@@ -124,6 +124,15 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement;
 
+      // Escape closes the overlay regardless of focus
+      if (e.key === 'Escape' && activeOverlayId !== null) {
+        e.preventDefault();
+        setActiveOverlayId(null);
+        setEditingEvent(null);
+        setOverlayCoords(null);
+        return;
+      }
+
       // Enter saves the event regardless of whether focus is in a form field
       if (e.key === 'Enter' && activeOverlayId !== null && editingEvent) {
         e.preventDefault();

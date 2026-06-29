@@ -62,6 +62,10 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   const [editEndDate, setEditEndDate] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
 
+  // Ref so the keydown handler always reads the latest edit state.
+  const editStateRef = useRef({ editTitle, editTag, editDesc, editStartDate, editStartTime, editEndDate, editEndTime });
+  editStateRef.current = { editTitle, editTag, editDesc, editStartDate, editStartTime, editEndDate, editEndTime };
+
   // --- Add Event Modal State ---
   const [showAddModal, setShowAddModal] = useState(false);
   const [addTitle, setAddTitle] = useState('');
@@ -137,13 +141,46 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     localStorage.setItem('calendarZoomLevel', '60');
   };
 
-  // Keyboard zoom (Cmd/Ctrl + '=', '-', '0') and arrow key navigation
+  // Keyboard zoom (Cmd/Ctrl + '=', '-', '0'), arrow key navigation, and edit overlay shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isInput =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement;
+
+      // Escape closes the overlay regardless of focus
+      if (e.key === 'Escape' && activeOverlayId !== null) {
+        e.preventDefault();
+        setActiveOverlayId(null);
+        setEditingEvent(null);
+        setOverlayCoords(null);
+        return;
+      }
+
+      // Enter saves the event regardless of whether focus is in a form field
+      if (e.key === 'Enter' && activeOverlayId !== null && editingEvent) {
+        e.preventDefault();
+        if (editingEvent.recurrenceId) {
+          setRecurEvent(editingEvent);
+          setShowEditRecurModal(true);
+        } else {
+          const s = editStateRef.current;
+          saveScroll();
+          updateEventAction(editingEvent.id, {
+            title: s.editTitle,
+            description: s.editDesc,
+            tag: s.editTag,
+            startDatetime: `${s.editStartDate}T${s.editStartTime}`,
+            endDatetime: `${s.editEndDate}T${s.editEndTime}`,
+          }).then(() => {
+            setActiveOverlayId(null);
+            setEditingEvent(null);
+            setOverlayCoords(null);
+          });
+        }
+        return;
+      }
 
       if (e.metaKey || e.ctrlKey) {
         if (e.key === '=' || e.key === '+') {
@@ -165,13 +202,21 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           e.preventDefault();
           saveScroll();
           router.push(`/weekly/${nextWeekStr}`);
+        } else if ((e.key === 'Delete' || e.key === 'Backspace') && activeOverlayId !== null && editingEvent) {
+          e.preventDefault();
+          if (editingEvent.recurrenceId) {
+            setRecurEvent(editingEvent);
+            setShowDeleteRecurModal(true);
+          } else {
+            handleDeleteInstance(editingEvent.id);
+          }
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [router, prevWeekStr, nextWeekStr]);
+  }, [router, prevWeekStr, nextWeekStr, activeOverlayId, editingEvent]);
 
   const saveScroll = () => {
     if (timelineContainerRef.current) {
