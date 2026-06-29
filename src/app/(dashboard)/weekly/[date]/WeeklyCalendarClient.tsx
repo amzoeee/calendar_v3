@@ -527,21 +527,15 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                         return yiq >= 128 ? 'text-black' : 'text-white';
                       };
 
-                      const textClass = ev.isPending ? 'text-foreground' : getContrastClass(ev.tag_color || '#6b7280');
-                      const subtextClass = ev.isPending
-                        ? 'text-muted-foreground'
-                        : getContrastClass(ev.tag_color || '#6b7280') === 'text-black'
+                      const textClass = getContrastClass(ev.tag_color || '#6b7280');
+                      const subtextClass = getContrastClass(ev.tag_color || '#6b7280') === 'text-black'
                         ? 'text-black/80 font-medium'
                         : 'text-white/80 font-medium';
 
                       return (
                         <div
                           key={ev.id}
-                          className={`absolute rounded pointer-events-auto transition-all select-none cursor-pointer flex flex-col justify-center overflow-hidden shadow-sm event-card-clickable ${
-                            ev.isPending
-                              ? 'border border-dashed bg-amber-950/20 border-amber-500/50'
-                              : 'border border-black/10 hover:brightness-105'
-                          } ${
+                          className={`absolute rounded pointer-events-auto transition-all select-none cursor-pointer flex flex-col justify-center overflow-hidden shadow-sm event-card-clickable border border-black/10 hover:brightness-105 ${
                             heightPx < 46
                               ? 'px-1 items-start justify-center'
                               : 'pt-1 pb-1 px-1 items-start justify-start'
@@ -551,7 +545,11 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                             height: `${heightPx}px`,
                             left: `${leftPercent}%`,
                             width: `calc(${widthPercent}% - 2px)`,
-                            backgroundColor: ev.isPending ? undefined : ev.tag_color,
+                            backgroundColor: ev.tag_color
+                              ? ev.isPending
+                                ? `${ev.tag_color}66`
+                                : ev.tag_color
+                              : undefined,
                           }}
                           onClick={(e) => {
                             e.stopPropagation();

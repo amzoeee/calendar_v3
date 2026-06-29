@@ -628,21 +628,15 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                   return yiq >= 128 ? 'text-black' : 'text-white';
                 };
 
-                const textClass = ev.isPending ? 'text-foreground' : getContrastClass(ev.tag_color || '#6b7280');
-                const subtextClass = ev.isPending
-                  ? 'text-muted-foreground'
-                  : getContrastClass(ev.tag_color || '#6b7280') === 'text-black'
+                const textClass = getContrastClass(ev.tag_color || '#6b7280');
+                const subtextClass = getContrastClass(ev.tag_color || '#6b7280') === 'text-black'
                   ? 'text-black/80 font-medium'
                   : 'text-white/80 font-medium';
 
                 return (
                   <div
                     key={ev.id}
-                    className={`absolute rounded pointer-events-auto transition-all select-none cursor-pointer flex flex-col overflow-hidden group event-card-clickable ${
-                      ev.isPending
-                        ? 'border border-dashed bg-amber-950/20 border-amber-500/50 shadow-md'
-                        : 'shadow border border-black/10 hover:brightness-105'
-                    } ${
+                    className={`absolute rounded pointer-events-auto transition-all select-none cursor-pointer flex flex-col overflow-hidden group event-card-clickable shadow border border-black/10 hover:brightness-105 ${
                       heightPx < 46
                         ? 'px-1.5 items-start justify-center'
                         : 'pt-1 pb-1 px-1.5 items-start justify-start'
@@ -652,7 +646,11 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                       height: `${heightPx}px`,
                       left: `${leftPercent}%`,
                       width: `calc(${widthPercent}% - 3px)`,
-                      backgroundColor: ev.isPending ? undefined : ev.tag_color,
+                      backgroundColor: ev.tag_color
+                        ? ev.isPending
+                          ? `${ev.tag_color}66`
+                          : ev.tag_color
+                        : undefined,
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -681,12 +679,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                       </div>
                     )}
 
-                    {/* Pending label indicator */}
-                    {ev.isPending === 1 && heightPx >= 46 && (
-                      <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest bg-amber-900/30 px-1 rounded self-start mt-1">
-                        Pending
-                      </span>
-                    )}
+
                   </div>
                 );
               })}
