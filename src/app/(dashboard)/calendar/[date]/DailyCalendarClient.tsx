@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import TagSelect from '@/app/components/TagSelect';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft,
@@ -445,20 +446,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                   className="w-4 h-4 rounded-full border border-border flex-shrink-0"
                   style={{ backgroundColor: getTagColor(formTag) }}
                 ></span>
-                <select
-                  value={formTag}
-                  onChange={(e) => setFormTag(e.target.value)}
-                  className="block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent cursor-pointer"
-                >
-                  <option value="">None</option>
-                  {tags
-                    .filter((t) => !t.isArchived)
-                    .map((t) => (
-                      <option key={t.id} value={t.name}>
-                        {t.name}
-                      </option>
-                    ))}
-                </select>
+                <TagSelect tags={tags} value={formTag} onChange={setFormTag} />
               </div>
             </div>
 
@@ -770,18 +758,12 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               className="w-4 h-4 rounded-full border border-border flex-shrink-0"
               style={{ backgroundColor: getTagColor(editTag) }}
             ></span>
-            <select
+            <TagSelect
+              tags={tags}
               value={editTag}
-              onChange={(e) => setEditTag(e.target.value)}
+              onChange={setEditTag}
               className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-            >
-              <option value="">No Tag</option>
-              {tags.map((t) => (
-                <option key={t.id} value={t.name}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* Date/Time Inputs */}

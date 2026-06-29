@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import TagSelect from '@/app/components/TagSelect';
 import {
   ChevronLeft,
   ChevronRight,
@@ -629,18 +630,12 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
               className="w-4 h-4 rounded-full border border-border flex-shrink-0"
               style={{ backgroundColor: getTagColor(editTag) }}
             ></span>
-            <select
+            <TagSelect
+              tags={tags}
               value={editTag}
-              onChange={(e) => setEditTag(e.target.value)}
+              onChange={setEditTag}
               className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-            >
-              <option value="">No Tag</option>
-              {tags.map((t) => (
-                <option key={t.id} value={t.name}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* Times */}
@@ -798,18 +793,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase">Tag</label>
-                <select
-                  value={addTag}
-                  onChange={(e) => setAddTag(e.target.value)}
-                  className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground"
-                >
-                  <option value="">None</option>
-                  {tags.filter((t) => !t.isArchived).map((t) => (
-                    <option key={t.id} value={t.name}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+                <TagSelect tags={tags} value={addTag} onChange={setAddTag} className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground" />
               </div>
 
               <div>

@@ -23,6 +23,7 @@ import {
   reorderTagsAction,
   stageLogAction,
 } from '@/app/actions';
+import TagSelect from '@/app/components/TagSelect';
 
 interface Tag {
   id: number;
@@ -378,19 +379,13 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase">Assign Tag</label>
-              <select
-                name="import_tag"
+              <TagSelect
+                tags={activeTags}
                 value={importTag}
-                onChange={(e) => setImportTag(e.target.value)}
+                onChange={setImportTag}
+                name="import_tag"
                 className="mt-1 block w-full bg-secondary border border-border rounded px-3 py-2 text-xs text-foreground cursor-pointer"
-              >
-                <option value="">No Tag</option>
-                {activeTags.map((t) => (
-                  <option key={t.id} value={t.name}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           </div>
           <button
