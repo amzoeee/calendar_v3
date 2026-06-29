@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -29,8 +29,8 @@ export default function StatsClient({
   const router = useRouter();
 
   // Navigation dates
-  const prevWeekStr = new Date(new Date(sundayDate).getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const nextWeekStr = new Date(new Date(sundayDate).getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const prevWeekStr = new Date(new Date(sundayDate + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const nextWeekStr = new Date(new Date(sundayDate + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
 
   const weekDates: Date[] = [];
   const sun = new Date(sundayDate + 'T00:00:00');
@@ -114,6 +114,29 @@ export default function StatsClient({
     const nextVal = !weekdaysOnly;
     router.push(`/stats/${date}?weekdays_only=${nextVal}`);
   };
+
+  // Keyboard arrow navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isInput =
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement;
+
+      if (!isInput && !e.metaKey && !e.ctrlKey) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          router.push(`/stats/${prevWeekStr}?weekdays_only=${weekdaysOnly}`);
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          router.push(`/stats/${nextWeekStr}?weekdays_only=${weekdaysOnly}`);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [router, prevWeekStr, nextWeekStr, weekdaysOnly]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

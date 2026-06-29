@@ -86,8 +86,8 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   const weekDates = getWeekDates();
 
   // Navigation
-  const prevWeekStr = new Date(new Date(sundayDate).getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const nextWeekStr = new Date(new Date(sundayDate).getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const prevWeekStr = new Date(new Date(sundayDate + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const nextWeekStr = new Date(new Date(sundayDate + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const weekStartStr = weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const weekEndStr = weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -170,7 +170,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [prevWeekStr, nextWeekStr]);
+  }, [router, prevWeekStr, nextWeekStr]);
 
   const saveScroll = () => {
     if (timelineContainerRef.current) {

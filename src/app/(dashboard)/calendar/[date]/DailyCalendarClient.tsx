@@ -76,8 +76,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const [editEndTime, setEditEndTime] = useState('');
 
   // --- Date navigation ---
-  const prevDayStr = new Date(new Date(date).getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const nextDayStr = new Date(new Date(date).getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const prevDayStr = new Date(new Date(date + 'T00:00:00').getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const nextDayStr = new Date(new Date(date + 'T00:00:00').getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const displayDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
