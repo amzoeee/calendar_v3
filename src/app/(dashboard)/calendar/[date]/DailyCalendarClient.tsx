@@ -75,6 +75,11 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const [editEndDate, setEditEndDate] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
 
+  // Ref so the keydown handler always reads the latest edit state without
+  // needing to be recreated on every keystroke.
+  const editStateRef = useRef({ editTitle, editTag, editDesc, editStartDate, editStartTime, editEndDate, editEndTime });
+  editStateRef.current = { editTitle, editTag, editDesc, editStartDate, editStartTime, editEndDate, editEndTime };
+
   // --- Date navigation ---
   const prevDayStr = new Date(new Date(date + 'T00:00:00').getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const nextDayStr = new Date(new Date(date + 'T00:00:00').getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
@@ -118,6 +123,30 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement;
 
+      // Enter saves the event regardless of whether focus is in a form field
+      if (e.key === 'Enter' && activeOverlayId !== null && editingEvent) {
+        e.preventDefault();
+        if (editingEvent.recurrenceId) {
+          setRecurEvent(editingEvent);
+          setShowEditRecurModal(true);
+        } else {
+          const s = editStateRef.current;
+          saveScroll();
+          updateEventAction(editingEvent.id, {
+            title: s.editTitle,
+            description: s.editDesc,
+            tag: s.editTag,
+            startDatetime: `${s.editStartDate}T${s.editStartTime}`,
+            endDatetime: `${s.editEndDate}T${s.editEndTime}`,
+          }).then(() => {
+            setActiveOverlayId(null);
+            setEditingEvent(null);
+            setOverlayCoords(null);
+          });
+        }
+        return;
+      }
+
       if (e.metaKey || e.ctrlKey) {
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
@@ -138,13 +167,21 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
           e.preventDefault();
           saveScroll();
           router.push(`/calendar/${nextDayStr}`);
+        } else if ((e.key === 'Delete' || e.key === 'Backspace') && activeOverlayId !== null && editingEvent) {
+          e.preventDefault();
+          if (editingEvent.recurrenceId) {
+            setRecurEvent(editingEvent);
+            setShowDeleteRecurModal(true);
+          } else {
+            handleDeleteInstance(editingEvent.id);
+          }
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [router, prevDayStr, nextDayStr]);
+  }, [router, prevDayStr, nextDayStr, activeOverlayId, editingEvent]);
 
   // Click outside overlay listener to close the popover
   useEffect(() => {
