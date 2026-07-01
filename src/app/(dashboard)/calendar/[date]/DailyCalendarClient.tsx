@@ -501,7 +501,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
 
             <button
               type="submit"
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded bg-primary text-sm font-bold text-white shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary cursor-pointer transition"
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded bg-primary text-sm font-bold text-primary-foreground shadow-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring cursor-pointer transition"
             >
               Add Event
             </button>
@@ -817,7 +817,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                   setRecurEvent(editingEvent);
                   setShowEditRecurModal(true);
                 }}
-                className="flex-1 py-1.5 bg-primary hover:bg-blue-600 text-white rounded text-xs font-semibold cursor-pointer text-center"
+                className="flex-1 py-1.5 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-semibold cursor-pointer text-center"
               >
                 Save
               </button>
@@ -825,7 +825,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               <button
                 type="button"
                 onClick={() => handleUpdateInstance(editingEvent.id)}
-                className="flex-1 py-1.5 bg-primary hover:bg-blue-600 text-white rounded text-xs font-semibold cursor-pointer text-center"
+                className="flex-1 py-1.5 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-semibold cursor-pointer text-center"
               >
                 Save
               </button>
@@ -895,7 +895,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                   handleUpdateInstance(recurEvent.id);
                   setShowEditRecurModal(false);
                 }}
-                className="w-full py-2 bg-primary hover:bg-blue-600 text-white text-sm font-semibold rounded cursor-pointer transition"
+                className="w-full py-2 bg-primary hover:bg-muted text-primary-foreground text-sm font-semibold rounded cursor-pointer transition"
               >
                 Edit this event only
               </button>
@@ -906,7 +906,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                   }
                   setShowEditRecurModal(false);
                 }}
-                className="w-full py-2 bg-primary hover:bg-blue-600 text-white text-sm font-semibold rounded cursor-pointer transition"
+                className="w-full py-2 bg-primary hover:bg-muted text-primary-foreground text-sm font-semibold rounded cursor-pointer transition"
               >
                 Edit entire series
               </button>

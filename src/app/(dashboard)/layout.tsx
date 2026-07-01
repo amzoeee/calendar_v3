@@ -47,9 +47,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         <div>
           {/* Logo */}
           <div className="h-16 flex items-center px-6 border-b border-border gap-2">
-            <CalendarDays className="h-6 w-6 text-primary" />
-            <span className="font-extrabold text-lg tracking-wider bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-              CALENDAR V2
+            <CalendarDays className="h-6 w-6 text-foreground" />
+            <span className="font-extrabold text-lg tracking-wider text-foreground">
+              CALENDAR
             </span>
           </div>
 
@@ -57,28 +57,28 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
           <nav className="mt-6 px-4 space-y-1">
             <Link
               href={`/calendar/${todayStr}`}
-              className="flex items-center px-4 py-3 text-sm font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
+              className="flex items-center px-4 py-3 text-base font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
             >
               <CalendarIcon className="h-5 w-5 text-muted-foreground" />
               Daily View
             </Link>
             <Link
               href={`/weekly/${todayStr}`}
-              className="flex items-center px-4 py-3 text-sm font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
+              className="flex items-center px-4 py-3 text-base font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
             >
               <CalendarIcon className="h-5 w-5 text-muted-foreground" />
               Weekly View
             </Link>
             <Link
               href={`/stats/${todayStr}`}
-              className="flex items-center px-4 py-3 text-sm font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
+              className="flex items-center px-4 py-3 text-base font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
             >
               <TrendingUp className="h-5 w-5 text-muted-foreground" />
               Weekly Stats
             </Link>
             <Link
               href="/settings"
-              className="flex items-center px-4 py-3 text-sm font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
+              className="flex items-center px-4 py-3 text-base font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
             >
               <SettingsIcon className="h-5 w-5 text-muted-foreground" />
               Settings
@@ -89,7 +89,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         {/* User profile & Logout */}
         <div className="p-4 border-t border-border space-y-3">
           <div className="px-4 py-2 bg-secondary/50 rounded-lg flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center font-bold text-primary-foreground text-sm uppercase">
+            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center font-bold text-foreground text-sm uppercase">
               {session.username[0]}
             </div>
             <div className="truncate">

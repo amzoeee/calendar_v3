@@ -725,7 +725,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                   setRecurEvent(editingEvent);
                   setShowEditRecurModal(true);
                 }}
-                className="flex-1 py-1.5 bg-primary hover:bg-blue-600 text-white rounded text-xs font-semibold cursor-pointer text-center"
+                className="flex-1 py-1.5 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-semibold cursor-pointer text-center"
               >
                 Save
               </button>
@@ -733,7 +733,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
               <button
                 type="button"
                 onClick={() => handleUpdateInstance(editingEvent.id)}
-                className="flex-1 py-1.5 bg-primary hover:bg-blue-600 text-white rounded text-xs font-semibold cursor-pointer text-center"
+                className="flex-1 py-1.5 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-semibold cursor-pointer text-center"
               >
                 Save
               </button>
@@ -855,7 +855,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
               <div>
                 <button
                   type="submit"
-                  className="w-full py-2 bg-primary hover:bg-blue-600 text-white rounded text-sm font-bold cursor-pointer transition"
+                  className="w-full py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-bold cursor-pointer transition"
                 >
                   Create Event
                 </button>
@@ -879,7 +879,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                   handleUpdateInstance(recurEvent.id);
                   setShowEditRecurModal(false);
                 }}
-                className="w-full py-2 bg-primary hover:bg-blue-600 text-white text-sm font-semibold rounded cursor-pointer transition"
+                className="w-full py-2 bg-primary hover:bg-muted text-primary-foreground text-sm font-semibold rounded cursor-pointer transition"
               >
                 Edit this event only
               </button>
@@ -890,7 +890,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                   }
                   setShowEditRecurModal(false);
                 }}
-                className="w-full py-2 bg-primary hover:bg-blue-600 text-white text-sm font-semibold rounded cursor-pointer transition"
+                className="w-full py-2 bg-primary hover:bg-muted text-primary-foreground text-sm font-semibold rounded cursor-pointer transition"
               >
                 Edit entire series
               </button>

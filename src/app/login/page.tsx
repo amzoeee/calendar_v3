@@ -11,7 +11,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col justify-center px-6 py-12 lg:px-8 bg-background">
       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
         <h2 className="mt-10 text-center text-3xl font-extrabold tracking-tight text-foreground">
-          Sign in to Calendar v2
+          Sign in to Calendar
         </h2>
       </div>
 
@@ -57,7 +57,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isPending}
-              className="flex w-full justify-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 transition"
+              className="flex w-full justify-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 transition"
             >
               {isPending ? 'Signing in...' : 'Sign in'}
             </button>
@@ -66,7 +66,7 @@ export default function LoginPage() {
 
         <p className="mt-10 text-center text-sm text-muted-foreground">
           Don't have an account?{' '}
-          <Link href="/register" className="font-semibold text-primary hover:text-blue-400">
+          <Link href="/register" className="font-semibold text-primary hover:text-foreground">
             Register here
           </Link>
         </p>

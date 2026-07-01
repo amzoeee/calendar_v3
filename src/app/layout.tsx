@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Self-Hosted Calendar v2",
+  title: "Calendar",
   description: "Personal calendar with tag tracking, recurrence, stats, and Discord import",
 };
 

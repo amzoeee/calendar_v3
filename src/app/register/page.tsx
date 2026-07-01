@@ -72,7 +72,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={isPending}
-              className="flex w-full justify-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 transition"
+              className="flex w-full justify-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 transition"
             >
               {isPending ? 'Registering...' : 'Register'}
             </button>
@@ -81,7 +81,7 @@ export default function RegisterPage() {
 
         <p className="mt-10 text-center text-sm text-muted-foreground">
           Already have an account?{' '}
-          <Link href="/login" className="font-semibold text-primary hover:text-blue-400">
+          <Link href="/login" className="font-semibold text-primary hover:text-foreground">
             Sign in here
           </Link>
         </p>

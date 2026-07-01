@@ -345,7 +345,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
             </div>
             <button
               type="submit"
-              className="px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
               Add Tag
@@ -390,7 +390,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
           </div>
           <button
             type="submit"
-            className="px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded text-xs font-bold transition cursor-pointer"
+            className="px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
           >
             Import ICS File
           </button>
@@ -423,7 +423,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
             <button
               onClick={handleStageLog}
               disabled={isLogStaging}
-              className="px-4 py-2 bg-primary hover:bg-blue-600 disabled:opacity-50 text-white rounded text-xs font-bold transition cursor-pointer"
+              className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
             >
               {isLogStaging ? 'Staging...' : 'Stage Discord Log'}
             </button>
@@ -491,7 +491,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
         
         <button
           onClick={handleExport}
-          className="px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded text-xs font-bold transition cursor-pointer"
+          className="px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
         >
           Export ICS File
         </button>
@@ -538,7 +538,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-primary hover:bg-blue-600 text-white rounded text-sm font-bold cursor-pointer transition"
+                  className="flex-1 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-bold cursor-pointer transition"
                 >
                   Save Changes
                 </button>

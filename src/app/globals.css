@@ -1,25 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090d16;
-  --foreground: #f3f4f6;
-  --card: #111827;
-  --card-foreground: #f3f4f6;
-  --popover: #111827;
-  --popover-foreground: #f3f4f6;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #1f2937;
-  --secondary-foreground: #f3f4f6;
-  --muted: #374151;
-  --muted-foreground: #9ca3af;
-  --accent: #1e3a8a;
-  --accent-foreground: #f3f4f6;
+  --background: #0d0d0d;
+  --foreground: #f0f0f0;
+  --card: #171717;
+  --card-foreground: #f0f0f0;
+  --popover: #171717;
+  --popover-foreground: #f0f0f0;
+  --primary: #e0e0e0;
+  --primary-foreground: #111111;
+  --secondary: #222222;
+  --secondary-foreground: #f0f0f0;
+  --muted: #333333;
+  --muted-foreground: #888888;
+  --accent: #333333;
+  --accent-foreground: #f0f0f0;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #1f2937;
-  --input: #1f2937;
-  --ring: #3b82f6;
+  --border: #2a2a2a;
+  --input: #222222;
+  --ring: #666666;
 }
 
 @theme {
@@ -57,25 +57,25 @@ body {
 }
 
 .calendar-scrollbar::-webkit-scrollbar-track {
-  background: rgba(17, 24, 39, 0.5);
+  background: rgba(23, 23, 23, 0.5);
 }
 
 .calendar-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.3);
+  background: rgba(136, 136, 136, 0.3);
   border-radius: 3px;
 }
 
 .calendar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.5);
+  background: rgba(136, 136, 136, 0.5);
 }
 
 .calendar-grid-line {
-  border-bottom: 1px solid rgba(31, 41, 55, 0.5);
+  border-bottom: 1px solid rgba(42, 42, 42, 0.5);
 }
 
 /* Glassmorphism overlays */
 .glass-panel {
-  background: rgba(17, 24, 39, 0.7);
+  background: rgba(23, 23, 23, 0.7);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
