@@ -423,26 +423,44 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               />
             </div>
 
-            {/* Start and End Times */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Start Time</label>
+            {/* Start Date/Time */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Start</label>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  required
+                  value={formStartDate}
+                  onChange={(e) => setFormStartDate(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+                />
                 <input
                   type="time"
                   required
                   value={formStartTime}
                   onChange={(e) => setFormStartTime(e.target.value)}
-                  className="mt-1 block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+                  className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">End Time</label>
+            </div>
+
+            {/* End Date/Time */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">End</label>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  required
+                  value={formEndDate}
+                  onChange={(e) => setFormEndDate(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+                />
                 <input
                   type="time"
                   required
                   value={formEndTime}
                   onChange={(e) => setFormEndTime(e.target.value)}
-                  className="mt-1 block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+                  className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
                 />
               </div>
             </div>
@@ -776,24 +794,40 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
           </div>
 
           {/* Date/Time Inputs */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="space-y-2 text-xs">
             <div>
-              <label className="block text-muted-foreground">Start Time</label>
-              <input
-                type="time"
-                value={editStartTime}
-                onChange={(e) => setEditStartTime(e.target.value)}
-                className="mt-1 block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
-              />
+              <label className="block text-muted-foreground">Start</label>
+              <div className="mt-1 grid grid-cols-2 gap-1">
+                <input
+                  type="date"
+                  value={editStartDate}
+                  onChange={(e) => setEditStartDate(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
+                />
+                <input
+                  type="time"
+                  value={editStartTime}
+                  onChange={(e) => setEditStartTime(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-muted-foreground">End Time</label>
-              <input
-                type="time"
-                value={editEndTime}
-                onChange={(e) => setEditEndTime(e.target.value)}
-                className="mt-1 block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
-              />
+              <label className="block text-muted-foreground">End</label>
+              <div className="mt-1 grid grid-cols-2 gap-1">
+                <input
+                  type="date"
+                  value={editEndDate}
+                  onChange={(e) => setEditEndDate(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
+                />
+                <input
+                  type="time"
+                  value={editEndTime}
+                  onChange={(e) => setEditEndTime(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 

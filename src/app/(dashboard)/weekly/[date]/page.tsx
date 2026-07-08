@@ -48,13 +48,20 @@ export default async function WeeklyPage({ params }: PageProps) {
       and(
         eq(eventsTable.userId, session.userId),
         or(
+          // Event starts within the week
           and(
             gte(eventsTable.startDatetime, startStr),
             lt(eventsTable.startDatetime, endStr)
           ),
+          // Event ends within the week
           and(
             gte(eventsTable.endDatetime, startStr),
             lt(eventsTable.endDatetime, endStr)
+          ),
+          // Event fully spans the week
+          and(
+            lt(eventsTable.startDatetime, startStr),
+            gte(eventsTable.endDatetime, endStr)
           )
         )
       )

@@ -36,13 +36,20 @@ export default async function DailyPage({ params }: PageProps) {
       and(
         eq(eventsTable.userId, session.userId),
         or(
+          // Event starts within this day
           and(
             gte(eventsTable.startDatetime, startStr),
             lt(eventsTable.startDatetime, endStr)
           ),
+          // Event ends within this day
           and(
             gte(eventsTable.endDatetime, startStr),
             lt(eventsTable.endDatetime, endStr)
+          ),
+          // Event fully spans this day (starts before, ends after)
+          and(
+            lt(eventsTable.startDatetime, startStr),
+            gte(eventsTable.endDatetime, endStr)
           )
         )
       )

@@ -683,25 +683,41 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
             />
           </div>
 
-          {/* Times */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          {/* Date/Time Inputs */}
+          <div className="space-y-2 text-xs">
             <div>
-              <label className="block text-muted-foreground">Start Time</label>
-              <input
-                type="time"
-                value={editStartTime}
-                onChange={(e) => setEditStartTime(e.target.value)}
-                className="mt-1 block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
-              />
+              <label className="block text-muted-foreground">Start</label>
+              <div className="mt-1 grid grid-cols-2 gap-1">
+                <input
+                  type="date"
+                  value={editStartDate}
+                  onChange={(e) => setEditStartDate(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
+                />
+                <input
+                  type="time"
+                  value={editStartTime}
+                  onChange={(e) => setEditStartTime(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-muted-foreground">End Time</label>
-              <input
-                type="time"
-                value={editEndTime}
-                onChange={(e) => setEditEndTime(e.target.value)}
-                className="mt-1 block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
-              />
+              <label className="block text-muted-foreground">End</label>
+              <div className="mt-1 grid grid-cols-2 gap-1">
+                <input
+                  type="date"
+                  value={editEndDate}
+                  onChange={(e) => setEditEndDate(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
+                />
+                <input
+                  type="time"
+                  value={editEndTime}
+                  onChange={(e) => setEditEndTime(e.target.value)}
+                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 
@@ -813,26 +829,44 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="space-y-2 text-xs">
                 <div>
-                  <label className="block text-muted-foreground">Start Time</label>
-                  <input
-                    type="time"
-                    required
-                    value={addStartTime}
-                    onChange={(e) => setAddStartTime(e.target.value)}
-                    className="mt-1 block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
-                  />
+                  <label className="block text-muted-foreground">Start</label>
+                  <div className="mt-1 grid grid-cols-2 gap-1">
+                    <input
+                      type="date"
+                      required
+                      value={addStartDate}
+                      onChange={(e) => setAddStartDate(e.target.value)}
+                      className="block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
+                    />
+                    <input
+                      type="time"
+                      required
+                      value={addStartTime}
+                      onChange={(e) => setAddStartTime(e.target.value)}
+                      className="block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-muted-foreground">End Time</label>
-                  <input
-                    type="time"
-                    required
-                    value={addEndTime}
-                    onChange={(e) => setAddEndTime(e.target.value)}
-                    className="mt-1 block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
-                  />
+                  <label className="block text-muted-foreground">End</label>
+                  <div className="mt-1 grid grid-cols-2 gap-1">
+                    <input
+                      type="date"
+                      required
+                      value={addEndDate}
+                      onChange={(e) => setAddEndDate(e.target.value)}
+                      className="block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
+                    />
+                    <input
+                      type="time"
+                      required
+                      value={addEndTime}
+                      onChange={(e) => setAddEndTime(e.target.value)}
+                      className="block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
+                    />
+                  </div>
                 </div>
               </div>
 
