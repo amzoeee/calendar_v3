@@ -51,10 +51,15 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const [recurEvent, setRecurEvent] = useState<PositionedEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState<PositionedEvent | null>(null);
   const [overlayCoords, setOverlayCoords] = useState<{ x: number; y: number } | null>(null);
+  // Vertical offset applied to the (fixed-positioned) overlay so it follows
+  // its event as the timeline scrolls. See the scroll-tracking effect below.
+  const [overlayScrollOffset, setOverlayScrollOffset] = useState(0);
 
   // --- Scroll Restoration ---
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  // Timeline scrollTop captured when the overlay was opened.
+  const overlayOpenScrollRef = useRef<number>(0);
 
   // --- Add Event Form State ---
   const [formTitle, setFormTitle] = useState('');
@@ -214,6 +219,27 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [activeOverlayId]);
 
+  // Keep the (fixed-positioned) edit overlay anchored to its event as the
+  // timeline scrolls: shift it vertically by the same delta as the scroll.
+  useEffect(() => {
+    const container = timelineContainerRef.current;
+    if (activeOverlayId === null || !container) return;
+
+    let raf = 0;
+    const handleScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        setOverlayScrollOffset(overlayOpenScrollRef.current - container.scrollTop);
+      });
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [activeOverlayId]);
+
   const saveScroll = () => {
     if (timelineContainerRef.current) {
       localStorage.setItem('calendarScrollPos', String(timelineContainerRef.current.scrollTop));
@@ -313,6 +339,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       y = Math.max(10, viewportHeight - overlayHeight - 20);
     }
 
+    overlayOpenScrollRef.current = timelineContainerRef.current?.scrollTop ?? 0;
+    setOverlayScrollOffset(0);
     setOverlayCoords({ x, y });
     setEditingEvent(ev);
     setActiveOverlayId(ev.id);
@@ -748,7 +776,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
           className="fixed bg-card border border-border rounded-lg shadow-2xl p-4 w-72 space-y-3 z-50 text-left"
           style={{
             left: overlayCoords ? `${overlayCoords.x}px` : '50%',
-            top: overlayCoords ? `${overlayCoords.y}px` : '50%',
+            top: overlayCoords ? `${overlayCoords.y + overlayScrollOffset}px` : '50%',
           }}
         >
           <div className="flex items-center justify-between border-b border-border pb-2">
