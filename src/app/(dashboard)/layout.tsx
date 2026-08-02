@@ -74,7 +74,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               className="flex items-center px-4 py-3 text-base font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
             >
               <TrendingUp className="h-5 w-5 text-muted-foreground" />
-              Weekly Stats
+              Stats
             </Link>
             <Link
               href="/settings"

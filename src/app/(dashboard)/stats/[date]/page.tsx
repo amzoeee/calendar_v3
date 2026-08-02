@@ -1,22 +1,28 @@
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';
 import { events as eventsTable, tags as tagsTable } from '@/db/schema';
-import { eq, and, or, gte, lt } from 'drizzle-orm';
+import { eq, and, or, gte, lt, lte } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import StatsClient from './StatsClient';
 
 interface PageProps {
   params: Promise<{ date: string }> | { date: string };
-  searchParams: Promise<{ weekdays_only?: string }> | { weekdays_only?: string };
+  searchParams:
+    | Promise<{ weekdays_only?: string; end?: string }>
+    | { weekdays_only?: string; end?: string };
 }
 
-function getWeekRange(dateStr: string): { sunday: Date; saturday: Date } {
-  const date = new Date(dateStr + 'T00:00:00');
-  const day = date.getDay(); // 0 = Sunday
-  const sunday = new Date(date.getTime() - day * 24 * 60 * 60 * 1000);
-  const saturday = new Date(sunday.getTime() + 6 * 24 * 60 * 60 * 1000);
-  return { sunday, saturday };
-}
+// Maximum span we're willing to fetch/render in one view.
+const MAX_RANGE_DAYS = 366;
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const toDateStr = (d: Date) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseLocalDate = (dateStr: string) => new Date(dateStr + 'T00:00:00');
+// Midnight anchor, safe to iterate day-by-day across DST boundaries.
+const dayAnchor = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const sundayOf = (d: Date) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay());
 
 export default async function StatsPage({ params, searchParams }: PageProps) {
   const resolvedParams = await params;
@@ -36,11 +42,44 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
     redirect(`/stats/${today}`);
   }
 
-  const { sunday, saturday } = getWeekRange(date);
+  // Determine the range. With no `end` param we default to the one-week
+  // (Sun–Sat) span containing `date`, preserving the original weekly view.
+  // When `end` is provided, `date` is treated as the literal range start.
+  const hasEnd =
+    typeof resolvedSearchParams.end === 'string' &&
+    dateRegex.test(resolvedSearchParams.end);
 
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const startStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())} 00:00:00`;
-  const endStr = `${saturday.getFullYear()}-${pad(saturday.getMonth() + 1)}-${pad(saturday.getDate())} 23:59:59`;
+  const startDate = dayAnchor(
+    hasEnd ? parseLocalDate(date) : sundayOf(parseLocalDate(date))
+  );
+  let endDate = hasEnd
+    ? dayAnchor(parseLocalDate(resolvedSearchParams.end as string))
+    : new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 6);
+
+  // Guard against an end before the start.
+  if (endDate.getTime() < startDate.getTime()) {
+    endDate = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth(),
+      startDate.getDate() + 6
+    );
+  }
+
+  // Build the list of days in range (DST-safe), capped at MAX_RANGE_DAYS.
+  const rangeDates: Date[] = [];
+  let cursor = startDate;
+  while (
+    cursor.getTime() <= endDate.getTime() &&
+    rangeDates.length < MAX_RANGE_DAYS
+  ) {
+    rangeDates.push(cursor);
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+  }
+  // Clamp the effective end to the last day we actually included.
+  endDate = rangeDates[rangeDates.length - 1];
+
+  const startStr = `${toDateStr(startDate)} 00:00:00`;
+  const endStr = `${toDateStr(endDate)} 23:59:59`;
 
   // Fetch tags
   const dbTags = await db
@@ -49,7 +88,7 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
     .where(eq(tagsTable.userId, session.userId))
     .orderBy(tagsTable.orderIndex);
 
-  // Fetch events overlapping this week
+  // Fetch events overlapping the range: starts within, ends within, or spans it.
   const dbEvents = await db
     .select()
     .from(eventsTable)
@@ -65,19 +104,19 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
           and(
             gte(eventsTable.endDatetime, startStr),
             lt(eventsTable.endDatetime, endStr)
+          ),
+          and(
+            lte(eventsTable.startDatetime, startStr),
+            gte(eventsTable.endDatetime, endStr)
           )
         )
       )
     );
 
-  // Calculate day-by-day tag hours (equivalent to Python database.get_tag_hours_for_week)
+  // Calculate day-by-day tag hours, clipping each event to each day.
   const tagHoursByDay: Record<string, Record<string, number>> = {};
-  const weekDates: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(sunday.getTime() + i * 24 * 60 * 60 * 1000);
-    const dateStr = d.toLocaleDateString('en-CA');
-    weekDates.push(d);
-    tagHoursByDay[dateStr] = {};
+  for (const day of rangeDates) {
+    tagHoursByDay[toDateStr(day)] = {};
   }
 
   for (const ev of dbEvents) {
@@ -85,8 +124,8 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
     const endDt = new Date(ev.endDatetime.replace(' ', 'T'));
     const tag = ev.tag || 'Untagged';
 
-    for (const day of weekDates) {
-      const dateStr = day.toLocaleDateString('en-CA');
+    for (const day of rangeDates) {
+      const dateStr = toDateStr(day);
       const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).getTime();
       const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59).getTime();
 
@@ -105,8 +144,8 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
 
   return (
     <StatsClient
-      date={date}
-      sundayDate={sunday.toLocaleDateString('en-CA')}
+      startDate={toDateStr(startDate)}
+      endDate={toDateStr(endDate)}
       weekdaysOnly={weekdaysOnly}
       tagHoursByDay={tagHoursByDay}
       tags={dbTags}
