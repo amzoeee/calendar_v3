@@ -4,6 +4,7 @@ import { events } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import MiniCalendar from '@/app/components/MiniCalendar';
 import {
   Calendar as CalendarIcon,
   TrendingUp,
@@ -84,6 +85,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               Settings
             </Link>
           </nav>
+
+          {/* Mini month calendar for quick day navigation */}
+          <MiniCalendar />
         </div>
 
         {/* User profile & Logout */}
