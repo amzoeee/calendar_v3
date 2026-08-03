@@ -81,15 +81,15 @@ export default function StatsClient({
     return buildUrl(toDateStr(s), toDateStr(e));
   };
 
-  // Preset ranges (keep the current start, adjust the end).
-  const oneMonthEnd = addDays(
-    new Date(start.getFullYear(), start.getMonth() + 1, start.getDate()),
-    -1
+  // Preset ranges (keep the current end, extend the start into the past).
+  const oneMonthStart = addDays(
+    new Date(end.getFullYear(), end.getMonth() - 1, end.getDate()),
+    1
   );
-  const presets: { label: string; end: string; active: boolean }[] = [
-    { label: '1 Week', end: toDateStr(addDays(start, 6)), active: rangeLen === 7 },
-    { label: '2 Weeks', end: toDateStr(addDays(start, 13)), active: rangeLen === 14 },
-    { label: '1 Month', end: toDateStr(oneMonthEnd), active: endDate === toDateStr(oneMonthEnd) },
+  const presets: { label: string; start: string; active: boolean }[] = [
+    { label: '1 Week', start: toDateStr(addDays(end, -6)), active: rangeLen === 7 },
+    { label: '2 Weeks', start: toDateStr(addDays(end, -13)), active: rangeLen === 14 },
+    { label: '1 Month', start: toDateStr(oneMonthStart), active: startDate === toDateStr(oneMonthStart) },
   ];
 
   // Header date display.
@@ -297,7 +297,7 @@ export default function StatsClient({
             {presets.map((p) => (
               <button
                 key={p.label}
-                onClick={() => router.push(buildUrl(startDate, p.end))}
+                onClick={() => router.push(buildUrl(p.start, endDate))}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${
                   p.active
                     ? 'bg-primary/20 border-primary text-primary'
