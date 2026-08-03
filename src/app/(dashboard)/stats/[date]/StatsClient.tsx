@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -94,20 +94,17 @@ export default function StatsClient({
     year: 'numeric',
   });
 
-  // Calculate totals and peak scale
-  let maxTotalHours = 0;
+  // Per-day totals (used for the tag averages panel below).
   const dayStats = rangeDates.map((day) => {
     const dateStr = toDateStr(day);
     const hours = tagHoursByDay[dateStr] || {};
     const total = Object.values(hours).reduce((a, b) => a + b, 0);
-    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-
-    if (!weekdaysOnly || !isWeekend) {
-      maxTotalHours = Math.max(maxTotalHours, total);
-    }
+    const weekday = day.getDay();
+    const isWeekend = weekday === 0 || weekday === 6;
 
     return {
       dateStr,
+      weekday,
       dayName: day.toLocaleDateString('en-US', { weekday: 'short' }),
       dayDisplay: day.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }),
       hours,
@@ -115,8 +112,6 @@ export default function StatsClient({
       isWeekend,
     };
   });
-
-  const maxScale = Math.max(8, Math.ceil(maxTotalHours) + 1);
 
   const visibleDays = dayStats.filter((d) => !weekdaysOnly || !d.isWeekend);
 
@@ -138,6 +133,26 @@ export default function StatsClient({
     return idxA - idxB;
   });
 
+  // Collapse the range into at most 7 bars — one per weekday — so long ranges
+  // never need horizontal scrolling. Each bar stacks the *average* hours per tag
+  // across that weekday's occurrences (counting only days that had data logged).
+  const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const weekdayIndices = weekdaysOnly ? [1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6];
+  const weekdayBars = weekdayIndices.map((wd) => {
+    const daysOfWeekday = visibleDays.filter((d) => d.weekday === wd);
+    const activeCount = daysOfWeekday.filter((d) => d.total > 0).length;
+    const hours: Record<string, number> = {};
+    allTags.forEach((tag) => {
+      const sum = daysOfWeekday.reduce((s, d) => s + (d.hours[tag] || 0), 0);
+      hours[tag] = activeCount > 0 ? sum / activeCount : 0;
+    });
+    const total = Object.values(hours).reduce((a, b) => a + b, 0);
+    return { weekday: wd, dayName: WEEKDAY_LABELS[wd], hours, total, activeCount };
+  });
+
+  const maxBarTotal = weekdayBars.reduce((m, b) => Math.max(m, b.total), 0);
+  const maxScale = Math.max(8, Math.ceil(maxBarTotal) + 1);
+
   // Calculate averages per tag across active days (excluding days with 0 hours logged)
   const activeDaysWithData = visibleDays.filter((d) => d.total > 0).length;
 
@@ -156,18 +171,38 @@ export default function StatsClient({
     router.push(`/stats/${startDate}?end=${endDate}&weekdays_only=${!weekdaysOnly}`);
   };
 
-  const handleStartChange = (value: string) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+  // Local copies of the range inputs so typing doesn't navigate mid-entry
+  // (which used to reset the field after a single digit). We only commit — and
+  // navigate — on blur or Enter, mirroring the event add/edit forms.
+  const [localStart, setLocalStart] = useState(startDate);
+  const [localEnd, setLocalEnd] = useState(endDate);
+  const [prevRange, setPrevRange] = useState({ start: startDate, end: endDate });
+  if (prevRange.start !== startDate || prevRange.end !== endDate) {
+    setPrevRange({ start: startDate, end: endDate });
+    setLocalStart(startDate);
+    setLocalEnd(endDate);
+  }
+
+  const commitStart = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(localStart)) {
+      setLocalStart(startDate); // revert an incomplete entry
+      return;
+    }
+    if (localStart === startDate) return;
     // Keep the end no earlier than the new start.
-    const newEnd = value > endDate ? value : endDate;
-    router.push(buildUrl(value, newEnd));
+    const newEnd = localStart > endDate ? localStart : endDate;
+    router.push(buildUrl(localStart, newEnd));
   };
 
-  const handleEndChange = (value: string) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+  const commitEnd = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(localEnd)) {
+      setLocalEnd(endDate); // revert an incomplete entry
+      return;
+    }
+    if (localEnd === endDate) return;
     // Keep the start no later than the new end.
-    const newStart = value < startDate ? value : startDate;
-    router.push(buildUrl(newStart, value));
+    const newStart = localEnd < startDate ? localEnd : startDate;
+    router.push(buildUrl(newStart, localEnd));
   };
 
   // Keyboard arrow navigation — shifts by the range length.
@@ -269,17 +304,25 @@ export default function StatsClient({
             <span className="uppercase tracking-wider">From</span>
             <input
               type="date"
-              value={startDate}
-              max={endDate}
-              onChange={(e) => handleStartChange(e.target.value)}
+              value={localStart}
+              max={localEnd}
+              onChange={(e) => setLocalStart(e.target.value)}
+              onBlur={commitStart}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+              }}
               className="bg-secondary border border-border px-2 py-1 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <span className="uppercase tracking-wider">To</span>
             <input
               type="date"
-              value={endDate}
-              min={startDate}
-              onChange={(e) => handleEndChange(e.target.value)}
+              value={localEnd}
+              min={localStart}
+              onChange={(e) => setLocalEnd(e.target.value)}
+              onBlur={commitEnd}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+              }}
               className="bg-secondary border border-border px-2 py-1 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <span className="text-muted-foreground/70 normal-case tracking-normal">
@@ -295,8 +338,8 @@ export default function StatsClient({
         {/* Stacked Bar Chart */}
         <div className="flex-1 bg-card rounded-xl border border-border p-6 flex flex-col justify-between min-h-[400px]">
           <div>
-            <h2 className="text-lg font-bold">Time Breakdown per Day</h2>
-            <p className="text-xs text-muted-foreground mt-1">Stacked hours logged on each day in range</p>
+            <h2 className="text-lg font-bold">Time Breakdown by Weekday</h2>
+            <p className="text-xs text-muted-foreground mt-1">Average hours logged per weekday across the range</p>
           </div>
 
           {/* Grid Chart */}
@@ -316,13 +359,13 @@ export default function StatsClient({
               })}
             </div>
 
-            {/* Bars Column (horizontally scrollable for long ranges) */}
-            <div className="absolute left-10 right-0 top-0 bottom-0 overflow-x-auto overflow-y-hidden">
-              <div className="h-full min-w-full flex items-stretch justify-around gap-2">
-                {visibleDays.map((day, idx) => (
+            {/* Bars Column — one averaged bar per weekday (max 7, no scroll) */}
+            <div className="absolute left-10 right-0 top-0 bottom-0">
+              <div className="h-full w-full flex items-stretch justify-around gap-2">
+                {weekdayBars.map((day, idx) => (
                   <div
                     key={idx}
-                    className="shrink-0 flex-1 min-w-[40px] max-w-[84px] h-full flex flex-col group/bar"
+                    className="flex-1 min-w-[40px] max-w-[110px] h-full flex flex-col group/bar"
                   >
                     {/* Bar area */}
                     <div className="flex-1 w-full relative flex flex-col justify-end pb-8">
@@ -347,28 +390,22 @@ export default function StatsClient({
                             >
                               {/* Segment Tooltip */}
                               <div className="absolute opacity-0 group-hover/segment:opacity-100 bg-black text-white text-[9px] font-semibold p-1.5 rounded pointer-events-none z-30 transition-all -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap border border-border">
-                                {tag}: {hrs.toFixed(1)} hrs
+                                {tag}: {hrs.toFixed(1)} hrs avg
                               </div>
                             </div>
                           );
                         })}
                       </div>
-
-                      {/* Total label above bar */}
-                      {day.total > 0 && (
-                        <span
-                          className="absolute left-1/2 -translate-x-1/2 text-[9px] font-extrabold text-foreground pb-1"
-                          style={{ bottom: `${(day.total / maxScale) * 100 + 8}%` }}
-                        >
-                          {day.total.toFixed(1)}h
-                        </span>
-                      )}
                     </div>
 
                     {/* Day label below bar */}
                     <div className="h-8 pt-1 text-center select-none">
-                      <p className="text-[10px] font-bold text-foreground leading-tight">{day.dayName}</p>
-                      <p className="text-[9px] text-muted-foreground leading-tight">{day.dayDisplay}</p>
+                      <p className="text-[11px] font-bold text-foreground leading-tight">{day.dayName}</p>
+                      <p className="text-[9px] text-muted-foreground leading-tight">
+                        {day.activeCount === 0
+                          ? 'no data'
+                          : `avg of ${day.activeCount} day${day.activeCount === 1 ? '' : 's'}`}
+                      </p>
                     </div>
                   </div>
                 ))}
