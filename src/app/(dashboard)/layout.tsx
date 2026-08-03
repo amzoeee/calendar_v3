@@ -2,12 +2,10 @@ import { getSession } from '@/lib/auth';
 import { db } from '@/db';
 import { events } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import MiniCalendar from '@/app/components/MiniCalendar';
+import SidebarNav from '@/app/components/SidebarNav';
 import {
-  Calendar as CalendarIcon,
-  TrendingUp,
-  Settings as SettingsIcon,
   LogOut,
   Sparkles,
   Check,
@@ -53,37 +51,11 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             </span>
           </div>
 
-          {/* Nav Navigation */}
-          <nav className="mt-6 px-4 space-y-1">
-            <Link
-              href={`/calendar/${todayStr}`}
-              className="flex items-center px-4 py-3 text-base font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
-            >
-              <CalendarIcon className="h-5 w-5 text-muted-foreground" />
-              Daily View
-            </Link>
-            <Link
-              href={`/weekly/${todayStr}`}
-              className="flex items-center px-4 py-3 text-base font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
-            >
-              <CalendarIcon className="h-5 w-5 text-muted-foreground" />
-              Weekly View
-            </Link>
-            <Link
-              href={`/stats/${todayStr}`}
-              className="flex items-center px-4 py-3 text-base font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
-            >
-              <TrendingUp className="h-5 w-5 text-muted-foreground" />
-              Stats
-            </Link>
-            <Link
-              href="/settings"
-              className="flex items-center px-4 py-3 text-base font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
-            >
-              <SettingsIcon className="h-5 w-5 text-muted-foreground" />
-              Settings
-            </Link>
-          </nav>
+          {/* Mini month calendar for quick day navigation */}
+          <MiniCalendar />
+
+          {/* Navigation (preserves the currently-viewed date across views) */}
+          <SidebarNav todayStr={todayStr} />
         </div>
 
         {/* User profile & Logout */}
