@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import TagSelect from '@/app/components/TagSelect';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -51,7 +51,11 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const [showDeleteRecurModal, setShowDeleteRecurModal] = useState<boolean>(false);
   const [recurEvent, setRecurEvent] = useState<PositionedEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState<PositionedEvent | null>(null);
-  const [overlayCoords, setOverlayCoords] = useState<{ x: number; y: number } | null>(null);
+  // Anchor for the edit overlay: `topMin` = the event's start minute (so it
+  // scales with zoom), `x` = horizontal viewport px. The overlay is positioned
+  // imperatively from this (see positionOverlay) so it tracks the event with no
+  // per-frame React re-render.
+  const [overlayCoords, setOverlayCoords] = useState<{ topMin: number; x: number } | null>(null);
 
   // --- Scroll Restoration ---
   const timelineContainerRef = useRef<HTMLDivElement>(null);
@@ -220,6 +224,47 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [activeOverlayId]);
 
+  // Position the edit overlay imperatively so it tracks its event as the
+  // timeline scrolls/zooms — pinned to the event's on-screen position, and
+  // clipped to the timeline box so it partially cuts off at the edges and
+  // disappears entirely once the event scrolls out of view. Writing styles
+  // directly (rather than via React state) keeps scrolling lag-free.
+  const positionOverlay = () => {
+    const el = overlayRef.current;
+    const container = timelineContainerRef.current;
+    if (!el || !container || !overlayCoords) return;
+
+    const rect = container.getBoundingClientRect();
+    const top = rect.top + (overlayCoords.topMin / 60) * zoomLevel - container.scrollTop;
+    el.style.top = `${top}px`;
+    el.style.left = `${overlayCoords.x}px`;
+
+    // Clip to the container's vertical bounds; hide once fully outside.
+    const h = el.offsetHeight;
+    const clipTop = Math.max(0, rect.top - top);
+    const clipBottom = Math.max(0, top + h - rect.bottom);
+    if (clipTop >= h || clipBottom >= h) {
+      el.style.visibility = 'hidden';
+    } else {
+      el.style.visibility = 'visible';
+      el.style.clipPath = `inset(${clipTop}px 0px ${clipBottom}px 0px round 0.5rem)`;
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (activeOverlayId === null || !overlayCoords) return;
+    positionOverlay();
+    const container = timelineContainerRef.current;
+    const onScroll = () => positionOverlay();
+    container?.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      container?.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOverlayId, overlayCoords, zoomLevel]);
+
   const saveScroll = () => {
     if (timelineContainerRef.current) {
       localStorage.setItem('calendarScrollPos', String(timelineContainerRef.current.scrollTop));
@@ -299,9 +344,27 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     return tags.find((t) => t.name === tagName)?.color || 'transparent';
   };
 
-  // Open the edit overlay for an event at the given viewport coords.
-  const openEventOverlay = (ev: PositionedEvent, x: number, y: number) => {
-    setOverlayCoords({ x, y });
+  // Open edit overlay popover from a click, clamped into the viewport.
+  const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
+    saveScroll();
+
+    // Anchor the overlay to the exact click point: horizontal straight from the
+    // click, vertical converted to a timeline minute so all subsequent
+    // scroll/zoom anchoring stays relative to where the click landed.
+    const overlayWidth = 288;
+    const viewportWidth = window.innerWidth;
+    const container = timelineContainerRef.current;
+    const rect = container?.getBoundingClientRect();
+    const scrollTop = container?.scrollTop ?? 0;
+    const contentY = e.clientY - (rect?.top ?? 0) + scrollTop;
+    const topMin = (contentY / zoomLevel) * 60;
+
+    let x = e.clientX;
+    if (x + overlayWidth > viewportWidth) {
+      x = Math.max(10, viewportWidth - overlayWidth - 20);
+    }
+
+    setOverlayCoords({ topMin, x });
     setEditingEvent(ev);
     setActiveOverlayId(ev.id);
     setEditTitle(ev.title);
@@ -311,29 +374,6 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     setEditStartTime(ev.startDatetime.substring(11, 16));
     setEditEndDate(ev.endDatetime.substring(0, 10));
     setEditEndTime(ev.endDatetime.substring(11, 16));
-  };
-
-  // Open edit overlay popover from a click, clamped into the viewport.
-  const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
-    saveScroll();
-
-    // Position clamp logic
-    const overlayWidth = 288;
-    const overlayHeight = 320;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    let x = e.clientX;
-    if (x + overlayWidth > viewportWidth) {
-      x = Math.max(10, viewportWidth - overlayWidth - 20);
-    }
-
-    let y = e.clientY;
-    if (y + overlayHeight > viewportHeight) {
-      y = Math.max(10, viewportHeight - overlayHeight - 20);
-    }
-
-    openEventOverlay(ev, x, y);
   };
 
   // Deep link from search: when arriving with ?event=<id>, the matching event is
@@ -796,10 +836,6 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
         <div
           ref={overlayRef}
           className="fixed bg-card border border-border rounded-lg shadow-2xl p-4 w-72 space-y-3 z-50 text-left"
-          style={{
-            left: overlayCoords ? `${overlayCoords.x}px` : '50%',
-            top: overlayCoords ? `${overlayCoords.y}px` : '50%',
-          }}
         >
           <div className="flex items-center justify-between border-b border-border pb-2">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
