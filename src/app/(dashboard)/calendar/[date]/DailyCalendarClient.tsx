@@ -52,8 +52,6 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const [recurEvent, setRecurEvent] = useState<PositionedEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState<PositionedEvent | null>(null);
   const [overlayCoords, setOverlayCoords] = useState<{ x: number; y: number } | null>(null);
-  // Event briefly ring-highlighted after arriving via a search deep link.
-  const [highlightEventId, setHighlightEventId] = useState<number | null>(null);
 
   // --- Scroll Restoration ---
   const timelineContainerRef = useRef<HTMLDivElement>(null);
@@ -99,8 +97,13 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     const savedZoom = localStorage.getItem('calendarZoomLevel');
     if (savedZoom) setZoomLevel(parseInt(savedZoom, 10));
 
+    // Skip scroll restore on a search deep link — the deep-link handler owns the
+    // scroll position in that case, and restoring would fight it.
+    const isDeepLink =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).has('event');
     const savedScroll = localStorage.getItem('calendarScrollPos');
-    if (savedScroll && timelineContainerRef.current) {
+    if (!isDeepLink && savedScroll && timelineContainerRef.current) {
       timelineContainerRef.current.scrollTop = parseInt(savedScroll, 10);
     }
   }, []);
@@ -333,65 +336,42 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     openEventOverlay(ev, x, y);
   };
 
-  // Deep link from search: when arriving with ?event=<id>, scroll that event
-  // into view and open its edit popup. A ref guards against reopening it.
+  // Deep link from search: when arriving with ?event=<id>, the matching event is
+  // ring-highlighted purely from the URL during render (see the card's class),
+  // so it needs no state/timer and clears on navigation. This effect only scrolls
+  // that event into view once. A ref guards against re-scrolling.
   const searchParams = useSearchParams();
-  const handledEventParam = useRef<string | null>(null);
+  const highlightEventId = searchParams.get('event')
+    ? parseInt(searchParams.get('event') as string, 10)
+    : null;
+  const scrolledToEventParam = useRef<string | null>(null);
   useEffect(() => {
     const idParam = searchParams.get('event');
-    if (!idParam || handledEventParam.current === idParam) return;
+    if (!idParam || scrolledToEventParam.current === idParam) return;
 
     const ev = positionedEvents.find((e) => e.id === parseInt(idParam, 10));
     if (!ev) return;
 
-    handledEventParam.current = idParam;
-
-    const topPx = ((ev.top_position || 0) / 60) * zoomLevel;
-
-    requestAnimationFrame(() => {
-      // Scroll the event's start time into view, then point the popup's
-      // top-left corner at the event's top-left — the same anchoring as a click.
+    // The event card renders a little after mount (dev renders can lag), so poll
+    // for it before scrolling rather than guessing a fixed delay. Uses setTimeout
+    // (not requestAnimationFrame, which is paused while the tab is backgrounded).
+    let tries = 0;
+    const scrollToEvent = () => {
+      if (scrolledToEventParam.current === idParam) return; // already done
       const container = timelineContainerRef.current;
-      if (container) container.scrollTop = Math.max(0, topPx - 120);
-
-      const overlayWidth = 288;
-      const overlayHeight = 320;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-
-      let x: number;
-      let y: number;
       const card = container?.querySelector<HTMLElement>(`[data-event-id="${ev.id}"]`);
-      if (card) {
-        const r = card.getBoundingClientRect();
-        x = r.left;
-        y = r.top;
-      } else {
-        const rect = container?.getBoundingClientRect();
-        const scrollTop = container?.scrollTop ?? 0;
-        x = (rect?.left ?? 0) + 64;
-        y = (rect?.top ?? 0) + topPx - scrollTop;
+      if (container && card) {
+        scrolledToEventParam.current = idParam;
+        // Scroll the event's start ~120px below the top of the timeline.
+        const rect = container.getBoundingClientRect();
+        container.scrollTop += card.getBoundingClientRect().top - (rect.top + 120);
+        return;
       }
-      // Nudge in only if it would overflow the viewport (matches on-click).
-      if (x + overlayWidth > vw) x = Math.max(10, vw - overlayWidth - 20);
-      if (y + overlayHeight > vh) y = Math.max(10, vh - overlayHeight - 20);
-
-      openEventOverlay(ev, x, y);
-      // Briefly highlight the event so it's easy to spot; clears on a timer
-      // (and naturally on navigation/reload).
-      setHighlightEventId(ev.id);
-      // Strip the query so closing/reopening the day doesn't re-trigger it.
-      window.history.replaceState(null, '', `/calendar/${date}`);
-    });
+      if (tries++ < 40) setTimeout(scrollToEvent, 60);
+    };
+    setTimeout(scrollToEvent, 60);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
-
-  // Clear the search deep-link highlight after a moment.
-  useEffect(() => {
-    if (highlightEventId === null) return;
-    const t = setTimeout(() => setHighlightEventId(null), 2600);
-    return () => clearTimeout(t);
-  }, [highlightEventId]);
 
   // Actions
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -762,11 +742,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                       heightPx < 46
                         ? 'px-1.5 items-start justify-center'
                         : 'pt-1 pb-1 px-1.5 items-start justify-start'
-                    } ${
-                      highlightEventId === ev.id
-                        ? 'ring-2 ring-white animate-pulse z-20'
-                        : ''
-                    }`}
+                    } ${highlightEventId === ev.id ? 'ring-2 ring-white z-20' : ''}`}
                     style={{
                       top: `${topPx}px`,
                       height: `${heightPx}px`,
