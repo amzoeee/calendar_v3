@@ -51,15 +51,14 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const [recurEvent, setRecurEvent] = useState<PositionedEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState<PositionedEvent | null>(null);
   const [overlayCoords, setOverlayCoords] = useState<{ x: number; y: number } | null>(null);
-  // Vertical offset applied to the (fixed-positioned) overlay so it follows
-  // its event as the timeline scrolls. See the scroll-tracking effect below.
-  const [overlayScrollOffset, setOverlayScrollOffset] = useState(0);
+  // Live vertical position of the (fixed) overlay, recomputed from the event's
+  // on-screen position so it follows the timeline as it scrolls/zooms while
+  // staying clamped inside the timeline box. See the anchor effect below.
+  const [overlayTop, setOverlayTop] = useState(0);
 
   // --- Scroll Restoration ---
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  // Timeline scrollTop captured when the overlay was opened.
-  const overlayOpenScrollRef = useRef<number>(0);
 
   // --- Add Event Form State ---
   const [formTitle, setFormTitle] = useState('');
@@ -219,26 +218,48 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [activeOverlayId]);
 
-  // Keep the (fixed-positioned) edit overlay anchored to its event as the
-  // timeline scrolls: shift it vertically by the same delta as the scroll.
+  // Height reserved for the edit overlay when clamping it into view.
+  const OVERLAY_HEIGHT = 320;
+
+  // Where the overlay's top should sit: aligned to the event's current on-screen
+  // position, clamped to stay inside the timeline box (and viewport) so it never
+  // drifts above or below the calendar when scrolling or zooming.
+  const computeOverlayTop = (ev: PositionedEvent): number => {
+    const margin = 8;
+    const eventTopContent = ((ev.top_position || 0) / 60) * zoomLevel;
+    const container = timelineContainerRef.current;
+    if (!container) return eventTopContent;
+    const rect = container.getBoundingClientRect();
+    const anchorY = rect.top + eventTopContent - container.scrollTop;
+    const minTop = rect.top + margin;
+    const maxTop = Math.min(rect.bottom, window.innerHeight) - OVERLAY_HEIGHT - margin;
+    if (maxTop < minTop) return minTop;
+    return Math.max(minTop, Math.min(anchorY, maxTop));
+  };
+
+  // Keep the (fixed) edit overlay anchored to its event as the timeline scrolls
+  // or zooms, clamped within the timeline box so it never drifts outside.
   useEffect(() => {
     const container = timelineContainerRef.current;
-    if (activeOverlayId === null || !container) return;
+    if (activeOverlayId === null || !container || !editingEvent) return;
+
+    setOverlayTop(computeOverlayTop(editingEvent));
 
     let raf = 0;
-    const handleScroll = () => {
+    const update = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        setOverlayScrollOffset(overlayOpenScrollRef.current - container.scrollTop);
-      });
+      raf = requestAnimationFrame(() => setOverlayTop(computeOverlayTop(editingEvent)));
     };
 
-    container.addEventListener('scroll', handleScroll, { passive: true });
+    container.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
     return () => {
-      container.removeEventListener('scroll', handleScroll);
+      container.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
       cancelAnimationFrame(raf);
     };
-  }, [activeOverlayId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOverlayId, editingEvent, zoomLevel]);
 
   const saveScroll = () => {
     if (timelineContainerRef.current) {
@@ -323,25 +344,18 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
     saveScroll();
 
-    // Position clamp logic
+    // Horizontal clamp so the overlay never runs off the right edge. Vertical
+    // placement is handled by computeOverlayTop (anchored to the event).
     const overlayWidth = 288;
-    const overlayHeight = 320;
     const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
 
     let x = e.clientX;
     if (x + overlayWidth > viewportWidth) {
       x = Math.max(10, viewportWidth - overlayWidth - 20);
     }
 
-    let y = e.clientY;
-    if (y + overlayHeight > viewportHeight) {
-      y = Math.max(10, viewportHeight - overlayHeight - 20);
-    }
-
-    overlayOpenScrollRef.current = timelineContainerRef.current?.scrollTop ?? 0;
-    setOverlayScrollOffset(0);
-    setOverlayCoords({ x, y });
+    setOverlayCoords({ x, y: e.clientY });
+    setOverlayTop(computeOverlayTop(ev));
     setEditingEvent(ev);
     setActiveOverlayId(ev.id);
     setEditTitle(ev.title);
@@ -776,7 +790,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
           className="fixed bg-card border border-border rounded-lg shadow-2xl p-4 w-72 space-y-3 z-50 text-left"
           style={{
             left: overlayCoords ? `${overlayCoords.x}px` : '50%',
-            top: overlayCoords ? `${overlayCoords.y + overlayScrollOffset}px` : '50%',
+            top: overlayCoords ? `${overlayTop}px` : '50%',
           }}
         >
           <div className="flex items-center justify-between border-b border-border pb-2">
