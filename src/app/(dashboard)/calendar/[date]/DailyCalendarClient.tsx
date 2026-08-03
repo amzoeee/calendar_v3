@@ -349,18 +349,32 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     const topPx = ((ev.top_position || 0) / 60) * zoomLevel;
 
     requestAnimationFrame(() => {
-      // Scroll the event's start time into view, then anchor the popup to the
-      // event's actual on-screen position (not a fixed spot).
+      // Scroll the event's start time into view, then point the popup's
+      // top-left corner at the event's top-left — the same anchoring as a click.
       const container = timelineContainerRef.current;
       if (container) container.scrollTop = Math.max(0, topPx - 120);
 
-      const rect = container?.getBoundingClientRect();
-      const scrollTop = container?.scrollTop ?? 0;
-      const w = window.innerWidth;
-      const eventViewportY = (rect?.top ?? 0) + topPx - scrollTop;
-      const y = Math.max(70, Math.min(eventViewportY, window.innerHeight - 320 - 10));
-      const centerX = rect ? rect.left + rect.width / 2 - 144 : w / 2 - 144;
-      const x = Math.max(20, Math.min(centerX, w - 288 - 20));
+      const overlayWidth = 288;
+      const overlayHeight = 320;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      let x: number;
+      let y: number;
+      const card = container?.querySelector<HTMLElement>(`[data-event-id="${ev.id}"]`);
+      if (card) {
+        const r = card.getBoundingClientRect();
+        x = r.left;
+        y = r.top;
+      } else {
+        const rect = container?.getBoundingClientRect();
+        const scrollTop = container?.scrollTop ?? 0;
+        x = (rect?.left ?? 0) + 64;
+        y = (rect?.top ?? 0) + topPx - scrollTop;
+      }
+      // Nudge in only if it would overflow the viewport (matches on-click).
+      if (x + overlayWidth > vw) x = Math.max(10, vw - overlayWidth - 20);
+      if (y + overlayHeight > vh) y = Math.max(10, vh - overlayHeight - 20);
 
       openEventOverlay(ev, x, y);
       // Briefly highlight the event so it's easy to spot; clears on a timer
@@ -743,6 +757,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                 return (
                   <div
                     key={ev.id}
+                    data-event-id={ev.id}
                     className={`absolute rounded pointer-events-auto transition-all select-none cursor-pointer flex flex-col overflow-hidden group event-card-clickable shadow border border-black/10 hover:brightness-105 ${
                       heightPx < 46
                         ? 'px-1.5 items-start justify-center'
