@@ -764,7 +764,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                         : 'pt-1 pb-1 px-1.5 items-start justify-start'
                     } ${
                       highlightEventId === ev.id
-                        ? 'ring-2 ring-offset-2 ring-offset-background ring-foreground animate-pulse z-20'
+                        ? 'ring-2 ring-white animate-pulse z-20'
                         : ''
                     }`}
                     style={{
