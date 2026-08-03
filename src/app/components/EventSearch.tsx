@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 
@@ -19,10 +20,17 @@ interface EventResult {
   tag: string | null;
 }
 
+const PAGE_SIZE = 25;
+
 /**
  * Global event search for the view headers. Debounced query against
  * /api/events/search; clicking a result jumps to that event's day and
  * opens it (via a ?event=<id> deep link read by the daily view).
+ *
+ * The results dropdown is rendered in a portal with fixed positioning so it
+ * escapes the calendar's clipping/overflow containers and sits above the grid
+ * — otherwise it gets clipped to a sliver and clicks/scrolls fall through to
+ * the calendar behind it. More results page in as you scroll to the bottom.
  */
 export default function EventSearch({ tags }: { tags: Tag[] }) {
   const router = useRouter();
@@ -30,31 +38,42 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
   const [results, setResults] = useState<EventResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const [rect, setRect] = useState<DOMRect | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Debounced fetch. State resets for the empty-query case happen in the
-  // change handler; this effect only performs the (async) fetch.
+  const fetchPage = async (q: string, offset: number): Promise<EventResult[] | null> => {
+    try {
+      const res = await fetch(
+        `/api/events/search?q=${encodeURIComponent(q)}&offset=${offset}`
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data.events || []) as EventResult[];
+    } catch {
+      return null;
+    }
+  };
+
+  // Debounced initial fetch (offset 0) whenever the query changes.
   useEffect(() => {
     const q = query.trim();
     if (q.length === 0) return;
 
     const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/events/search?q=${encodeURIComponent(q)}`);
-        if (res.ok) {
-          const data = await res.json();
-          setResults(data.events || []);
-          setHighlight(0);
-          setOpen(true);
-        }
-      } catch {
-        // network hiccup — leave existing results
-      } finally {
-        setLoading(false);
+      const events = await fetchPage(q, 0);
+      if (events) {
+        setResults(events);
+        setHasMore(events.length === PAGE_SIZE);
+        setHighlight(0);
+        setOpen(true);
       }
+      setLoading(false);
     }, 250);
 
     return () => clearTimeout(timer);
@@ -64,6 +83,7 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
     setQuery(value);
     if (value.trim().length === 0) {
       setResults([]);
+      setHasMore(false);
       setOpen(false);
       setLoading(false);
     } else {
@@ -72,12 +92,49 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
     }
   };
 
-  // Close on outside click
+  // Append the next page when the list nears its bottom.
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const events = await fetchPage(query.trim(), results.length);
+    if (events) {
+      setResults((prev) => [...prev, ...events]);
+      setHasMore(events.length === PAGE_SIZE);
+    }
+    setLoadingMore(false);
+  };
+
+  const onListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
+      loadMore();
+    }
+  };
+
+  // Track the anchor rect so the fixed dropdown stays under the input as the
+  // page scrolls or resizes.
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      if (containerRef.current) setRect(containerRef.current.getBoundingClientRect());
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open]);
+
+  // Close on outside click (input container and the portaled dropdown both count
+  // as "inside").
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const t = e.target as Node;
+      if (containerRef.current?.contains(t)) return;
+      if (dropdownRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -127,9 +184,69 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
   const clear = () => {
     setQuery('');
     setResults([]);
+    setHasMore(false);
     setOpen(false);
     inputRef.current?.focus();
   };
+
+  const dropdown =
+    open && rect
+      ? createPortal(
+          <div
+            ref={dropdownRef}
+            onScroll={onListScroll}
+            onWheel={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              top: rect.bottom + 8,
+              right: Math.max(8, window.innerWidth - rect.right),
+              width: 320,
+              // Solid background so the grid never shows through, and keep any
+              // overscroll from chaining to the calendar behind it.
+              backgroundColor: 'var(--card)',
+              overscrollBehavior: 'contain',
+            }}
+            className="max-h-96 overflow-y-auto border border-border rounded-lg shadow-2xl z-[100] py-1"
+          >
+            {loading && results.length === 0 ? (
+              <div className="px-3 py-4 text-xs text-muted-foreground text-center">Searching…</div>
+            ) : results.length === 0 ? (
+              <div className="px-3 py-4 text-xs text-muted-foreground text-center">No events found</div>
+            ) : (
+              <>
+                {results.map((ev, i) => (
+                  <button
+                    key={ev.id}
+                    onClick={() => goTo(ev)}
+                    onMouseEnter={() => setHighlight(i)}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-left cursor-pointer transition-colors ${
+                      i === highlight ? 'bg-secondary' : ''
+                    }`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: getColor(ev.tag) }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-foreground truncate">
+                        {ev.title}
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground truncate">
+                        {formatWhen(ev.startDatetime)}
+                        {ev.tag ? ` · ${ev.tag}` : ''}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+                {loadingMore && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground text-center">Loading more…</div>
+                )}
+              </>
+            )}
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <div ref={containerRef} className="relative">
@@ -158,40 +275,7 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
         )}
       </div>
 
-      {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-card border border-border rounded-lg shadow-2xl z-50 py-1">
-          {loading && results.length === 0 ? (
-            <div className="px-3 py-4 text-xs text-muted-foreground text-center">Searching…</div>
-          ) : results.length === 0 ? (
-            <div className="px-3 py-4 text-xs text-muted-foreground text-center">No events found</div>
-          ) : (
-            results.map((ev, i) => (
-              <button
-                key={ev.id}
-                onClick={() => goTo(ev)}
-                onMouseEnter={() => setHighlight(i)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left cursor-pointer transition-colors ${
-                  i === highlight ? 'bg-secondary' : ''
-                }`}
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: getColor(ev.tag) }}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-foreground truncate">
-                    {ev.title}
-                  </span>
-                  <span className="block text-[11px] text-muted-foreground truncate">
-                    {formatWhen(ev.startDatetime)}
-                    {ev.tag ? ` · ${ev.tag}` : ''}
-                  </span>
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }

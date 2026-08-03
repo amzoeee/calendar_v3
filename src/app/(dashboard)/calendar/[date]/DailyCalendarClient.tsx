@@ -52,6 +52,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const [recurEvent, setRecurEvent] = useState<PositionedEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState<PositionedEvent | null>(null);
   const [overlayCoords, setOverlayCoords] = useState<{ x: number; y: number } | null>(null);
+  // Event briefly ring-highlighted after arriving via a search deep link.
+  const [highlightEventId, setHighlightEventId] = useState<number | null>(null);
 
   // --- Scroll Restoration ---
   const timelineContainerRef = useRef<HTMLDivElement>(null);
@@ -345,20 +347,37 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     handledEventParam.current = idParam;
 
     const topPx = ((ev.top_position || 0) / 60) * zoomLevel;
-    const w = window.innerWidth;
-    const x = Math.max(20, Math.min(w - 288 - 20, Math.round(w / 2 - 144)));
 
     requestAnimationFrame(() => {
-      // Scroll the event's start time into view and open its popup.
-      if (timelineContainerRef.current) {
-        timelineContainerRef.current.scrollTop = Math.max(0, topPx - 120);
-      }
-      openEventOverlay(ev, x, 120);
+      // Scroll the event's start time into view, then anchor the popup to the
+      // event's actual on-screen position (not a fixed spot).
+      const container = timelineContainerRef.current;
+      if (container) container.scrollTop = Math.max(0, topPx - 120);
+
+      const rect = container?.getBoundingClientRect();
+      const scrollTop = container?.scrollTop ?? 0;
+      const w = window.innerWidth;
+      const eventViewportY = (rect?.top ?? 0) + topPx - scrollTop;
+      const y = Math.max(70, Math.min(eventViewportY, window.innerHeight - 320 - 10));
+      const centerX = rect ? rect.left + rect.width / 2 - 144 : w / 2 - 144;
+      const x = Math.max(20, Math.min(centerX, w - 288 - 20));
+
+      openEventOverlay(ev, x, y);
+      // Briefly highlight the event so it's easy to spot; clears on a timer
+      // (and naturally on navigation/reload).
+      setHighlightEventId(ev.id);
       // Strip the query so closing/reopening the day doesn't re-trigger it.
       window.history.replaceState(null, '', `/calendar/${date}`);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  // Clear the search deep-link highlight after a moment.
+  useEffect(() => {
+    if (highlightEventId === null) return;
+    const t = setTimeout(() => setHighlightEventId(null), 2600);
+    return () => clearTimeout(t);
+  }, [highlightEventId]);
 
   // Actions
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -728,6 +747,10 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                       heightPx < 46
                         ? 'px-1.5 items-start justify-center'
                         : 'pt-1 pb-1 px-1.5 items-start justify-start'
+                    } ${
+                      highlightEventId === ev.id
+                        ? 'ring-2 ring-offset-2 ring-offset-background ring-foreground animate-pulse z-20'
+                        : ''
                     }`}
                     style={{
                       top: `${topPx}px`,

@@ -17,6 +17,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ events: [] });
   }
 
+  // Pagination: fixed page size, client requests further pages by `offset`.
+  const PAGE_SIZE = 25;
+  const parsedOffset = parseInt(searchParams.get('offset') || '0', 10);
+  const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
+
   const pattern = `%${q}%`;
 
   try {
@@ -41,7 +46,8 @@ export async function GET(request: NextRequest) {
         )
       )
       .orderBy(desc(events.startDatetime))
-      .limit(25);
+      .limit(PAGE_SIZE)
+      .offset(offset);
 
     return NextResponse.json({ events: result });
   } catch (e: unknown) {
