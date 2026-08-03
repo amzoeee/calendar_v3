@@ -14,6 +14,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
+import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
   updateEventAction,
@@ -505,6 +506,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           <span className="px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
             Weekly
           </span>
+          <EventSearch tags={tags} />
         </div>
       </div>
 
