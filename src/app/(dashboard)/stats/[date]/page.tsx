@@ -17,8 +17,10 @@ const MAX_RANGE_DAYS = 366;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toDateStr = (d: Date) =>
-  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  // 4-digit year so the emitted string is always a parseable date.
+  `${String(d.getFullYear()).padStart(4, '0')}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const parseLocalDate = (dateStr: string) => new Date(dateStr + 'T00:00:00');
+const isRealDate = (dateStr: string) => !isNaN(parseLocalDate(dateStr).getTime());
 // Midnight anchor, safe to iterate day-by-day across DST boundaries.
 const dayAnchor = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const sundayOf = (d: Date) =>
@@ -35,9 +37,10 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
     redirect('/login');
   }
 
-  // Validate date format
+  // Validate date format AND that it's a real calendar date (e.g. reject
+  // "2026-13-45", which passes the regex but is not a parseable date).
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(date)) {
+  if (!dateRegex.test(date) || !isRealDate(date)) {
     const today = new Date().toLocaleDateString('en-CA');
     redirect(`/stats/${today}`);
   }
@@ -47,7 +50,8 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
   // When `end` is provided, `date` is treated as the literal range start.
   const hasEnd =
     typeof resolvedSearchParams.end === 'string' &&
-    dateRegex.test(resolvedSearchParams.end);
+    dateRegex.test(resolvedSearchParams.end) &&
+    isRealDate(resolvedSearchParams.end);
 
   const startDate = dayAnchor(
     hasEnd ? parseLocalDate(date) : sundayOf(parseLocalDate(date))

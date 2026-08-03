@@ -21,9 +21,20 @@ interface StatsClientProps {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toDateStr = (d: Date) =>
-  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  // Pad the year to 4 digits too — an unpadded 3-digit year (e.g. "202-08-16")
+  // is not a parseable date string and renders as "Invalid Date".
+  `${String(d.getFullYear()).padStart(4, '0')}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const addDays = (d: Date, n: number) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+
+// A well-formed YYYY-MM-DD that is also a real calendar date with a sensible
+// (4-digit) year. Guards against partial entries like "0202-08-15" that the
+// native date input can momentarily emit while the year is still being typed.
+const isSensibleDate = (s: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + 'T00:00:00');
+  return !isNaN(d.getTime()) && d.getFullYear() >= 1000;
+};
 
 export default function StatsClient({
   startDate,
@@ -184,8 +195,8 @@ export default function StatsClient({
   }
 
   const commitStart = () => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(localStart)) {
-      setLocalStart(startDate); // revert an incomplete entry
+    if (!isSensibleDate(localStart)) {
+      setLocalStart(startDate); // revert an incomplete/nonsensical entry
       return;
     }
     if (localStart === startDate) return;
@@ -195,8 +206,8 @@ export default function StatsClient({
   };
 
   const commitEnd = () => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(localEnd)) {
-      setLocalEnd(endDate); // revert an incomplete entry
+    if (!isSensibleDate(localEnd)) {
+      setLocalEnd(endDate); // revert an incomplete/nonsensical entry
       return;
     }
     if (localEnd === endDate) return;
