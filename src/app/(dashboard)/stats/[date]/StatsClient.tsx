@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import EventSearch from '@/app/components/EventSearch';
 
 interface Tag {
   id: number;
@@ -288,6 +289,7 @@ export default function StatsClient({
             <span className="px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
               Stats
             </span>
+            <EventSearch tags={tags} />
           </div>
         </div>
 

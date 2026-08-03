@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import TagSelect from '@/app/components/TagSelect';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft,
   ChevronRight,
@@ -16,6 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
+import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
   updateEventAction,
@@ -96,8 +97,13 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     const savedZoom = localStorage.getItem('calendarZoomLevel');
     if (savedZoom) setZoomLevel(parseInt(savedZoom, 10));
 
+    // Skip scroll restore on a search deep link — the deep-link handler owns the
+    // scroll position in that case, and restoring would fight it.
+    const isDeepLink =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).has('event');
     const savedScroll = localStorage.getItem('calendarScrollPos');
-    if (savedScroll && timelineContainerRef.current) {
+    if (!isDeepLink && savedScroll && timelineContainerRef.current) {
       timelineContainerRef.current.scrollTop = parseInt(savedScroll, 10);
     }
   }, []);
@@ -293,7 +299,21 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     return tags.find((t) => t.name === tagName)?.color || 'transparent';
   };
 
-  // Open edit overlay popover
+  // Open the edit overlay for an event at the given viewport coords.
+  const openEventOverlay = (ev: PositionedEvent, x: number, y: number) => {
+    setOverlayCoords({ x, y });
+    setEditingEvent(ev);
+    setActiveOverlayId(ev.id);
+    setEditTitle(ev.title);
+    setEditTag(ev.tag || '');
+    setEditDesc(ev.description || '');
+    setEditStartDate(ev.startDatetime.substring(0, 10));
+    setEditStartTime(ev.startDatetime.substring(11, 16));
+    setEditEndDate(ev.endDatetime.substring(0, 10));
+    setEditEndTime(ev.endDatetime.substring(11, 16));
+  };
+
+  // Open edit overlay popover from a click, clamped into the viewport.
   const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
     saveScroll();
 
@@ -313,17 +333,45 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       y = Math.max(10, viewportHeight - overlayHeight - 20);
     }
 
-    setOverlayCoords({ x, y });
-    setEditingEvent(ev);
-    setActiveOverlayId(ev.id);
-    setEditTitle(ev.title);
-    setEditTag(ev.tag || '');
-    setEditDesc(ev.description || '');
-    setEditStartDate(ev.startDatetime.substring(0, 10));
-    setEditStartTime(ev.startDatetime.substring(11, 16));
-    setEditEndDate(ev.endDatetime.substring(0, 10));
-    setEditEndTime(ev.endDatetime.substring(11, 16));
+    openEventOverlay(ev, x, y);
   };
+
+  // Deep link from search: when arriving with ?event=<id>, the matching event is
+  // ring-highlighted purely from the URL during render (see the card's class),
+  // so it needs no state/timer and clears on navigation. This effect only scrolls
+  // that event into view once. A ref guards against re-scrolling.
+  const searchParams = useSearchParams();
+  const highlightEventId = searchParams.get('event')
+    ? parseInt(searchParams.get('event') as string, 10)
+    : null;
+  const scrolledToEventParam = useRef<string | null>(null);
+  useEffect(() => {
+    const idParam = searchParams.get('event');
+    if (!idParam || scrolledToEventParam.current === idParam) return;
+
+    const ev = positionedEvents.find((e) => e.id === parseInt(idParam, 10));
+    if (!ev) return;
+
+    // The event card renders a little after mount (dev renders can lag), so poll
+    // for it before scrolling rather than guessing a fixed delay. Uses setTimeout
+    // (not requestAnimationFrame, which is paused while the tab is backgrounded).
+    let tries = 0;
+    const scrollToEvent = () => {
+      if (scrolledToEventParam.current === idParam) return; // already done
+      const container = timelineContainerRef.current;
+      const card = container?.querySelector<HTMLElement>(`[data-event-id="${ev.id}"]`);
+      if (container && card) {
+        scrolledToEventParam.current = idParam;
+        // Scroll the event's start ~120px below the top of the timeline.
+        const rect = container.getBoundingClientRect();
+        container.scrollTop += card.getBoundingClientRect().top - (rect.top + 120);
+        return;
+      }
+      if (tries++ < 40) setTimeout(scrollToEvent, 60);
+    };
+    setTimeout(scrollToEvent, 60);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Actions
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -593,10 +641,11 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
 
           <h1 className="text-xl font-bold tracking-tight">{displayDate}</h1>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
               Daily
             </span>
+            <EventSearch tags={tags} />
           </div>
         </div>
 
@@ -688,11 +737,12 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                 return (
                   <div
                     key={ev.id}
+                    data-event-id={ev.id}
                     className={`absolute rounded pointer-events-auto transition-all select-none cursor-pointer flex flex-col overflow-hidden group event-card-clickable shadow border border-black/10 hover:brightness-105 ${
                       heightPx < 46
                         ? 'px-1.5 items-start justify-center'
                         : 'pt-1 pb-1 px-1.5 items-start justify-start'
-                    }`}
+                    } ${highlightEventId === ev.id ? 'ring-2 ring-white z-20' : ''}`}
                     style={{
                       top: `${topPx}px`,
                       height: `${heightPx}px`,
