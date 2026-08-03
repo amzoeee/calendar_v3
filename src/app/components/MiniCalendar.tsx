@@ -72,7 +72,9 @@ export default function MiniCalendar() {
   });
 
   // Year range for the picker, centered generously around the shown year.
-  const years = Array.from({ length: 21 }, (_, i) => year - 10 + i);
+  // Wide enough that the native dropdown scrolls and any reasonable year is
+  // reachable; the shown year sits in the middle so it opens scrolled to it.
+  const years = Array.from({ length: 121 }, (_, i) => year - 60 + i);
 
   // 6-week grid (42 cells) starting on the Sunday on/before the 1st.
   const firstWeekday = new Date(year, month, 1).getDay();
