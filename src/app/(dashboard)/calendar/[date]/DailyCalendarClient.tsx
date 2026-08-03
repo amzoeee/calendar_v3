@@ -342,17 +342,23 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
     saveScroll();
 
-    // Horizontal clamp so the overlay never runs off the right edge. Vertical
-    // placement is anchored to the event's start minute (see positionOverlay).
+    // Anchor the overlay to the exact click point: horizontal straight from the
+    // click, vertical converted to a timeline minute so all subsequent
+    // scroll/zoom anchoring stays relative to where the click landed.
     const overlayWidth = 288;
     const viewportWidth = window.innerWidth;
+    const container = timelineContainerRef.current;
+    const rect = container?.getBoundingClientRect();
+    const scrollTop = container?.scrollTop ?? 0;
+    const contentY = e.clientY - (rect?.top ?? 0) + scrollTop;
+    const topMin = (contentY / zoomLevel) * 60;
 
     let x = e.clientX;
     if (x + overlayWidth > viewportWidth) {
       x = Math.max(10, viewportWidth - overlayWidth - 20);
     }
 
-    setOverlayCoords({ topMin: ev.top_position || 0, x });
+    setOverlayCoords({ topMin, x });
     setEditingEvent(ev);
     setActiveOverlayId(ev.id);
     setEditTitle(ev.title);
