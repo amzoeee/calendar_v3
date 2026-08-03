@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import TagSelect from '@/app/components/TagSelect';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft,
   ChevronRight,
@@ -16,6 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
+import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
   updateEventAction,
@@ -293,7 +294,21 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     return tags.find((t) => t.name === tagName)?.color || 'transparent';
   };
 
-  // Open edit overlay popover
+  // Open the edit overlay for an event at the given viewport coords.
+  const openEventOverlay = (ev: PositionedEvent, x: number, y: number) => {
+    setOverlayCoords({ x, y });
+    setEditingEvent(ev);
+    setActiveOverlayId(ev.id);
+    setEditTitle(ev.title);
+    setEditTag(ev.tag || '');
+    setEditDesc(ev.description || '');
+    setEditStartDate(ev.startDatetime.substring(0, 10));
+    setEditStartTime(ev.startDatetime.substring(11, 16));
+    setEditEndDate(ev.endDatetime.substring(0, 10));
+    setEditEndTime(ev.endDatetime.substring(11, 16));
+  };
+
+  // Open edit overlay popover from a click, clamped into the viewport.
   const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
     saveScroll();
 
@@ -313,17 +328,37 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       y = Math.max(10, viewportHeight - overlayHeight - 20);
     }
 
-    setOverlayCoords({ x, y });
-    setEditingEvent(ev);
-    setActiveOverlayId(ev.id);
-    setEditTitle(ev.title);
-    setEditTag(ev.tag || '');
-    setEditDesc(ev.description || '');
-    setEditStartDate(ev.startDatetime.substring(0, 10));
-    setEditStartTime(ev.startDatetime.substring(11, 16));
-    setEditEndDate(ev.endDatetime.substring(0, 10));
-    setEditEndTime(ev.endDatetime.substring(11, 16));
+    openEventOverlay(ev, x, y);
   };
+
+  // Deep link from search: when arriving with ?event=<id>, scroll that event
+  // into view and open its edit popup. A ref guards against reopening it.
+  const searchParams = useSearchParams();
+  const handledEventParam = useRef<string | null>(null);
+  useEffect(() => {
+    const idParam = searchParams.get('event');
+    if (!idParam || handledEventParam.current === idParam) return;
+
+    const ev = positionedEvents.find((e) => e.id === parseInt(idParam, 10));
+    if (!ev) return;
+
+    handledEventParam.current = idParam;
+
+    const topPx = ((ev.top_position || 0) / 60) * zoomLevel;
+    const w = window.innerWidth;
+    const x = Math.max(20, Math.min(w - 288 - 20, Math.round(w / 2 - 144)));
+
+    requestAnimationFrame(() => {
+      // Scroll the event's start time into view and open its popup.
+      if (timelineContainerRef.current) {
+        timelineContainerRef.current.scrollTop = Math.max(0, topPx - 120);
+      }
+      openEventOverlay(ev, x, 120);
+      // Strip the query so closing/reopening the day doesn't re-trigger it.
+      window.history.replaceState(null, '', `/calendar/${date}`);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Actions
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -593,10 +628,11 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
 
           <h1 className="text-xl font-bold tracking-tight">{displayDate}</h1>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
               Daily
             </span>
+            <EventSearch tags={tags} />
           </div>
         </div>
 
