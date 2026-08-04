@@ -16,6 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
+import { computeInitialOverlayCoords, topMinToViewportTop } from '@/lib/overlayPosition';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -235,7 +236,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     if (!el || !container || !overlayCoords) return;
 
     const rect = container.getBoundingClientRect();
-    const top = rect.top + (overlayCoords.topMin / 60) * zoomLevel - container.scrollTop;
+    const top = topMinToViewportTop(overlayCoords.topMin, rect.top, container.scrollTop, zoomLevel);
     el.style.top = `${top}px`;
     el.style.left = `${overlayCoords.x}px`;
 
@@ -351,20 +352,13 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     // Anchor the overlay to the exact click point: horizontal straight from the
     // click, vertical converted to a timeline minute so all subsequent
     // scroll/zoom anchoring stays relative to where the click landed.
-    const overlayWidth = 288;
-    const viewportWidth = window.innerWidth;
     const container = timelineContainerRef.current;
     const rect = container?.getBoundingClientRect();
     const scrollTop = container?.scrollTop ?? 0;
-    const contentY = e.clientY - (rect?.top ?? 0) + scrollTop;
-    const topMin = (contentY / zoomLevel) * 60;
 
-    let x = e.clientX;
-    if (x + overlayWidth > viewportWidth) {
-      x = Math.max(10, viewportWidth - overlayWidth - 20);
-    }
-
-    setOverlayCoords({ topMin, x });
+    setOverlayCoords(
+      computeInitialOverlayCoords(e.clientX, e.clientY, rect?.top ?? 0, scrollTop, zoomLevel, window.innerWidth)
+    );
     setEditingEvent(ev);
     setActiveOverlayId(ev.id);
     setEditTitle(ev.title);
