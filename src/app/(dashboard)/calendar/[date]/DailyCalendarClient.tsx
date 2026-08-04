@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
-import { computeInitialOverlayCoords, topMinToViewportTop } from '@/lib/overlayPosition';
+import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin } from '@/lib/overlayPosition';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -254,8 +254,25 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
 
   useLayoutEffect(() => {
     if (activeOverlayId === null || !overlayCoords) return;
-    positionOverlay();
+
+    // On open (and whenever this effect re-fires), nudge the overlay's anchor
+    // back on-screen if it would otherwise render partially above/below the
+    // viewport — e.g. an event near the end of the day. Left out of the
+    // scroll handler below so the existing clip-path scroll-crop behavior is
+    // unaffected; scrolling just keeps tracking this (possibly nudged) anchor.
+    const el = overlayRef.current;
     const container = timelineContainerRef.current;
+    if (el && container) {
+      const rect = container.getBoundingClientRect();
+      const top = topMinToViewportTop(overlayCoords.topMin, rect.top, container.scrollTop, zoomLevel);
+      const nextTopMin = clampOverlayTopMin(overlayCoords.topMin, top, el.offsetHeight, zoomLevel, window.innerHeight);
+      if (nextTopMin !== overlayCoords.topMin) {
+        setOverlayCoords({ ...overlayCoords, topMin: nextTopMin });
+        return;
+      }
+    }
+
+    positionOverlay();
     const onScroll = () => positionOverlay();
     container?.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);

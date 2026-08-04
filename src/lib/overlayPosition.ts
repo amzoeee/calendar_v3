@@ -45,3 +45,27 @@ export function computeInitialOverlayCoords(
 export function topMinToViewportTop(topMin: number, containerTop: number, scrollTop: number, zoomLevel: number): number {
   return containerTop + (topMin / 60) * zoomLevel - scrollTop;
 }
+
+/**
+ * If the overlay (rendered at `top` px, `height` px tall) would run off the
+ * top or bottom of the viewport, shift `topMin` by the overflow amount so it
+ * renders fully on-screen. Returns the original topMin if it already fits.
+ */
+export function clampOverlayTopMin(
+  topMin: number,
+  top: number,
+  height: number,
+  zoomLevel: number,
+  viewportHeight: number,
+  margin: number = EDGE_MARGIN
+): number {
+  const overflowBottom = top + height - (viewportHeight - margin);
+  if (overflowBottom > 0) {
+    return topMin - (overflowBottom * 60) / zoomLevel;
+  }
+  const overflowTop = margin - top;
+  if (overflowTop > 0) {
+    return topMin + (overflowTop * 60) / zoomLevel;
+  }
+  return topMin;
+}
