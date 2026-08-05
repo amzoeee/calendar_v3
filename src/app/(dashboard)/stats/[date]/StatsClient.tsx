@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import EventSearch from '@/app/components/EventSearch';
 
 interface Tag {
@@ -105,6 +105,9 @@ export default function StatsClient({
     day: 'numeric',
     year: 'numeric',
   });
+  // Compact form for the mobile header — "8/2 - 8/8" instead of "Aug 2 - Aug 8, 2026".
+  const startDisplayCompact = start.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+  const endDisplayCompact = end.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
 
   // Per-day totals (used for the tag averages panel below).
   const dayStats = rangeDates.map((day) => {
@@ -183,6 +186,10 @@ export default function StatsClient({
     router.push(`/stats/${startDate}?end=${endDate}&weekdays_only=${!weekdaysOnly}`);
   };
 
+  // Mobile: the presets/custom-range/weekdays-only row is too much to show at
+  // once on a phone, so it collapses into a bottom sheet behind this toggle.
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+
   // Local copies of the range inputs so typing doesn't navigate mid-entry
   // (which used to reset the field after a single digit). We only commit — and
   // navigate — on blur or Enter, mirroring the event add/edit forms.
@@ -244,38 +251,47 @@ export default function StatsClient({
     <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* Header controls */}
-      <div className="border-b border-border flex flex-col gap-3 px-6 py-3 shrink-0 glass-panel">
+      <div className="border-b border-border flex flex-col gap-3 px-3 md:px-6 py-3 shrink-0 glass-panel">
         {/* Row 1: navigation + title + toggle */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2 md:gap-4 md:flex-wrap">
+          <div className="flex items-center gap-1.5 md:gap-3">
             <button
               onClick={() => router.push(prevUrl)}
-              className="p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
               aria-label="Previous period"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
             </button>
             <button
               onClick={() => router.push(todayUrl())}
-              className="px-3 py-2 text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
             >
               Today
             </button>
             <button
               onClick={() => router.push(nextUrl)}
-              className="p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
               aria-label="Next period"
             >
-              <ChevronRight className="h-5 w-5" />
+              <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
             </button>
           </div>
 
-          <h1 className="text-xl font-bold tracking-tight">
-            Stats: {startDisplay} – {endDisplay}
+          <h1 className="text-sm md:text-xl font-bold tracking-tight truncate min-w-0">
+            <span className="hidden md:inline">Stats: </span>
+            <span className="md:hidden">{startDisplayCompact} – {endDisplayCompact}</span>
+            <span className="hidden md:inline">{startDisplay} – {endDisplay}</span>
           </h1>
 
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
+          <div className="flex items-center gap-2 md:gap-4 shrink-0">
+            <button
+              onClick={() => setShowMobileFilters(true)}
+              className="md:hidden p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              aria-label="Range and filters"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+            </button>
+            <label className="hidden md:flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={weekdaysOnly}
@@ -286,15 +302,15 @@ export default function StatsClient({
                 Weekdays Only
               </span>
             </label>
-            <span className="px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
+            <span className="hidden md:inline-block px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
               Stats
             </span>
             <EventSearch tags={tags} />
           </div>
         </div>
 
-        {/* Row 2: presets + custom range pickers */}
-        <div className="flex items-center gap-3 flex-wrap">
+        {/* Row 2: presets + custom range pickers (desktop only — see the mobile filter sheet below) */}
+        <div className="hidden md:flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
             {presets.map((p) => (
               <button
@@ -351,18 +367,100 @@ export default function StatsClient({
         </div>
       </div>
 
+      {/* MOBILE FILTERS SHEET — presets, custom range, weekdays-only toggle */}
+      {showMobileFilters && (
+        <div className="md:hidden fixed inset-0 z-50 flex items-end">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileFilters(false)} />
+          <div className="relative w-full max-h-[85vh] overflow-y-auto bg-card border-t border-border rounded-t-2xl p-5 pb-8 space-y-5">
+            <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold tracking-tight">Range and filters</h2>
+              <button
+                onClick={() => setShowMobileFilters(false)}
+                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Presets</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {presets.map((p) => (
+                  <button
+                    key={p.label}
+                    onClick={() => router.push(buildUrl(p.start, endDate))}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${
+                      p.active
+                        ? 'bg-primary/20 border-primary text-primary'
+                        : 'bg-secondary border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Custom range</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">From</label>
+                  <input
+                    type="date"
+                    value={localStart}
+                    max={localEnd}
+                    onChange={(e) => setLocalStart(e.target.value)}
+                    onBlur={commitStart}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">To</label>
+                  <input
+                    type="date"
+                    value={localEnd}
+                    min={localStart}
+                    onChange={(e) => setLocalEnd(e.target.value)}
+                    onBlur={commitEnd}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground/70 mt-2">
+                {rangeLen} day{rangeLen === 1 ? '' : 's'} · {activeDaysWithData} active
+              </p>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={weekdaysOnly}
+                onChange={handleToggleWeekdays}
+                className="rounded bg-secondary border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+              />
+              <span className="text-sm font-medium text-foreground">Weekdays only</span>
+            </label>
+          </div>
+        </div>
+      )}
+
       {/* Main Page Area */}
-      <div className="flex-1 p-8 overflow-y-auto flex flex-col lg:flex-row gap-8">
+      <div className="flex-1 p-4 md:p-8 overflow-y-auto flex flex-col lg:flex-row gap-4 md:gap-8">
 
         {/* Stacked Bar Chart */}
-        <div className="flex-1 bg-card rounded-xl border border-border p-6 flex flex-col justify-between min-h-[400px]">
+        <div className="flex-1 bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
           <div>
             <h2 className="text-lg font-bold">Time Breakdown by Weekday</h2>
             <p className="text-xs text-muted-foreground mt-1">Average hours logged per weekday across the range</p>
           </div>
 
-          {/* Grid Chart */}
-          <div className="flex-1 flex mt-8 relative">
+          {/* Grid Chart — horizontally scrollable on mobile since 7 bars don't
+              fit a phone width at a legible size (see the fixed inner width below) */}
+          <div className="flex-1 mt-8 overflow-x-auto md:overflow-visible calendar-scrollbar">
+            <div className="relative h-full w-[460px] md:w-full">
 
             {/* Y Axis Guide Lines */}
             <div className="absolute left-10 right-0 top-0 bottom-8 flex flex-col justify-between pointer-events-none select-none">
@@ -431,11 +529,12 @@ export default function StatsClient({
               </div>
             </div>
 
+            </div>
           </div>
         </div>
 
         {/* Tag Averages Panel */}
-        <div className="w-full lg:w-96 bg-card rounded-xl border border-border p-6 space-y-6">
+        <div className="w-full lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
           <div>
             <h2 className="text-lg font-bold">Daily Averages</h2>
             <p className="text-xs text-muted-foreground mt-1">
