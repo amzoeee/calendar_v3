@@ -69,3 +69,14 @@ export function clampOverlayTopMin(
   }
   return topMin;
 }
+
+/**
+ * clip-path for an overlay cropped by `clipTop`/`clipBottom` px. Only the
+ * corners on an unclipped edge get rounded — a rounded corner on an edge
+ * that's actually cut off would look like a rendering bug, not an edge.
+ */
+export function overlayClipPath(clipTop: number, clipBottom: number, radius: string = '0.5rem'): string {
+  const topRadius = clipTop > 0 ? '0px' : radius;
+  const bottomRadius = clipBottom > 0 ? '0px' : radius;
+  return `inset(${clipTop}px 0px ${clipBottom}px 0px round ${topRadius} ${topRadius} ${bottomRadius} ${bottomRadius})`;
+}

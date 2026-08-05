@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
-import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, clampOverlayX } from '@/lib/overlayPosition';
+import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, clampOverlayX, overlayClipPath } from '@/lib/overlayPosition';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -248,7 +248,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       el.style.visibility = 'hidden';
     } else {
       el.style.visibility = 'visible';
-      el.style.clipPath = `inset(${clipTop}px 0px ${clipBottom}px 0px round 0.5rem)`;
+      el.style.clipPath = overlayClipPath(clipTop, clipBottom);
     }
   };
 
