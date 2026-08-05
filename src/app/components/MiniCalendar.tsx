@@ -11,6 +11,9 @@ const toDateStr = (d: Date) =>
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Date-bearing views the mini calendar can navigate within.
 const DATE_VIEWS = ['calendar', 'weekly', 'stats'];
+// Views with no date of their own where the mini calendar still shows, but
+// day clicks fall back to the daily view (see `view` below).
+const DATELESS_VIEWS = ['settings'];
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -20,7 +23,8 @@ const MONTHS = [
 /**
  * Google-Calendar-style mini month for the sidebar. Clicking a day jumps to
  * that date, preserving whichever date-bearing view you're currently on
- * (daily / weekly / stats). Hidden on pages that carry no date (e.g. Settings).
+ * (daily / weekly / stats). On dateless views that still opt in (e.g.
+ * Settings), day clicks fall back to the daily view.
  */
 export default function MiniCalendar() {
   const router = useRouter();
@@ -61,8 +65,8 @@ export default function MiniCalendar() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [pickerOpen]);
 
-  // Don't render on pages without a date (e.g. Settings).
-  if (!isDateView) return null;
+  // Don't render on pages without a date, unless explicitly opted in.
+  if (!isDateView && !DATELESS_VIEWS.includes(segments[0])) return null;
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
