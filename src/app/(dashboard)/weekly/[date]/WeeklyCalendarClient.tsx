@@ -14,6 +14,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
+import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -52,9 +53,23 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   const [recurEvent, setRecurEvent] = useState<PositionedEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState<PositionedEvent | null>(null);
   // Anchor for the edit overlay: `topMin` = the event's start minute (so it
-  // scales with zoom), `x` = horizontal viewport px. Positioned imperatively
+  // scales with zoom), `x` = horizontal viewport px. This is the TRUE click
+  // anchor and is never mutated after being set — positioned imperatively
   // (see positionOverlay) so it tracks the event with no per-frame re-render.
   const [overlayCoords, setOverlayCoords] = useState<{ topMin: number; x: number } | null>(null);
+  // One-time vertical nudge (in timeline minutes) applied on top of
+  // overlayCoords.topMin so the popup opens fully on-screen even when the
+  // click was near the end of the day. Computed fresh from the true anchor
+  // whenever the overlay opens, and dropped back to 0 on zoom/resize so a
+  // nudge sized for one viewport never lingers and drags the popup out of
+  // sync with its event — see the effects below.
+  const [verticalNudgeMin, setVerticalNudgeMin] = useState(0);
+  // Adjust-state-during-render: reset the nudge as soon as zoom changes.
+  const [prevZoomLevel, setPrevZoomLevel] = useState(zoomLevel);
+  if (prevZoomLevel !== zoomLevel) {
+    setPrevZoomLevel(zoomLevel);
+    if (verticalNudgeMin !== 0) setVerticalNudgeMin(0);
+  }
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // --- Edit Form State ---
@@ -239,7 +254,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     if (!el || !container || !overlayCoords) return;
 
     const rect = container.getBoundingClientRect();
-    const top = rect.top + (overlayCoords.topMin / 60) * zoomLevel - container.scrollTop;
+    const top = topMinToViewportTop(overlayCoords.topMin + verticalNudgeMin, rect.top, container.scrollTop, zoomLevel);
     el.style.top = `${top}px`;
     el.style.left = `${overlayCoords.x}px`;
 
@@ -251,23 +266,48 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       el.style.visibility = 'hidden';
     } else {
       el.style.visibility = 'visible';
-      el.style.clipPath = `inset(${clipTop}px 0px ${clipBottom}px 0px round 0.5rem)`;
+      el.style.clipPath = overlayClipPath(clipTop, clipBottom);
     }
   };
 
+  // Compute the one-time vertical nudge fresh from the TRUE click anchor
+  // whenever the overlay opens (or a new click re-anchors it within the same
+  // event) — never from a previously-nudged value, so it can't compound or
+  // drift out of sync with the event after a later zoom/resize.
+  useLayoutEffect(() => {
+    if (activeOverlayId === null || !overlayCoords) return;
+    const el = overlayRef.current;
+    const container = timelineContainerRef.current;
+    if (!el || !container) return;
+
+    const rect = container.getBoundingClientRect();
+    const naturalTop = topMinToViewportTop(overlayCoords.topMin, rect.top, container.scrollTop, zoomLevel);
+    const nudge = clampOverlayTopMin(overlayCoords.topMin, naturalTop, el.offsetHeight, zoomLevel, window.innerHeight) - overlayCoords.topMin;
+    setVerticalNudgeMin(nudge);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOverlayId, overlayCoords]);
+
+  // Reposition on scroll (tracking the current nudge as-is) and on resize
+  // (dropping the nudge — a window resize can't be "clamped for" the way an
+  // initial-open nudge is, so just let the popup crop/hide via the clip-path
+  // above, same as when its event scrolls out of view).
   useLayoutEffect(() => {
     if (activeOverlayId === null || !overlayCoords) return;
     positionOverlay();
     const container = timelineContainerRef.current;
     const onScroll = () => positionOverlay();
+    const onResize = () => {
+      setVerticalNudgeMin(0);
+      positionOverlay();
+    };
     container?.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', onResize);
     return () => {
       container?.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOverlayId, overlayCoords, zoomLevel]);
+  }, [activeOverlayId, overlayCoords, zoomLevel, verticalNudgeMin]);
 
   // Process events for a single day
   const getPositionedEventsForDay = (day: Date): PositionedEvent[] => {
@@ -327,20 +367,13 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     // Anchor the overlay to the exact click point: horizontal straight from the
     // click, vertical converted to a timeline minute so all subsequent
     // scroll/zoom anchoring stays relative to where the click landed.
-    const overlayWidth = 288;
-    const viewportWidth = window.innerWidth;
     const container = timelineContainerRef.current;
     const rect = container?.getBoundingClientRect();
     const scrollTop = container?.scrollTop ?? 0;
-    const contentY = e.clientY - (rect?.top ?? 0) + scrollTop;
-    const topMin = (contentY / zoomLevel) * 60;
 
-    let x = e.clientX;
-    if (x + overlayWidth > viewportWidth) {
-      x = Math.max(10, viewportWidth - overlayWidth - 20);
-    }
-
-    setOverlayCoords({ topMin, x });
+    setOverlayCoords(
+      computeInitialOverlayCoords(e.clientX, e.clientY, rect?.top ?? 0, scrollTop, zoomLevel, window.innerWidth)
+    );
     setEditingEvent(ev);
     setActiveOverlayId(ev.id);
     setEditTitle(ev.title);
