@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
-import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, clampOverlayX, overlayClipPath } from '@/lib/overlayPosition';
+import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -255,36 +255,27 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   useLayoutEffect(() => {
     if (activeOverlayId === null || !overlayCoords) return;
 
-    // On open and on resize, nudge the overlay's anchor back on-screen if it
-    // would otherwise render partially off the viewport — e.g. an event near
-    // the end of the day, or a window resize after opening. Left out of the
-    // scroll handler below so the existing clip-path scroll-crop behavior is
-    // unaffected; scrolling just keeps tracking this (possibly nudged) anchor.
-    // Returns true if it adjusted overlayCoords (a re-render will follow).
-    const reclamp = (): boolean => {
-      const el = overlayRef.current;
-      const container = timelineContainerRef.current;
-      if (!el || !container) return false;
-
+    // Once, when the overlay opens (or its anchor/zoom changes), nudge it
+    // back on-screen if it would otherwise render partially above/below the
+    // viewport — e.g. an event near the end of the day. Scrolling and
+    // resizing after that just reposition from this anchor and let the
+    // clip-path above crop/hide it as usual, same as when its event scrolls
+    // out of view — the popup isn't forced to stay glued to the screen.
+    const el = overlayRef.current;
+    const container = timelineContainerRef.current;
+    if (el && container) {
       const rect = container.getBoundingClientRect();
       const top = topMinToViewportTop(overlayCoords.topMin, rect.top, container.scrollTop, zoomLevel);
       const nextTopMin = clampOverlayTopMin(overlayCoords.topMin, top, el.offsetHeight, zoomLevel, window.innerHeight);
-      const nextX = clampOverlayX(overlayCoords.x, window.innerWidth);
-      if (nextTopMin !== overlayCoords.topMin || nextX !== overlayCoords.x) {
-        setOverlayCoords({ topMin: nextTopMin, x: nextX });
-        return true;
+      if (nextTopMin !== overlayCoords.topMin) {
+        setOverlayCoords({ ...overlayCoords, topMin: nextTopMin });
+        return;
       }
-      return false;
-    };
-
-    if (reclamp()) return;
+    }
 
     positionOverlay();
-    const container = timelineContainerRef.current;
     const onScroll = () => positionOverlay();
-    const onResize = () => {
-      if (!reclamp()) positionOverlay();
-    };
+    const onResize = () => positionOverlay();
     container?.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize);
     return () => {
