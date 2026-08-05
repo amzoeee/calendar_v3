@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import TagSelect from '@/app/components/TagSelect';
 import {
   ChevronLeft,
@@ -12,6 +12,7 @@ import {
   Copy,
   X,
   Plus,
+  Circle,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
@@ -71,6 +72,10 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     if (verticalNudgeMin !== 0) setVerticalNudgeMin(0);
   }
   const overlayRef = useRef<HTMLDivElement>(null);
+  // Separate DOM subtree from overlayRef (the desktop popover, hidden on
+  // mobile) — the click-outside listener below needs to know about both so a
+  // tap inside the mobile sheet isn't mistaken for a click outside it.
+  const mobileEditSheetRef = useRef<HTMLDivElement>(null);
 
   // --- Edit Form State ---
   const [editTitle, setEditTitle] = useState('');
@@ -114,6 +119,9 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   const nextWeekStr = new Date(new Date(sundayDate + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const weekStartStr = weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const weekEndStr = weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // Compact form for the mobile header — "8/2 - 8/8" instead of "Aug 2 - Aug 8, 2026".
+  const weekStartCompact = weekDates[0].toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+  const weekEndCompact = weekDates[6].toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
 
   // Load state
   useEffect(() => {
@@ -132,7 +140,8 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       if (
         activeOverlayId !== null &&
         overlayRef.current &&
-        !overlayRef.current.contains(event.target as Node)
+        !overlayRef.current.contains(event.target as Node) &&
+        !mobileEditSheetRef.current?.contains(event.target as Node)
       ) {
         const clickedEventCard = (event.target as Element).closest('.event-card-clickable');
         if (!clickedEventCard) {
@@ -385,6 +394,22 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     setEditEndTime(ev.endDatetime.substring(11, 16));
   };
 
+  // Mobile agenda rows have no click-point to anchor a popover to (there's no
+  // desktop-style overlay on mobile — see the bottom sheet below), so this just
+  // populates the edit state without touching overlayCoords/positioning.
+  const handleOpenEditMobile = (ev: PositionedEvent) => {
+    saveScroll();
+    setEditingEvent(ev);
+    setActiveOverlayId(ev.id);
+    setEditTitle(ev.title);
+    setEditTag(ev.tag || '');
+    setEditDesc(ev.description || '');
+    setEditStartDate(ev.startDatetime.substring(0, 10));
+    setEditStartTime(ev.startDatetime.substring(11, 16));
+    setEditEndDate(ev.endDatetime.substring(0, 10));
+    setEditEndTime(ev.endDatetime.substring(11, 16));
+  };
+
   const handleGridClick = (day: Date, hour: number) => {
     saveScroll();
     const dateStr = day.toLocaleDateString('en-CA');
@@ -475,28 +500,69 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     setOverlayCoords(null);
   };
 
+  const today = new Date();
+
+  // Mobile: tapping Today should jump the agenda list to today's section, not
+  // just land at the top (Sunday). Clicking Today navigates to a new `date`
+  // (even within the same week), which fully remounts this component — so a
+  // ref set before the click can't survive to the other side. Instead it's
+  // driven by a `?scrollToday=` query param (same deep-link pattern as the
+  // `?event=` scroll-to-event in the daily view), read fresh after whatever
+  // navigation/remount happens. Polls briefly since the agenda list may render
+  // a tick after mount.
+  const agendaContainerRef = useRef<HTMLDivElement>(null);
+  const searchParams = useSearchParams();
+  const scrolledToTodayParam = useRef<string | null>(null);
+  useEffect(() => {
+    const flag = searchParams.get('scrollToday');
+    if (!flag || scrolledToTodayParam.current === flag) return;
+
+    let tries = 0;
+    const attempt = () => {
+      if (scrolledToTodayParam.current === flag) return;
+      const container = agendaContainerRef.current;
+      const target = container?.querySelector<HTMLElement>('[data-today-section]');
+      if (container && target) {
+        scrolledToTodayParam.current = flag;
+        container.scrollTo({ top: target.offsetTop - 8, behavior: 'smooth' });
+        return;
+      }
+      if (tries++ < 20) setTimeout(attempt, 50);
+    };
+    attempt();
+  }, [searchParams]);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
-      
+
+      {/* Mobile FAB: opens the same Add Event modal used on desktop */}
+      <button
+        onClick={() => setShowAddModal(true)}
+        className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
+        aria-label="Add event"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
+
       {/* Navigation Header */}
-      <div className="h-16 border-b border-border flex items-center justify-between px-6 shrink-0 glass-panel">
-        <div className="flex items-center gap-3">
+      <div className="h-14 md:h-16 border-b border-border flex items-center justify-between px-3 md:px-6 gap-2 shrink-0 glass-panel">
+        <div className="flex items-center gap-1.5 md:gap-3">
           <button
             onClick={() => {
               saveScroll();
               router.push(`/weekly/${prevWeekStr}`);
             }}
-            className="p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+            className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
           </button>
           <button
             onClick={() => {
               saveScroll();
-              const today = new Date().toLocaleDateString('en-CA');
-              router.push(`/weekly/${today}`);
+              const todayStr = new Date().toLocaleDateString('en-CA');
+              router.push(`/weekly/${todayStr}?scrollToday=${Date.now()}`);
             }}
-            className="px-3 py-2 text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+            className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
           >
             Today
           </button>
@@ -505,18 +571,19 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
               saveScroll();
               router.push(`/weekly/${nextWeekStr}`);
             }}
-            className="p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+            className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
           </button>
         </div>
 
-        <h1 className="text-xl font-bold tracking-tight">
-          {weekStartStr} – {weekEndStr}
+        <h1 className="text-sm md:text-xl font-bold tracking-tight truncate min-w-0">
+          <span className="md:hidden">{weekStartCompact} – {weekEndCompact}</span>
+          <span className="hidden md:inline">{weekStartStr} – {weekEndStr}</span>
         </h1>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 bg-secondary border border-border rounded-lg p-0.5">
+        <div className="flex items-center gap-3 md:gap-4 shrink-0">
+          <div className="hidden md:flex items-center gap-1.5 bg-secondary border border-border rounded-lg p-0.5">
             <button
               onClick={() => changeZoom(-15)}
               className="p-1 rounded hover:bg-muted text-foreground cursor-pointer"
@@ -536,15 +603,70 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
               <ZoomIn className="h-4 w-4" />
             </button>
           </div>
-          <span className="px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
+          <span className="hidden md:inline-block px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
             Weekly
           </span>
           <EventSearch tags={tags} />
         </div>
       </div>
 
-      {/* Frozen day-header row (outside scroll) */}
-      <div className="flex shrink-0 border-b border-border bg-background">
+      {/* Mobile agenda list — the desktop hour grid doesn't fit 7 columns legibly on a
+          phone, so mobile gets a scrollable day-by-day list instead. */}
+      <div ref={agendaContainerRef} className="md:hidden flex-1 overflow-y-auto calendar-scrollbar divide-y divide-border">
+        {weekDates.map((day, idx) => {
+          const isToday = day.toDateString() === today.toDateString();
+          const dayEvents = getPositionedEventsForDay(day).sort(
+            (a, b) => (a.top_position || 0) - (b.top_position || 0)
+          );
+          return (
+            <div key={idx} className="px-4 py-3" {...(isToday ? { 'data-today-section': true } : {})}>
+              <div className="flex items-center gap-2 mb-2">
+                <span
+                  className={`text-xs font-bold uppercase tracking-wider ${
+                    isToday ? 'text-primary' : 'text-muted-foreground'
+                  }`}
+                >
+                  {day.toLocaleDateString('en-US', { weekday: 'short' })}
+                </span>
+                <span
+                  className={`text-sm font-extrabold inline-flex items-center justify-center h-6 w-6 rounded-full ${
+                    isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'
+                  }`}
+                >
+                  {day.getDate()}
+                </span>
+              </div>
+              {dayEvents.length === 0 ? (
+                <p className="text-xs text-muted-foreground pl-1">No events</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {dayEvents.map((ev) => (
+                    <button
+                      key={ev.id}
+                      onClick={() => handleOpenEditMobile(ev)}
+                      className="w-full flex items-center gap-2.5 text-left px-2.5 py-2 rounded-lg bg-secondary/60 hover:bg-secondary cursor-pointer event-card-clickable"
+                    >
+                      <Circle
+                        className="h-2.5 w-2.5 shrink-0"
+                        style={{ fill: ev.tag_color, color: ev.tag_color }}
+                      />
+                      <span className="flex-1 min-w-0 truncate text-sm font-semibold text-foreground">
+                        {ev.title}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {ev.start_time}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Frozen day-header row (outside scroll) — desktop only, see mobile agenda above */}
+      <div className="hidden md:flex shrink-0 border-b border-border bg-background">
         {/* Spacer matching the time-labels sidebar width */}
         <div className="w-16 shrink-0 border-r border-border" />
         {/* Day headers */}
@@ -572,10 +694,10 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
         </div>
       </div>
 
-      {/* Scrollable timeline area */}
+      {/* Scrollable timeline area — desktop only, see mobile agenda above */}
       <div
         ref={timelineContainerRef}
-        className="flex-1 overflow-y-auto calendar-scrollbar relative timeline-container"
+        className="hidden md:block flex-1 overflow-y-auto calendar-scrollbar relative timeline-container"
         id="timeline-container"
       >
         {/* Weekly grid wrapper */}
@@ -710,11 +832,11 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
         </div>
       </div>
 
-      {/* EDIT OVERLAY POPOVER */}
+      {/* EDIT OVERLAY POPOVER (desktop only — see the mobile bottom sheet below) */}
       {activeOverlayId && editingEvent && (
         <div
           ref={overlayRef}
-          className="fixed bg-card border border-border rounded-lg shadow-2xl p-4 w-72 space-y-3 z-50 text-left"
+          className="hidden md:block fixed bg-card border border-border rounded-lg shadow-2xl p-4 w-72 space-y-3 z-50 text-left"
         >
           <div className="flex items-center justify-between border-b border-border pb-2">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -878,10 +1000,176 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           </div>
         )}
 
+      {/* MOBILE EDIT EVENT SHEET (desktop uses the click-anchored popover above) */}
+      {activeOverlayId && editingEvent && (
+        <div className="md:hidden fixed inset-0 z-50 flex items-end">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => {
+              setActiveOverlayId(null);
+              setEditingEvent(null);
+              setOverlayCoords(null);
+            }}
+          />
+          <div ref={mobileEditSheetRef} className="relative w-full max-h-[85vh] overflow-y-auto bg-card border-t border-border rounded-t-2xl p-5 pb-8 space-y-4">
+            <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold tracking-tight">Edit event</h2>
+              <button
+                onClick={() => {
+                  setActiveOverlayId(null);
+                  setEditingEvent(null);
+                  setOverlayCoords(null);
+                }}
+                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <input
+              type="text"
+              required
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="Title"
+              className="block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+
+            <div className="flex items-center gap-2">
+              <span
+                className="w-4 h-4 rounded-full border border-border flex-shrink-0"
+                style={{ backgroundColor: getTagColor(editTag) }}
+              ></span>
+              <TagSelect
+                tags={tags}
+                value={editTag}
+                onChange={setEditTag}
+                className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              />
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="block text-muted-foreground text-xs mb-1">Start</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={editStartDate}
+                    onChange={(e) => setEditStartDate(e.target.value)}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
+                  />
+                  <input
+                    type="time"
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-muted-foreground text-xs mb-1">End</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={editEndDate}
+                    onChange={(e) => setEditEndDate(e.target.value)}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
+                  />
+                  <input
+                    type="time"
+                    value={editEndTime}
+                    onChange={(e) => setEditEndTime(e.target.value)}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              placeholder="Description"
+              rows={2}
+              className="block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none resize-none"
+            />
+
+            <div className="flex gap-2">
+              {editingEvent.recurrenceId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecurEvent(editingEvent);
+                    setShowEditRecurModal(true);
+                  }}
+                  className="flex-1 py-2.5 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-semibold cursor-pointer text-center"
+                >
+                  Save
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleUpdateInstance(editingEvent.id)}
+                  className="flex-1 py-2.5 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-semibold cursor-pointer text-center"
+                >
+                  Save
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveOverlayId(null);
+                  setEditingEvent(null);
+                  setOverlayCoords(null);
+                }}
+                className="px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="border-t border-border pt-3 flex justify-between gap-2">
+              {editingEvent.recurrenceId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecurEvent(editingEvent);
+                    setShowDeleteRecurModal(true);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-650 hover:bg-red-700 text-white rounded text-sm font-semibold cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteInstance(editingEvent.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-650 hover:bg-red-700 text-white rounded text-sm font-semibold cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleCopy(editingEvent.id)}
+                className="px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                title="Copy Event"
+              >
+                <Copy className="h-4 w-4" />
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* QUICK ADD MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-card border border-border p-6 rounded-lg w-full max-w-sm space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50">
+          <div className="bg-card border border-border p-6 rounded-t-2xl md:rounded-lg w-full md:max-w-sm space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <h3 className="text-lg font-bold text-foreground">Add Event</h3>
               <button
@@ -976,8 +1264,8 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
       {/* EDIT RECURRING SERIES MODAL */}
       {showEditRecurModal && recurEvent && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-card border border-border p-6 rounded-lg w-full max-w-sm space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50">
+          <div className="bg-card border border-border p-6 rounded-t-2xl md:rounded-lg w-full md:max-w-sm space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-foreground">Edit Recurring Event</h3>
             <p className="text-sm text-muted-foreground">
               This is a recurring event. How would you like to edit it?
@@ -1016,8 +1304,8 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
       {/* DELETE RECURRING SERIES MODAL */}
       {showDeleteRecurModal && recurEvent && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-card border border-border p-6 rounded-lg w-full max-w-sm space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50">
+          <div className="bg-card border border-border p-6 rounded-t-2xl md:rounded-lg w-full md:max-w-sm space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-foreground">Delete Recurring Event</h3>
             <p className="text-sm text-muted-foreground">
               This is a recurring event. How would you like to delete it?
