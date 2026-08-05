@@ -200,7 +200,7 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
               position: 'fixed',
               top: rect.bottom + 8,
               right: Math.max(8, window.innerWidth - rect.right),
-              width: 320,
+              width: Math.min(320, window.innerWidth - 16),
               // Solid background so the grid never shows through, and keep any
               // overscroll from chaining to the calendar behind it.
               backgroundColor: 'var(--card)',
@@ -250,7 +250,7 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-center gap-2 bg-secondary border border-border rounded-lg px-2.5 h-9 w-52 focus-within:ring-1 focus-within:ring-primary">
+      <div className="flex items-center gap-2 bg-secondary border border-border rounded-lg px-2.5 h-9 w-36 sm:w-44 md:w-52 focus-within:ring-1 focus-within:ring-primary">
         <Search className="h-4 w-4 text-muted-foreground shrink-0" />
         <input
           ref={inputRef}
