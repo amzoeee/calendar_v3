@@ -13,6 +13,7 @@ import {
   Copy,
   Check,
   X,
+  Plus,
   Sparkles,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
@@ -48,6 +49,9 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
 
   // --- Popovers & Modals ---
   const [activeOverlayId, setActiveOverlayId] = useState<number | null>(null);
+  // Mobile-only: the always-visible desktop "Add Event" panel becomes a FAB +
+  // bottom sheet on small screens (there's no room for a persistent side panel).
+  const [showMobileAddSheet, setShowMobileAddSheet] = useState<boolean>(false);
   const [showEditRecurModal, setShowEditRecurModal] = useState<boolean>(false);
   const [showDeleteRecurModal, setShowDeleteRecurModal] = useState<boolean>(false);
   const [recurEvent, setRecurEvent] = useState<PositionedEvent | null>(null);
@@ -75,6 +79,10 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   // --- Scroll Restoration ---
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  // Separate DOM subtree from overlayRef (the desktop popover, hidden on
+  // mobile) — the click-outside listener below needs to know about both so a
+  // tap inside the mobile sheet isn't mistaken for a click outside it.
+  const mobileEditSheetRef = useRef<HTMLDivElement>(null);
 
   // --- Add Event Form State ---
   const [formTitle, setFormTitle] = useState('');
@@ -110,6 +118,12 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     day: 'numeric',
     year: 'numeric',
   });
+  // Compact form for the mobile header — "Wed 8/5" instead of "Wednesday, August 5, 2026".
+  const displayDateCompact = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'numeric',
+    day: 'numeric',
+  });
 
   // Load zoom and scroll settings
   useEffect(() => {
@@ -140,6 +154,87 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     setZoomLevel(60);
     localStorage.setItem('calendarZoomLevel', '60');
   };
+
+  // --- Pinch-to-zoom (mobile) ---
+  // Desktop has the Zoom In/Out buttons in the side panel, which is hidden on
+  // mobile, so this is the only way to change zoom level on a phone.
+  const zoomLevelRef = useRef(zoomLevel);
+  useEffect(() => {
+    zoomLevelRef.current = zoomLevel;
+  }, [zoomLevel]);
+
+  // Anchor set at the start of a pinch and updated as fingers move; consumed by
+  // the layout effect below once the DOM has actually resized for the new
+  // zoomLevel, so the timeline content under the fingers doesn't jump.
+  const pinchAnchorRef = useRef<{ anchorMin: number; centerClientY: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const anchor = pinchAnchorRef.current;
+    const container = timelineContainerRef.current;
+    if (!anchor || !container) return;
+    const rect = container.getBoundingClientRect();
+    container.scrollTop = (anchor.anchorMin / 60) * zoomLevel - (anchor.centerClientY - rect.top);
+  }, [zoomLevel]);
+
+  useEffect(() => {
+    const container = timelineContainerRef.current;
+    if (!container) return;
+
+    const touchDist = (touches: TouchList) => {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    let startDist = 0;
+    let startZoom = 0;
+    // Updated synchronously in onTouchMove (unlike zoomLevelRef, which only
+    // catches up via an effect after React commits) so onTouchEnd — which can
+    // fire in the same tick as the last onTouchMove on a fast pinch-release —
+    // always persists the zoom level that was actually last set.
+    let lastZoom = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      const rect = container.getBoundingClientRect();
+      const centerClientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const zoom = zoomLevelRef.current;
+      const anchorMin = ((centerClientY - rect.top + container.scrollTop) / zoom) * 60;
+      startDist = touchDist(e.touches);
+      startZoom = zoom;
+      lastZoom = zoom;
+      pinchAnchorRef.current = { anchorMin, centerClientY };
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || !pinchAnchorRef.current || startDist === 0) return;
+      e.preventDefault(); // stop the page itself from pinch-zooming
+      const scale = touchDist(e.touches) / startDist;
+      const newZoom = Math.max(30, Math.min(300, Math.round(startZoom * scale)));
+      lastZoom = newZoom;
+      pinchAnchorRef.current.centerClientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      setZoomLevel(newZoom);
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2 && pinchAnchorRef.current) {
+        localStorage.setItem('calendarZoomLevel', String(lastZoom));
+        pinchAnchorRef.current = null;
+        startDist = 0;
+      }
+    };
+
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd);
+    container.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+      container.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, []);
 
   // Keyboard zoom listener (Cmd/Ctrl + '=', Cmd/Ctrl + '-', Cmd/Ctrl + '0') and arrow keys navigation
   useEffect(() => {
@@ -224,7 +319,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       if (
         activeOverlayId !== null &&
         overlayRef.current &&
-        !overlayRef.current.contains(event.target as Node)
+        !overlayRef.current.contains(event.target as Node) &&
+        !mobileEditSheetRef.current?.contains(event.target as Node)
       ) {
         const clickedEventCard = (event.target as Element).closest('.event-card-clickable');
         if (!clickedEventCard) {
@@ -465,6 +561,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     setFormTag('');
     setFormRecur('');
     setFormRecurEnd('');
+    setShowMobileAddSheet(false);
   };
 
   const handleUpdateInstance = async (eventId: number) => {
@@ -519,132 +616,139 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     setOverlayCoords(null);
   };
 
+  // Shared Add Event form fields, rendered both in the desktop side panel and
+  // the mobile FAB bottom sheet — kept as one JSX value so the two surfaces
+  // can't drift apart. `idPrefix` keeps input ids unique since both can be in
+  // the DOM at once (one hidden via CSS depending on viewport).
+  const renderAddEventForm = (idPrefix: string) => (
+    <form onSubmit={handleAddSubmit} className="space-y-4">
+      {/* Title */}
+      <div>
+        <label htmlFor={`${idPrefix}title`} className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Title
+        </label>
+        <input
+          id={`${idPrefix}title`}
+          type="text"
+          required
+          placeholder="Event Title"
+          value={formTitle}
+          onChange={(e) => setFormTitle(e.target.value)}
+          className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+        />
+      </div>
+
+      {/* Start Date/Time */}
+      <div>
+        <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Start</label>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            required
+            value={formStartDate}
+            onChange={(e) => setFormStartDate(e.target.value)}
+            className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+          />
+          <input
+            type="time"
+            required
+            value={formStartTime}
+            onChange={(e) => setFormStartTime(e.target.value)}
+            className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {/* End Date/Time */}
+      <div>
+        <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">End</label>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            required
+            value={formEndDate}
+            onChange={(e) => setFormEndDate(e.target.value)}
+            className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+          />
+          <input
+            type="time"
+            required
+            value={formEndTime}
+            onChange={(e) => setFormEndTime(e.target.value)}
+            className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {/* Tag Selection */}
+      <div>
+        <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tag</label>
+        <div className="mt-1 flex items-center gap-2">
+          <span
+            className="w-4 h-4 rounded-full border border-border flex-shrink-0"
+            style={{ backgroundColor: getTagColor(formTag) }}
+          ></span>
+          <TagSelect tags={tags} value={formTag} onChange={setFormTag} />
+        </div>
+      </div>
+
+      {/* Description */}
+      <div>
+        <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</label>
+        <textarea
+          value={formDesc}
+          onChange={(e) => setFormDesc(e.target.value)}
+          placeholder="Optional description"
+          rows={2}
+          className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent resize-none"
+        />
+      </div>
+
+      {/* Repeat / Recurrence */}
+      <div>
+        <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repeat</label>
+        <select
+          value={formRecur}
+          onChange={(e) => setFormRecur(e.target.value)}
+          className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent cursor-pointer"
+        >
+          <option value="">Does not repeat</option>
+          <option value="DAILY">Daily</option>
+          <option value="WEEKLY">Weekly</option>
+          <option value="MONTHLY">Monthly</option>
+        </select>
+      </div>
+
+      {/* Recurrence End Date */}
+      {formRecur && (
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repeat until</label>
+          <input
+            type="date"
+            value={formRecurEnd}
+            onChange={(e) => setFormRecurEnd(e.target.value)}
+            className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
+          />
+        </div>
+      )}
+
+      <button
+        type="submit"
+        className="w-full flex justify-center py-2 px-4 border border-transparent rounded bg-primary text-sm font-bold text-primary-foreground shadow-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring cursor-pointer transition"
+      >
+        Add Event
+      </button>
+    </form>
+  );
+
   return (
     <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-      
-      {/* Side Pane: Event Form & Info */}
-      <div className="w-full md:w-80 bg-card border-b md:border-b-0 md:border-r border-border p-6 overflow-y-auto shrink-0 space-y-6">
+
+      {/* Side Pane: Event Form & Info (desktop only — mobile uses the FAB + bottom sheet below) */}
+      <div className="hidden md:flex md:flex-col md:w-80 bg-card md:border-r border-border p-6 overflow-y-auto shrink-0 space-y-6">
         <div>
           <h2 className="text-xl font-extrabold tracking-tight">Add Event</h2>
-          <form onSubmit={handleAddSubmit} className="mt-4 space-y-4">
-            
-            {/* Title */}
-            <div>
-              <label htmlFor="title" className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Title
-              </label>
-              <input
-                id="title"
-                type="text"
-                required
-                placeholder="Event Title"
-                value={formTitle}
-                onChange={(e) => setFormTitle(e.target.value)}
-                className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
-              />
-            </div>
-
-            {/* Start Date/Time */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Start</label>
-              <div className="mt-1 grid grid-cols-2 gap-2">
-                <input
-                  type="date"
-                  required
-                  value={formStartDate}
-                  onChange={(e) => setFormStartDate(e.target.value)}
-                  className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
-                />
-                <input
-                  type="time"
-                  required
-                  value={formStartTime}
-                  onChange={(e) => setFormStartTime(e.target.value)}
-                  className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* End Date/Time */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">End</label>
-              <div className="mt-1 grid grid-cols-2 gap-2">
-                <input
-                  type="date"
-                  required
-                  value={formEndDate}
-                  onChange={(e) => setFormEndDate(e.target.value)}
-                  className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
-                />
-                <input
-                  type="time"
-                  required
-                  value={formEndTime}
-                  onChange={(e) => setFormEndTime(e.target.value)}
-                  className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Tag Selection */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tag</label>
-              <div className="mt-1 flex items-center gap-2">
-                <span
-                  className="w-4 h-4 rounded-full border border-border flex-shrink-0"
-                  style={{ backgroundColor: getTagColor(formTag) }}
-                ></span>
-                <TagSelect tags={tags} value={formTag} onChange={setFormTag} />
-              </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</label>
-              <textarea
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-                placeholder="Optional description"
-                rows={2}
-                className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent resize-none"
-              />
-            </div>
-
-            {/* Repeat / Recurrence */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repeat</label>
-              <select
-                value={formRecur}
-                onChange={(e) => setFormRecur(e.target.value)}
-                className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent cursor-pointer"
-              >
-                <option value="">Does not repeat</option>
-                <option value="DAILY">Daily</option>
-                <option value="WEEKLY">Weekly</option>
-                <option value="MONTHLY">Monthly</option>
-              </select>
-            </div>
-
-            {/* Recurrence End Date */}
-            {formRecur && (
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repeat until</label>
-                <input
-                  type="date"
-                  value={formRecurEnd}
-                  onChange={(e) => setFormRecurEnd(e.target.value)}
-                  className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
-                />
-              </div>
-            )}
-
-            <button
-              type="submit"
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded bg-primary text-sm font-bold text-primary-foreground shadow-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring cursor-pointer transition"
-            >
-              Add Event
-            </button>
-          </form>
+          <div className="mt-4">{renderAddEventForm('desktop-')}</div>
         </div>
 
         {/* Zoom Controls */}
@@ -678,18 +782,27 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       </div>
 
       {/* Main Timeline View */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {/* Mobile FAB: opens the Add Event bottom sheet (desktop uses the always-visible side panel) */}
+        <button
+          onClick={() => setShowMobileAddSheet(true)}
+          className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
+          aria-label="Add event"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+
         {/* Navigation Header */}
-        <div className="h-16 border-b border-border flex items-center justify-between px-6 shrink-0 glass-panel">
-          <div className="flex items-center gap-3">
+        <div className="h-14 md:h-16 border-b border-border flex items-center justify-between px-3 md:px-6 gap-2 shrink-0 glass-panel">
+          <div className="flex items-center gap-1.5 md:gap-3">
             <button
               onClick={() => {
                 saveScroll();
                 router.push(`/calendar/${prevDayStr}`);
               }}
-              className="p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
             </button>
             <button
               onClick={() => {
@@ -697,7 +810,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                 const today = new Date().toLocaleDateString('en-CA');
                 router.push(`/calendar/${today}`);
               }}
-              className="px-3 py-2 text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
             >
               Today
             </button>
@@ -706,16 +819,19 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                 saveScroll();
                 router.push(`/calendar/${nextDayStr}`);
               }}
-              className="p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
             >
-              <ChevronRight className="h-5 w-5" />
+              <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
             </button>
           </div>
 
-          <h1 className="text-xl font-bold tracking-tight">{displayDate}</h1>
+          <h1 className="text-sm md:text-xl font-bold tracking-tight truncate min-w-0">
+            <span className="md:hidden">{displayDateCompact}</span>
+            <span className="hidden md:inline">{displayDate}</span>
+          </h1>
 
-          <div className="flex items-center gap-3">
-            <span className="px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="hidden md:inline-block px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
               Daily
             </span>
             <EventSearch tags={tags} />
@@ -864,11 +980,12 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
         </div>
       </div>
 
-      {/* EDIT OVERLAY POPOVER */}
+      {/* EDIT OVERLAY POPOVER (desktop only — the click-anchored positioning below
+          doesn't translate to touch; mobile gets a bottom sheet instead, see below) */}
       {activeOverlayId && editingEvent && (
         <div
           ref={overlayRef}
-          className="fixed bg-card border border-border rounded-lg shadow-2xl p-4 w-72 space-y-3 z-50 text-left"
+          className="hidden md:block fixed bg-card border border-border rounded-lg shadow-2xl p-4 w-72 space-y-3 z-50 text-left"
         >
           <div className="flex items-center justify-between border-b border-border pb-2">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -1034,10 +1151,200 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
           </div>
         )}
 
+      {/* MOBILE ADD EVENT SHEET (mirrors the desktop side panel's form) */}
+      {showMobileAddSheet && (
+        <div className="md:hidden fixed inset-0 z-50 flex items-end">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowMobileAddSheet(false)}
+          />
+          <div className="relative w-full max-h-[85vh] overflow-y-auto bg-card border-t border-border rounded-t-2xl p-5 pb-8 space-y-4">
+            <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold tracking-tight">Add event</h2>
+              <button
+                onClick={() => setShowMobileAddSheet(false)}
+                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {renderAddEventForm('mobile-')}
+          </div>
+        </div>
+      )}
+
+      {/* MOBILE EDIT EVENT SHEET (desktop uses the click-anchored popover above) */}
+      {activeOverlayId && editingEvent && (
+        <div className="md:hidden fixed inset-0 z-50 flex items-end">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => {
+              setActiveOverlayId(null);
+              setEditingEvent(null);
+              setOverlayCoords(null);
+            }}
+          />
+          <div ref={mobileEditSheetRef} className="relative w-full max-h-[85vh] overflow-y-auto bg-card border-t border-border rounded-t-2xl p-5 pb-8 space-y-4">
+            <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold tracking-tight">Edit event</h2>
+              <button
+                onClick={() => {
+                  setActiveOverlayId(null);
+                  setEditingEvent(null);
+                  setOverlayCoords(null);
+                }}
+                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <input
+              type="text"
+              required
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="Title"
+              className="block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+
+            <div className="flex items-center gap-2">
+              <span
+                className="w-4 h-4 rounded-full border border-border flex-shrink-0"
+                style={{ backgroundColor: getTagColor(editTag) }}
+              ></span>
+              <TagSelect
+                tags={tags}
+                value={editTag}
+                onChange={setEditTag}
+                className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              />
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="block text-muted-foreground text-xs mb-1">Start</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={editStartDate}
+                    onChange={(e) => setEditStartDate(e.target.value)}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
+                  />
+                  <input
+                    type="time"
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-muted-foreground text-xs mb-1">End</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={editEndDate}
+                    onChange={(e) => setEditEndDate(e.target.value)}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
+                  />
+                  <input
+                    type="time"
+                    value={editEndTime}
+                    onChange={(e) => setEditEndTime(e.target.value)}
+                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              placeholder="Description"
+              rows={2}
+              className="block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none resize-none"
+            />
+
+            <div className="flex gap-2">
+              {editingEvent.recurrenceId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecurEvent(editingEvent);
+                    setShowEditRecurModal(true);
+                  }}
+                  className="flex-1 py-2.5 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-semibold cursor-pointer text-center"
+                >
+                  Save
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleUpdateInstance(editingEvent.id)}
+                  className="flex-1 py-2.5 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-semibold cursor-pointer text-center"
+                >
+                  Save
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveOverlayId(null);
+                  setEditingEvent(null);
+                  setOverlayCoords(null);
+                }}
+                className="px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="border-t border-border pt-3 flex justify-between gap-2">
+              {editingEvent.recurrenceId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecurEvent(editingEvent);
+                    setShowDeleteRecurModal(true);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-650 hover:bg-red-700 text-white rounded text-sm font-semibold cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteInstance(editingEvent.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-650 hover:bg-red-700 text-white rounded text-sm font-semibold cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleCopy(editingEvent.id)}
+                className="px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                title="Copy Event"
+              >
+                <Copy className="h-4 w-4" />
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* RENDER EDIT RECURRING MODAL */}
       {showEditRecurModal && recurEvent && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-card border border-border p-6 rounded-lg w-full max-w-sm space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50">
+          <div className="bg-card border border-border p-6 rounded-t-2xl md:rounded-lg w-full md:max-w-sm space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-foreground">Edit Recurring Event</h3>
             <p className="text-sm text-muted-foreground">
               This is a recurring event. How would you like to edit it?
@@ -1076,8 +1383,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
 
       {/* RENDER DELETE RECURRING MODAL */}
       {showDeleteRecurModal && recurEvent && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-card border border-border p-6 rounded-lg w-full max-w-sm space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50">
+          <div className="bg-card border border-border p-6 rounded-t-2xl md:rounded-lg w-full md:max-w-sm space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold text-foreground">Delete Recurring Event</h3>
             <p className="text-sm text-muted-foreground">
               This is a recurring event. How would you like to delete it?
