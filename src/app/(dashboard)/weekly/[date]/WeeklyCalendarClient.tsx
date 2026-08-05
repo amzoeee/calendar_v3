@@ -14,7 +14,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
-import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin } from '@/lib/overlayPosition';
+import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, clampOverlayX } from '@/lib/overlayPosition';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -259,30 +259,41 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   useLayoutEffect(() => {
     if (activeOverlayId === null || !overlayCoords) return;
 
-    // On open (and whenever this effect re-fires), nudge the overlay's anchor
-    // back on-screen if it would otherwise render partially above/below the
-    // viewport — e.g. an event near the end of the day. Left out of the
+    // On open and on resize, nudge the overlay's anchor back on-screen if it
+    // would otherwise render partially off the viewport — e.g. an event near
+    // the end of the day, or a window resize after opening. Left out of the
     // scroll handler below so the existing clip-path scroll-crop behavior is
     // unaffected; scrolling just keeps tracking this (possibly nudged) anchor.
-    const el = overlayRef.current;
-    const container = timelineContainerRef.current;
-    if (el && container) {
+    // Returns true if it adjusted overlayCoords (a re-render will follow).
+    const reclamp = (): boolean => {
+      const el = overlayRef.current;
+      const container = timelineContainerRef.current;
+      if (!el || !container) return false;
+
       const rect = container.getBoundingClientRect();
       const top = topMinToViewportTop(overlayCoords.topMin, rect.top, container.scrollTop, zoomLevel);
       const nextTopMin = clampOverlayTopMin(overlayCoords.topMin, top, el.offsetHeight, zoomLevel, window.innerHeight);
-      if (nextTopMin !== overlayCoords.topMin) {
-        setOverlayCoords({ ...overlayCoords, topMin: nextTopMin });
-        return;
+      const nextX = clampOverlayX(overlayCoords.x, window.innerWidth);
+      if (nextTopMin !== overlayCoords.topMin || nextX !== overlayCoords.x) {
+        setOverlayCoords({ topMin: nextTopMin, x: nextX });
+        return true;
       }
-    }
+      return false;
+    };
+
+    if (reclamp()) return;
 
     positionOverlay();
+    const container = timelineContainerRef.current;
     const onScroll = () => positionOverlay();
+    const onResize = () => {
+      if (!reclamp()) positionOverlay();
+    };
     container?.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', onResize);
     return () => {
       container?.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOverlayId, overlayCoords, zoomLevel]);
