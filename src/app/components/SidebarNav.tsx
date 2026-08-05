@@ -7,10 +7,14 @@ import {
   TrendingUp,
   Settings as SettingsIcon,
 } from 'lucide-react';
+import { getNavLinks } from './navLinks';
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-// Date-bearing views whose date should carry across view switches.
-const DATE_VIEWS = ['calendar', 'weekly', 'stats'];
+const ICONS: Record<string, typeof CalendarIcon> = {
+  calendar: CalendarIcon,
+  weekly: CalendarIcon,
+  stats: TrendingUp,
+  settings: SettingsIcon,
+};
 
 /**
  * Sidebar navigation that preserves the currently-viewed date when switching
@@ -21,22 +25,13 @@ const DATE_VIEWS = ['calendar', 'weekly', 'stats'];
  */
 export default function SidebarNav({ todayStr }: { todayStr: string }) {
   const pathname = usePathname();
-  const segments = pathname.split('/').filter(Boolean);
-  const view = DATE_VIEWS.includes(segments[0]) ? segments[0] : null;
-  const activeDate =
-    segments[1] && DATE_RE.test(segments[1]) ? segments[1] : todayStr;
-
-  const links = [
-    { key: 'calendar', href: `/calendar/${activeDate}`, label: 'Daily View', Icon: CalendarIcon },
-    { key: 'weekly', href: `/weekly/${activeDate}`, label: 'Weekly View', Icon: CalendarIcon },
-    { key: 'stats', href: `/stats/${activeDate}`, label: 'Stats', Icon: TrendingUp },
-    { key: 'settings', href: '/settings', label: 'Settings', Icon: SettingsIcon },
-  ];
+  const { links, activeKey } = getNavLinks(pathname, todayStr);
 
   return (
     <nav className="mt-6 px-4 space-y-1">
-      {links.map(({ key, href, label, Icon }) => {
-        const active = key === 'settings' ? segments[0] === 'settings' : view === key;
+      {links.map(({ key, href, label }) => {
+        const Icon = ICONS[key];
+        const active = activeKey === key;
         return (
           <Link
             key={key}
