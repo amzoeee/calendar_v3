@@ -5,6 +5,8 @@ import { eq, and, sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import MiniCalendar from '@/app/components/MiniCalendar';
 import SidebarNav from '@/app/components/SidebarNav';
+import MobileTabBar from '@/app/components/MobileTabBar';
+import MobileProfileMenu from '@/app/components/MobileProfileMenu';
 import {
   LogOut,
   Sparkles,
@@ -39,9 +41,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const todayStr = new Date().toLocaleDateString('en-CA');
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-52 bg-card border-r border-border flex flex-col justify-between shrink-0">
+    <div className="flex h-dvh bg-background text-foreground overflow-hidden">
+      {/* Sidebar (desktop only — MobileTabBar covers navigation on small screens) */}
+      <aside className="hidden md:flex w-52 bg-card border-r border-border flex-col justify-between shrink-0">
         <div>
           {/* Logo */}
           <div className="h-16 flex items-center px-6 border-b border-border gap-2">
@@ -82,6 +84,15 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
       {/* Main Content Pane */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Mobile top bar (desktop uses the sidebar logo instead) */}
+        <div className="md:hidden h-14 flex items-center justify-between px-4 border-b border-border shrink-0 glass-panel">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-foreground" />
+            <span className="font-extrabold text-sm tracking-wider text-foreground">CALENDAR</span>
+          </div>
+          <MobileProfileMenu username={session.username} logoutAction={logoutAction} />
+        </div>
+
         {/* Pending Import Banner */}
         {pendingCount > 0 && (
           <div className="bg-amber-950/30 border-b border-amber-500/30 p-4 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0 glass-panel">
@@ -135,10 +146,12 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         )}
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto relative flex flex-col min-w-0">
+        <main className="flex-1 overflow-y-auto relative flex flex-col min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
           {children}
         </main>
       </div>
+
+      <MobileTabBar todayStr={todayStr} />
     </div>
   );
 }
