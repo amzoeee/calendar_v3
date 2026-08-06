@@ -3,7 +3,8 @@ services:
     image: ghcr.io/amzoeee/calendar_v3:latest
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      # Bound to localhost only — public access goes through Caddy on 443.
+      - "127.0.0.1:4000:4000"
     env_file:
       - .env
     environment:
@@ -12,6 +13,22 @@ services:
       - calendar-data:/app/data
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
+
+  # Terminates HTTPS and auto-manages a Let's Encrypt cert for the
+  # tplinkdns.com hostname, proxying to the app over the internal
+  # docker network.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
 
   # Polls GHCR for a newer `app` image and redeploys it automatically.
   # Scoped to labeled containers only via --label-enable, so it won't
@@ -25,3 +42,5 @@ services:
 
 volumes:
   calendar-data:
+  caddy-data:
+  caddy-config:
