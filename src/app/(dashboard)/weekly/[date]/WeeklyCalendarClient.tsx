@@ -532,7 +532,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
         const containerRect = container.getBoundingClientRect();
         const targetRect = target.getBoundingClientRect();
         const offset = targetRect.top - containerRect.top + container.scrollTop;
-        container.scrollTo({ top: offset - 8, behavior: 'smooth' });
+        container.scrollTo({ top: offset, behavior: 'smooth' });
         return;
       }
       if (tries++ < 20) setTimeout(attempt, 50);
