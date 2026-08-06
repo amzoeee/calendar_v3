@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.vscode
+.env
+.env.*
+*.db
+*.db-shm
+*.db-wal
+*.tsbuildinfo
+__pycache__
+.DS_Store
+npm-debug.log*

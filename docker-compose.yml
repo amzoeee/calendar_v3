@@ -1,0 +1,27 @@
+services:
+  app:
+    image: ghcr.io/amzoeee/calendar_v3:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_PATH=/app/data/calendar.db
+    volumes:
+      - calendar-data:/app/data
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # Polls GHCR for a newer `app` image and redeploys it automatically.
+  # Scoped to labeled containers only via --label-enable, so it won't
+  # touch anything else running on the host.
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --label-enable --cleanup
+
+volumes:
+  calendar-data:
