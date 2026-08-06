@@ -345,22 +345,29 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
                 className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
-            <div className="shrink-0 w-24">
-              <label className="block text-xs font-semibold text-muted-foreground uppercase">Color</label>
-              <input
-                type="color"
-                value={newTagColor}
-                onChange={(e) => setNewTagColor(e.target.value)}
-                className="mt-1 block w-full h-8 rounded bg-secondary border border-border px-1 py-0.5 cursor-pointer"
-              />
+            {/* Color + button always share a row (even on mobile) and stay
+                bottom-aligned to each other via this inner items-end, which
+                doesn't depend on the outer row's own breakpoint-gated
+                alignment — that's what kept drifting out of sync with the
+                Discord Log button above. */}
+            <div className="flex items-end gap-3 shrink-0">
+              <div className="shrink-0 w-24">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase">Color</label>
+                <input
+                  type="color"
+                  value={newTagColor}
+                  onChange={(e) => setNewTagColor(e.target.value)}
+                  className="mt-1 block w-full h-8 rounded bg-secondary border border-border px-1 py-0.5 cursor-pointer"
+                />
+              </div>
+              <button
+                type="submit"
+                className="shrink-0 px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Tag
+              </button>
             </div>
-            <button
-              type="submit"
-              className="self-start px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add Tag
-            </button>
           </form>
           {addTagError && <p className="text-xs text-red-400 mt-1">{addTagError}</p>}
         </div>
