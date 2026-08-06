@@ -524,7 +524,15 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       const target = container?.querySelector<HTMLElement>('[data-today-section]');
       if (container && target) {
         scrolledToTodayParam.current = flag;
-        container.scrollTo({ top: target.offsetTop - 8, behavior: 'smooth' });
+        // offsetTop is relative to the nearest positioned ancestor, not
+        // necessarily this container (neither is position:relative here) —
+        // that overshot past the header height and landed on the first
+        // event instead of the date label. getBoundingClientRect deltas give
+        // the true offset within the scroll container regardless.
+        const containerRect = container.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const offset = targetRect.top - containerRect.top + container.scrollTop;
+        container.scrollTo({ top: offset - 8, behavior: 'smooth' });
         return;
       }
       if (tries++ < 20) setTimeout(attempt, 50);
