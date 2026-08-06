@@ -15,7 +15,7 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
 
   # Terminates HTTPS and auto-manages a Let's Encrypt cert for the
-  # tplinkdns.com hostname, proxying to the app over the internal
+  # app's hostname (see Caddyfile), proxying to it over the internal
   # docker network.
   caddy:
     image: caddy:2
