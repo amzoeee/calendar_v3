@@ -30,6 +30,16 @@ services:
     depends_on:
       - app
 
+  # Keeps calendar.geodesync.com's Cloudflare DNS record pointed at this
+  # network's current public IP, since home internet IPs change.
+  cloudflare-ddns:
+    image: favonia/cloudflare-ddns:latest
+    restart: unless-stopped
+    environment:
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+      - DOMAINS=calendar.geodesync.com
+      - PROXIED=false
+
   # Polls GHCR for a newer `app` image and redeploys it automatically.
   # Scoped to labeled containers only via --label-enable, so it won't
   # touch anything else running on the host.

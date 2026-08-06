@@ -1,4 +1,4 @@
-calendar.hillbarnlabs.com {
+calendar.geodesync.com {
 	# Port 80 isn't forwarded (ISP/router reserves it), so certificate
 	# issuance/renewal relies solely on the TLS-ALPN-01 challenge over 443.
 	tls {
