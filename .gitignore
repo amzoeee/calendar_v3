@@ -29,9 +29,6 @@ build/
 .env.test.local
 .env.production.local
 
-# ---- Drizzle migration meta (generated) ----
-drizzle/meta/
-
 # ---- Misc ----
 .DS_Store
 Thumbs.db
