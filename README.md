@@ -1,6 +1,6 @@
 # Calendar
 
-A personal calendar web app you run on your own computer (or server). It gives you daily and weekly timeline views, color-coded tags, recurring events, Discord log import, and ICS import/export.
+A personal calendar web app you run on your own computer (or server). It gives you daily and weekly timeline views, a stats page, color-coded tags, recurring events, event search and ICS import/export.
 
 Built with Next.js, TypeScript, Tailwind CSS, SQLite, and Drizzle ORM.
 
