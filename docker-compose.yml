@@ -3,7 +3,7 @@ services:
     image: ghcr.io/amzoeee/calendar_v3:latest
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "4000:4000"
     env_file:
       - .env
     environment:

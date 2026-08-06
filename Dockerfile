@@ -27,7 +27,7 @@ RUN npm ci --omit=dev
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
-    PORT=3000 \
+    PORT=4000 \
     HOSTNAME=0.0.0.0
 
 RUN groupadd --system --gid 1001 nodejs \
@@ -45,6 +45,6 @@ COPY docker-entrypoint.js ./docker-entrypoint.js
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app
 
 USER nextjs
-EXPOSE 3000
+EXPOSE 4000
 
 CMD ["node", "docker-entrypoint.js"]
