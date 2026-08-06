@@ -122,4 +122,7 @@ If you have an existing `calendar.db` file from calendar_v2 (whether it was the 
 | Discord log import | Paste a Discord message export to bulk-create events |
 | ICS import/export | Standard calendar format for sharing with other apps (Google Calendar, Apple Calendar, etc.) |
 | Pending events | Mark events as unconfirmed (shown with reduced opacity) |
+| Mini month calendar | Jump to any day from a small month view, available on the main calendar and Settings page |
+| Event search | Search for events from the view header and jump straight to them |
+| Stats date range | Pick a custom date range on the Stats page and see the active-day count for it |
 
