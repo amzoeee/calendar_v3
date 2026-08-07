@@ -123,3 +123,4 @@ If you have an existing `calendar.db` file from calendar_v2 (whether it was the 
 | ICS import/export | Standard calendar format for sharing with other apps (Google Calendar, Apple Calendar, etc.) |
 | Mini month calendar | Jump to any day from a small month view, available on the main calendar and Settings page |
 
+
