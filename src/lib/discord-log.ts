@@ -1,8 +1,7 @@
 import { db } from '../db';
 import { events, tags } from '../db/schema';
 import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
-import { parseDate } from './recurring';
-import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, SERVER_TIMEZONE } from './timezone';
+import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, pacificDbStringToDate, SERVER_TIMEZONE } from './timezone';
 
 export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
   const match = line.match(/^.*?\s*[-—]\s*(.+)$/i);
@@ -165,7 +164,7 @@ export async function getLastEventEndTime(
     .limit(1);
 
   if (rows.length > 0) {
-    const dt = parseDate(rows[0].endDatetime);
+    const dt = pacificDbStringToDate(rows[0].endDatetime);
     if (continueFromLatest) {
       return dt;
     } else {
@@ -212,8 +211,8 @@ export async function getExistingEventsForRange(
     .orderBy(events.startDatetime);
 
   return rows.map((r) => ({
-    start: parseDate(r.startDatetime),
-    end: parseDate(r.endDatetime),
+    start: pacificDbStringToDate(r.startDatetime),
+    end: pacificDbStringToDate(r.endDatetime),
   }));
 }
 
@@ -273,9 +272,12 @@ export async function recalculatePendingEventsDate(userId: number, newDateStr: s
   }
 
   for (const pev of pending) {
-    const origEnd = parseDate(pev.endDatetime);
-    const hour = origEnd.getHours();
-    const minute = origEnd.getMinutes();
+    // pev.endDatetime is already a "YYYY-MM-DD HH:MM:SS" Pacific DB string —
+    // read the hour/minute directly instead of round-tripping through a
+    // parsed Date, whose .getHours()/.getMinutes() would report the host's
+    // own local time rather than Pacific.
+    const [, origEndTime] = pev.endDatetime.split(' ');
+    const [hour, minute] = origEndTime.split(':').map(Number);
 
     const endTime = getNextOccurrence(currentTime, hour, minute, hour);
     const existing = await getExistingEventsForRange(userId, currentTime, endTime);
