@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { dateStrInTimeZone, SERVER_TIMEZONE } from '@/lib/timezone';
 
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -13,12 +14,15 @@ export function middleware(request: NextRequest) {
     path.startsWith('/settings');
 
   const sessionCookie = request.cookies.get('calendar_session');
+  // Mirrored from the browser by <TimezoneSync>; absent on a user's very
+  // first request, in which case we fall back to the server's own timezone.
+  const viewerTimeZone = request.cookies.get('tz')?.value || SERVER_TIMEZONE;
+  const today = () => dateStrInTimeZone(viewerTimeZone, 0);
 
   // Redirect root / to today's daily view
   if (path === '/') {
-    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local time
     if (sessionCookie) {
-      return NextResponse.redirect(new URL(`/calendar/${today}`, request.url));
+      return NextResponse.redirect(new URL(`/calendar/${today()}`, request.url));
     } else {
       return NextResponse.redirect(new URL('/login', request.url));
     }
@@ -26,8 +30,7 @@ export function middleware(request: NextRequest) {
 
   // If session cookie exists and user is on a public page, redirect to today's daily view
   if (isPublicPath && sessionCookie) {
-    const today = new Date().toLocaleDateString('en-CA');
-    return NextResponse.redirect(new URL(`/calendar/${today}`, request.url));
+    return NextResponse.redirect(new URL(`/calendar/${today()}`, request.url));
   }
 
   // If no session cookie exists and user is on a protected page, redirect to login

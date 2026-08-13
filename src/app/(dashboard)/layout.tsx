@@ -8,6 +8,7 @@ import SidebarNav from '@/app/components/SidebarNav';
 import MobileTabBar from '@/app/components/MobileTabBar';
 import MobileProfileMenu from '@/app/components/MobileProfileMenu';
 import TimezoneSync from '@/app/components/TimezoneSync';
+import { todayForViewer } from '@/lib/server-timezone';
 import {
   LogOut,
   Sparkles,
@@ -39,7 +40,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     .where(and(eq(events.userId, session.userId), eq(events.isPending, 1)));
   const pendingCount = pendingCountResult[0]?.count || 0;
 
-  const todayStr = new Date().toLocaleDateString('en-CA');
+  const todayStr = await todayForViewer();
 
   return (
     <div className="flex h-dvh bg-background text-foreground overflow-hidden">

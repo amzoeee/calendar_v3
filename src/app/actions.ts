@@ -16,6 +16,7 @@ import { revalidatePath } from 'next/cache';
 import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
 import { parseLogText, recalculatePendingEventsDate } from '@/lib/discord-log';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
+import { todayForViewer } from '@/lib/server-timezone';
 
 // ==========================================
 // Authentication Actions
@@ -62,7 +63,7 @@ export async function registerAction(prevState: any, formData: FormData) {
     return { error: e.message || 'Registration failed' };
   }
 
-  const today = new Date().toLocaleDateString('en-CA');
+  const today = await todayForViewer();
   redirect(`/calendar/${today}`);
 }
 
@@ -90,7 +91,7 @@ export async function loginAction(prevState: any, formData: FormData) {
     return { error: e.message || 'Login failed' };
   }
 
-  const today = new Date().toLocaleDateString('en-CA');
+  const today = await todayForViewer();
   redirect(`/calendar/${today}`);
 }
 

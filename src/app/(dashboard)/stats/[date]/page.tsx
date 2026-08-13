@@ -5,7 +5,7 @@ import { eq, and, or, gte, lt, lte } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import StatsClient from './StatsClient';
 import { dbStringToUtcMillis } from '@/lib/timezone';
-import { getViewerTimeZone } from '@/lib/server-timezone';
+import { getViewerTimeZone, todayForViewer } from '@/lib/server-timezone';
 
 interface PageProps {
   params: Promise<{ date: string }> | { date: string };
@@ -45,7 +45,7 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
   // "2026-13-45", which passes the regex but is not a parseable date).
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(date) || !isRealDate(date)) {
-    const today = new Date().toLocaleDateString('en-CA');
+    const today = await todayForViewer();
     redirect(`/stats/${today}`);
   }
 
