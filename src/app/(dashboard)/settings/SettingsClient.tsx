@@ -24,6 +24,7 @@ import {
   stageLogAction,
 } from '@/app/actions';
 import TagSelect from '@/app/components/TagSelect';
+import { getBrowserTimeZone } from '@/lib/timezone';
 
 interface Tag {
   id: number;
@@ -191,7 +192,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
 
     setIsLogStaging(true);
     try {
-      const res = await stageLogAction(logText, logDateOverride || null);
+      const res = await stageLogAction(logText, logDateOverride || null, getBrowserTimeZone());
       if (res?.error) {
         setLogError(res.error);
         setIsLogStaging(false);

@@ -4,6 +4,7 @@ import { events as eventsTable, tags as tagsTable } from '@/db/schema';
 import { eq, and, or, gte, lt } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import DailyCalendarClient from './DailyCalendarClient';
+import { todayForViewer } from '@/lib/server-timezone';
 
 interface PageProps {
   params: Promise<{ date: string }> | { date: string };
@@ -22,7 +23,7 @@ export default async function DailyPage({ params }: PageProps) {
   // Validate date format YYYY-MM-DD
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(date)) {
-    const today = new Date().toLocaleDateString('en-CA');
+    const today = await todayForViewer();
     redirect(`/calendar/${today}`);
   }
 

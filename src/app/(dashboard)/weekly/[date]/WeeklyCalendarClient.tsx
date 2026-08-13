@@ -25,6 +25,7 @@ import {
   deleteRecurringSeriesAction,
   updateRecurringSeriesAction,
 } from '@/app/actions';
+import { getBrowserTimeZone, pacificDbStringToDate, formatDateInputValue, formatTimeInputValue } from '@/lib/timezone';
 
 interface Tag {
   id: number;
@@ -201,6 +202,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
             tag: s.editTag,
             startDatetime: `${s.editStartDate}T${s.editStartTime}`,
             endDatetime: `${s.editEndDate}T${s.editEndTime}`,
+            timeZone: getBrowserTimeZone(),
           }).then(() => {
             setActiveOverlayId(null);
             setEditingEvent(null);
@@ -325,8 +327,8 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59).getTime();
 
     for (const ev of initialEvents) {
-      const startDt = new Date(ev.startDatetime.replace(' ', 'T'));
-      const endDt = new Date(ev.endDatetime.replace(' ', 'T'));
+      const startDt = pacificDbStringToDate(ev.startDatetime);
+      const endDt = pacificDbStringToDate(ev.endDatetime);
 
       const clippedStart = Math.max(startDt.getTime(), dayStart);
       const clippedEnd = Math.min(endDt.getTime(), dayEnd);
@@ -358,8 +360,8 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
         duration_minutes: duration,
         start_time: startDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         end_time: endDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        start_datetime_local: ev.startDatetime.replace(' ', 'T').substring(0, 16),
-        end_datetime_local: ev.endDatetime.replace(' ', 'T').substring(0, 16),
+        start_datetime_local: `${formatDateInputValue(startDt)}T${formatTimeInputValue(startDt)}`,
+        end_datetime_local: `${formatDateInputValue(endDt)}T${formatTimeInputValue(endDt)}`,
         tag_color: tagColor,
         multi_day: startDt.toDateString() !== endDt.toDateString(),
         continues_before: startDt.getTime() < dayStart,
@@ -388,10 +390,12 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     setEditTitle(ev.title);
     setEditTag(ev.tag || '');
     setEditDesc(ev.description || '');
-    setEditStartDate(ev.startDatetime.substring(0, 10));
-    setEditStartTime(ev.startDatetime.substring(11, 16));
-    setEditEndDate(ev.endDatetime.substring(0, 10));
-    setEditEndTime(ev.endDatetime.substring(11, 16));
+    const editStartDt = pacificDbStringToDate(ev.startDatetime);
+    const editEndDt = pacificDbStringToDate(ev.endDatetime);
+    setEditStartDate(formatDateInputValue(editStartDt));
+    setEditStartTime(formatTimeInputValue(editStartDt));
+    setEditEndDate(formatDateInputValue(editEndDt));
+    setEditEndTime(formatTimeInputValue(editEndDt));
   };
 
   // Mobile agenda rows have no click-point to anchor a popover to (there's no
@@ -404,10 +408,12 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     setEditTitle(ev.title);
     setEditTag(ev.tag || '');
     setEditDesc(ev.description || '');
-    setEditStartDate(ev.startDatetime.substring(0, 10));
-    setEditStartTime(ev.startDatetime.substring(11, 16));
-    setEditEndDate(ev.endDatetime.substring(0, 10));
-    setEditEndTime(ev.endDatetime.substring(11, 16));
+    const editStartDt = pacificDbStringToDate(ev.startDatetime);
+    const editEndDt = pacificDbStringToDate(ev.endDatetime);
+    setEditStartDate(formatDateInputValue(editStartDt));
+    setEditStartTime(formatTimeInputValue(editStartDt));
+    setEditEndDate(formatDateInputValue(editEndDt));
+    setEditEndTime(formatTimeInputValue(editEndDt));
   };
 
   const handleGridClick = (day: Date, hour: number) => {
@@ -438,6 +444,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       endDatetime: `${addEndDate}T${addEndTime}`,
       recurrence: addRecur,
       recurrenceEndDate: addRecurEnd,
+      timeZone: getBrowserTimeZone(),
     });
     // Reset inputs
     setAddTitle('');
@@ -456,6 +463,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       tag: editTag,
       startDatetime: `${editStartDate}T${editStartTime}`,
       endDatetime: `${editEndDate}T${editEndTime}`,
+      timeZone: getBrowserTimeZone(),
     });
     setActiveOverlayId(null);
     setEditingEvent(null);

@@ -4,6 +4,8 @@ import { events as eventsTable, tags as tagsTable } from '@/db/schema';
 import { eq, and, or, gte, lt, lte } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import StatsClient from './StatsClient';
+import { dbStringToUtcMillis } from '@/lib/timezone';
+import { getViewerTimeZone, todayForViewer } from '@/lib/server-timezone';
 
 interface PageProps {
   params: Promise<{ date: string }> | { date: string };
@@ -37,11 +39,13 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
     redirect('/login');
   }
 
+  const viewerTimeZone = await getViewerTimeZone();
+
   // Validate date format AND that it's a real calendar date (e.g. reject
   // "2026-13-45", which passes the regex but is not a parseable date).
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(date) || !isRealDate(date)) {
-    const today = new Date().toLocaleDateString('en-CA');
+    const today = await todayForViewer();
     redirect(`/stats/${today}`);
   }
 
@@ -82,8 +86,15 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
   // Clamp the effective end to the last day we actually included.
   endDate = rangeDates[rangeDates.length - 1];
 
-  const startStr = `${toDateStr(startDate)} 00:00:00`;
-  const endStr = `${toDateStr(endDate)} 23:59:59`;
+  // The DB stores Pacific-time strings, but day boundaries below are computed
+  // in the viewer's own timezone — widen the fetch by a day on each side so
+  // events near the range edges aren't missed just because their Pacific
+  // string falls outside the nominal range while their viewer-local day
+  // still falls inside it (or vice versa).
+  const fetchStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() - 1);
+  const fetchEndDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1);
+  const startStr = `${toDateStr(fetchStartDate)} 00:00:00`;
+  const endStr = `${toDateStr(fetchEndDate)} 23:59:59`;
 
   // Fetch tags
   const dbTags = await db
@@ -124,17 +135,17 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
   }
 
   for (const ev of dbEvents) {
-    const startDt = new Date(ev.startDatetime.replace(' ', 'T'));
-    const endDt = new Date(ev.endDatetime.replace(' ', 'T'));
+    const startMs = dbStringToUtcMillis(ev.startDatetime);
+    const endMs = dbStringToUtcMillis(ev.endDatetime);
     const tag = ev.tag || 'Untagged';
 
     for (const day of rangeDates) {
       const dateStr = toDateStr(day);
-      const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).getTime();
-      const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59).getTime();
+      const dayStart = dbStringToUtcMillis(`${dateStr} 00:00:00`, viewerTimeZone);
+      const dayEnd = dbStringToUtcMillis(`${dateStr} 23:59:59`, viewerTimeZone);
 
-      const clippedStart = Math.max(startDt.getTime(), dayStart);
-      const clippedEnd = Math.min(endDt.getTime(), dayEnd);
+      const clippedStart = Math.max(startMs, dayStart);
+      const clippedEnd = Math.min(endMs, dayEnd);
 
       if (clippedStart < dayEnd && clippedEnd > dayStart) {
         const durationHours = (clippedEnd - clippedStart) / (1000 * 60 * 60);

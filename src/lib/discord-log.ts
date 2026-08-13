@@ -1,9 +1,9 @@
 import { db } from '../db';
 import { events, tags } from '../db/schema';
 import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
-import { formatDate, parseDate } from './recurring';
+import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, pacificDbStringToDate, SERVER_TIMEZONE } from './timezone';
 
-export function parseDiscordDate(line: string): string | null {
+export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
   const match = line.match(/^.*?\s*[-—]\s*(.+)$/i);
   if (!match) return null;
 
@@ -14,8 +14,6 @@ export function parseDiscordDate(line: string): string | null {
     return null;
   }
 
-  const now = new Date();
-
   // 1. MM/DD/YY or MM/DD/YYYY
   const m = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (m) {
@@ -23,19 +21,19 @@ export function parseDiscordDate(line: string): string | null {
     const day = parseInt(m[2], 10);
     let year = parseInt(m[3], 10);
     if (year < 100) year += 2000;
-    
+
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${year}-${pad(month)}-${pad(day)}`;
   }
 
-  // 2. Yesterday
+  // 2. Yesterday — resolved in the browser's timezone, since "yesterday" is
+  // relative to whatever calendar day the user is currently on, not the server's.
   if (dateStr.toLowerCase().includes('yesterday')) {
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    return yesterday.toLocaleDateString('en-CA'); // YYYY-MM-DD
+    return dateStrInTimeZone(browserTimeZone, -1);
   }
 
   // 3. Today
-  return now.toLocaleDateString('en-CA');
+  return dateStrInTimeZone(browserTimeZone, 0);
 }
 
 export function parseShorthandTime(
@@ -79,19 +77,31 @@ export function parseShorthandTime(
   return { hour, minute, exact24h };
 }
 
-export function getNextOccurrence(baseDt: Date, hour: number, minute: number, exact24h: number | null): Date {
+// `hour`/`minute`/`exact24h` are shorthand digits as the user typed them —
+// wall-clock time in `browserTimeZone`. Callers re-scheduling already-stored
+// (Pacific) times pass no `browserTimeZone`, which defaults to Pacific and
+// makes this a no-op conversion.
+export function getNextOccurrence(
+  baseDt: Date,
+  hour: number,
+  minute: number,
+  exact24h: number | null,
+  browserTimeZone: string = SERVER_TIMEZONE
+): Date {
   const options: Date[] = [];
-  
+  const pad = (n: number) => String(n).padStart(2, '0');
+
   for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
-    const curDate = new Date(baseDt.getTime() + dayOffset * 24 * 60 * 60 * 1000);
-    
+    const candidateMs = baseDt.getTime() + dayOffset * 24 * 60 * 60 * 1000;
+    const dayStr = dayStrOfInstant(candidateMs, browserTimeZone);
+
     if (exact24h !== null) {
-      options.push(new Date(curDate.getFullYear(), curDate.getMonth(), curDate.getDate(), exact24h, minute, 0));
+      options.push(new Date(instantForWallClock(`${dayStr}T${pad(exact24h)}:${pad(minute)}`, browserTimeZone)));
     } else {
       const hAm = hour === 12 ? 0 : hour;
       const hPm = hour === 12 ? 12 : hour + 12;
-      options.push(new Date(curDate.getFullYear(), curDate.getMonth(), curDate.getDate(), hAm, minute, 0));
-      options.push(new Date(curDate.getFullYear(), curDate.getMonth(), curDate.getDate(), hPm, minute, 0));
+      options.push(new Date(instantForWallClock(`${dayStr}T${pad(hAm)}:${pad(minute)}`, browserTimeZone)));
+      options.push(new Date(instantForWallClock(`${dayStr}T${pad(hPm)}:${pad(minute)}`, browserTimeZone)));
     }
   }
 
@@ -129,7 +139,11 @@ export async function getLastEventEndTime(
   targetDateStr: string,
   continueFromLatest: boolean
 ): Promise<Date> {
-  const targetMidnight = new Date(targetDateStr.replace(' ', 'T'));
+  // targetDateStr is a plain "YYYY-MM-DD" day, not a full datetime string —
+  // resolve it as Pacific midnight (the DB's storage timezone) explicitly,
+  // rather than `new Date(targetDateStr)`, which the JS spec parses as UTC
+  // midnight for date-only strings (silently wrong by Pacific's UTC offset).
+  const targetMidnight = new Date(dbStringToUtcMillis(`${targetDateStr} 00:00:00`));
   const prevMidnight = new Date(targetMidnight.getTime() - 24 * 60 * 60 * 1000);
 
   const limitDateStr = continueFromLatest ? `${targetDateStr} 23:59:59` : `${targetDateStr} 00:00:00`;
@@ -150,7 +164,7 @@ export async function getLastEventEndTime(
     .limit(1);
 
   if (rows.length > 0) {
-    const dt = parseDate(rows[0].endDatetime);
+    const dt = pacificDbStringToDate(rows[0].endDatetime);
     if (continueFromLatest) {
       return dt;
     } else {
@@ -197,8 +211,8 @@ export async function getExistingEventsForRange(
     .orderBy(events.startDatetime);
 
   return rows.map((r) => ({
-    start: parseDate(r.startDatetime),
-    end: parseDate(r.endDatetime),
+    start: pacificDbStringToDate(r.startDatetime),
+    end: pacificDbStringToDate(r.endDatetime),
   }));
 }
 
@@ -251,16 +265,19 @@ export async function recalculatePendingEventsDate(userId: number, newDateStr: s
   let currentTime = await getLastEventEndTime(userId, newDateStr, continueFlag);
   
   if (!continueFlag) {
-    const targetMidnight = new Date(newDateStr.replace(' ', 'T'));
+    const targetMidnight = new Date(dbStringToUtcMillis(`${newDateStr} 00:00:00`));
     if (currentTime.getTime() < targetMidnight.getTime()) {
       currentTime = targetMidnight;
     }
   }
 
   for (const pev of pending) {
-    const origEnd = parseDate(pev.endDatetime);
-    const hour = origEnd.getHours();
-    const minute = origEnd.getMinutes();
+    // pev.endDatetime is already a "YYYY-MM-DD HH:MM:SS" Pacific DB string —
+    // read the hour/minute directly instead of round-tripping through a
+    // parsed Date, whose .getHours()/.getMinutes() would report the host's
+    // own local time rather than Pacific.
+    const [, origEndTime] = pev.endDatetime.split(' ');
+    const [hour, minute] = origEndTime.split(':').map(Number);
 
     const endTime = getNextOccurrence(currentTime, hour, minute, hour);
     const existing = await getExistingEventsForRange(userId, currentTime, endTime);
@@ -275,8 +292,8 @@ export async function recalculatePendingEventsDate(userId: number, newDateStr: s
     await db
       .update(events)
       .set({
-        startDatetime: formatDate(startTime),
-        endDatetime: formatDate(endTime),
+        startDatetime: dateToServerDbString(startTime),
+        endDatetime: dateToServerDbString(endTime),
       })
       .where(eq(events.id, pev.id));
 
@@ -287,7 +304,8 @@ export async function recalculatePendingEventsDate(userId: number, newDateStr: s
 export async function parseLogText(
   text: string,
   userId: number,
-  dateOverride?: string | null
+  dateOverride?: string | null,
+  browserTimeZone: string = SERVER_TIMEZONE
 ): Promise<{
   events: Array<{ start: string; end: string; title: string; tag: string }>;
   dateUsed: string;
@@ -309,7 +327,7 @@ export async function parseLogText(
   if (lastDashIdx !== -1) {
     let parsedDate: string | null = null;
     for (let j = lastDashIdx - 1; j >= 0; j--) {
-      parsedDate = parseDiscordDate(lines[j].trim());
+      parsedDate = parseDiscordDate(lines[j].trim(), browserTimeZone);
       if (parsedDate) break;
     }
     if (parsedDate && !resolvedDate) {
@@ -321,7 +339,7 @@ export async function parseLogText(
   } else {
     if (!resolvedDate) {
       for (const line of lines) {
-        const parsedDate = parseDiscordDate(line.trim());
+        const parsedDate = parseDiscordDate(line.trim(), browserTimeZone);
         if (parsedDate) {
           resolvedDate = parsedDate;
           warnings.push(`Extracted date from first timestamp: ${resolvedDate}`);
@@ -339,7 +357,7 @@ export async function parseLogText(
   const activities: Array<{ timeStr: string; ampm?: string; title: string }> = [];
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || parseDiscordDate(trimmed)) continue;
+    if (!trimmed || parseDiscordDate(trimmed, browserTimeZone)) continue;
 
     const match = trimmed.match(/^(\d{1,4})\s*(am|pm)?\s+(.+)$/i);
     if (match) {
@@ -364,7 +382,7 @@ export async function parseLogText(
 
   let currentTime = await getLastEventEndTime(userId, resolvedDate, continueFlag);
   if (!continueFlag) {
-    const targetMidnight = new Date(resolvedDate.replace(' ', 'T'));
+    const targetMidnight = new Date(dbStringToUtcMillis(`${resolvedDate} 00:00:00`));
     if (currentTime.getTime() < targetMidnight.getTime()) {
       currentTime = targetMidnight;
     }
@@ -378,7 +396,7 @@ export async function parseLogText(
     const timeParsed = parseShorthandTime(act.timeStr, act.ampm);
     if (!timeParsed) continue;
 
-    const endTime = getNextOccurrence(currentTime, timeParsed.hour, timeParsed.minute, timeParsed.exact24h);
+    const endTime = getNextOccurrence(currentTime, timeParsed.hour, timeParsed.minute, timeParsed.exact24h, browserTimeZone);
     const existing = await getExistingEventsForRange(userId, currentTime, endTime);
 
     let startTime = new Date(currentTime.getTime());
@@ -391,8 +409,8 @@ export async function parseLogText(
     if (startTime.getTime() < endTime.getTime()) {
       const tag = await predictTag(userId, act.title);
       eventsResult.push({
-        start: formatDate(startTime),
-        end: formatDate(endTime),
+        start: dateToServerDbString(startTime),
+        end: dateToServerDbString(endTime),
         title: act.title,
         tag: tag || '',
       });
