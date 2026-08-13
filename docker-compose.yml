@@ -43,8 +43,12 @@ services:
   # Polls GHCR for a newer `app` image and redeploys it automatically.
   # Scoped to labeled containers only via --label-enable, so it won't
   # touch anything else running on the host.
+  # containrrr/watchtower was archived (Dec 2025) and its stale bundled
+  # Docker client stopped working against newer Docker Engine versions
+  # ("client version too old") — nicholas-fedor/watchtower is the
+  # actively maintained continuation.
   watchtower:
-    image: containrrr/watchtower
+    image: ghcr.io/nicholas-fedor/watchtower:latest
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
