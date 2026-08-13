@@ -1,8 +1,8 @@
 import { db } from '../db';
 import { events, tags } from '../db/schema';
 import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
-import { formatDate, parseDate } from './recurring';
-import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, SERVER_TIMEZONE } from './timezone';
+import { parseDate } from './recurring';
+import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, SERVER_TIMEZONE } from './timezone';
 
 export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
   const match = line.match(/^.*?\s*[-—]\s*(.+)$/i);
@@ -286,8 +286,8 @@ export async function recalculatePendingEventsDate(userId: number, newDateStr: s
     await db
       .update(events)
       .set({
-        startDatetime: formatDate(startTime),
-        endDatetime: formatDate(endTime),
+        startDatetime: dateToServerDbString(startTime),
+        endDatetime: dateToServerDbString(endTime),
       })
       .where(eq(events.id, pev.id));
 
@@ -403,8 +403,8 @@ export async function parseLogText(
     if (startTime.getTime() < endTime.getTime()) {
       const tag = await predictTag(userId, act.title);
       eventsResult.push({
-        start: formatDate(startTime),
-        end: formatDate(endTime),
+        start: dateToServerDbString(startTime),
+        end: dateToServerDbString(endTime),
         title: act.title,
         tag: tag || '',
       });

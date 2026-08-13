@@ -105,6 +105,13 @@ export function pacificDbStringToDate(dbString: string): Date {
   return new Date(dbStringToUtcMillis(dbString, SERVER_TIMEZONE));
 }
 
+// Format a real Date instant as a "YYYY-MM-DD HH:MM:SS" Pacific DB string.
+// Unlike calling .getHours() etc. directly, this is correct regardless of
+// what timezone the server host's own clock happens to be set to.
+export function dateToServerDbString(d: Date): string {
+  return utcMillisToDbString(d.getTime(), SERVER_TIMEZONE);
+}
+
 // "YYYY-MM-DD" for `Date.now() + dayOffsetDays * 24h`, as observed in `timeZone`.
 export function dateStrInTimeZone(timeZone: string, dayOffsetDays: number = 0): string {
   const ms = Date.now() + dayOffsetDays * 24 * 60 * 60 * 1000;
