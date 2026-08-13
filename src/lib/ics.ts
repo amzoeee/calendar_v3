@@ -57,6 +57,15 @@ function formatDbDatetime(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+// Format Date as an ICS UTC timestamp (YYYYMMDDTHHMMSSZ), per RFC 5545 §3.3.5.
+// Must use UTC getters — DTSTAMP's trailing 'Z' asserts the value really is
+// UTC, and pairing it with local-time getters silently produced a timestamp
+// off by the host's UTC offset.
+function formatIcsUtcTimestamp(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+}
+
 export function parseIcsContent(icsContent: string): ParsedIcsEvent[] {
   const lines = unfoldIcs(icsContent);
   const events: ParsedIcsEvent[] = [];
@@ -260,8 +269,7 @@ export function generateIcs(
       lines.push(`RRULE:${rruleStr}`);
     }
 
-    const now = formatIcsDate(formatDbDatetime(new Date())) + 'Z';
-    lines.push(`DTSTAMP:${now}`);
+    lines.push(`DTSTAMP:${formatIcsUtcTimestamp(new Date())}`);
     lines.push('END:VEVENT');
   }
 
@@ -278,8 +286,7 @@ export function generateIcs(
     lines.push(`SUMMARY:${title}`);
     if (desc) lines.push(`DESCRIPTION:${desc}`);
 
-    const now = formatIcsDate(formatDbDatetime(new Date())) + 'Z';
-    lines.push(`DTSTAMP:${now}`);
+    lines.push(`DTSTAMP:${formatIcsUtcTimestamp(new Date())}`);
     lines.push('END:VEVENT');
   }
 
