@@ -58,6 +58,14 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
 
   // --- Import/Export States ---
   const [importTag, setImportTag] = useState('');
+  // Set client-side only (matches TimezoneSync's approach) so the hidden
+  // input's value doesn't differ between the server-rendered and hydrated
+  // markup — getBrowserTimeZone() would report the server's own timezone
+  // during SSR, not the visiting browser's.
+  const [browserTz, setBrowserTz] = useState('');
+  React.useEffect(() => {
+    setBrowserTz(getBrowserTimeZone());
+  }, []);
   
   // --- Discord Log State ---
   const [logText, setLogText] = useState('');
@@ -385,6 +393,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
         </p>
 
         <form action="/api/import-ics" method="POST" encType="multipart/form-data" className="space-y-4">
+          <input type="hidden" name="browser_tz" value={browserTz} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase">ICS File</label>
