@@ -384,7 +384,7 @@ export async function updateRecurringSeriesAction(
 // Discord Log Actions
 // ==========================================
 
-export async function stageLogAction(text: string, dateOverride?: string | null) {
+export async function stageLogAction(text: string, dateOverride?: string | null, browserTimeZone?: string) {
   const session = await requireAuth();
 
   try {
@@ -400,7 +400,8 @@ export async function stageLogAction(text: string, dateOverride?: string | null)
     const { events: parsedEvents, dateUsed, warnings } = await parseLogText(
       text,
       session.userId,
-      dateOverride
+      dateOverride,
+      browserTimeZone
     );
 
     const valuesToInsert = parsedEvents.map((e) => ({
