@@ -2,7 +2,7 @@ import { db } from '../db';
 import { events, tags } from '../db/schema';
 import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
 import { parseDate } from './recurring';
-import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, SERVER_TIMEZONE } from './timezone';
+import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, SERVER_TIMEZONE } from './timezone';
 
 export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
   const match = line.match(/^.*?\s*[-—]\s*(.+)$/i);
@@ -140,7 +140,11 @@ export async function getLastEventEndTime(
   targetDateStr: string,
   continueFromLatest: boolean
 ): Promise<Date> {
-  const targetMidnight = new Date(targetDateStr.replace(' ', 'T'));
+  // targetDateStr is a plain "YYYY-MM-DD" day, not a full datetime string —
+  // resolve it as Pacific midnight (the DB's storage timezone) explicitly,
+  // rather than `new Date(targetDateStr)`, which the JS spec parses as UTC
+  // midnight for date-only strings (silently wrong by Pacific's UTC offset).
+  const targetMidnight = new Date(dbStringToUtcMillis(`${targetDateStr} 00:00:00`));
   const prevMidnight = new Date(targetMidnight.getTime() - 24 * 60 * 60 * 1000);
 
   const limitDateStr = continueFromLatest ? `${targetDateStr} 23:59:59` : `${targetDateStr} 00:00:00`;
@@ -262,7 +266,7 @@ export async function recalculatePendingEventsDate(userId: number, newDateStr: s
   let currentTime = await getLastEventEndTime(userId, newDateStr, continueFlag);
   
   if (!continueFlag) {
-    const targetMidnight = new Date(newDateStr.replace(' ', 'T'));
+    const targetMidnight = new Date(dbStringToUtcMillis(`${newDateStr} 00:00:00`));
     if (currentTime.getTime() < targetMidnight.getTime()) {
       currentTime = targetMidnight;
     }
@@ -376,7 +380,7 @@ export async function parseLogText(
 
   let currentTime = await getLastEventEndTime(userId, resolvedDate, continueFlag);
   if (!continueFlag) {
-    const targetMidnight = new Date(resolvedDate.replace(' ', 'T'));
+    const targetMidnight = new Date(dbStringToUtcMillis(`${resolvedDate} 00:00:00`));
     if (currentTime.getTime() < targetMidnight.getTime()) {
       currentTime = targetMidnight;
     }
