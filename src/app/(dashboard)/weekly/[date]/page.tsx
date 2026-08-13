@@ -5,6 +5,7 @@ import { eq, and, or, gte, lt } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import WeeklyCalendarClient from './WeeklyCalendarClient';
 import { todayForViewer } from '@/lib/server-timezone';
+import { shiftDateStr } from '@/lib/timezone';
 
 interface PageProps {
   params: Promise<{ date: string }> | { date: string };
@@ -37,10 +38,16 @@ export default async function WeeklyPage({ params }: PageProps) {
 
   const { sunday, saturday } = getWeekRange(date);
 
-  // Pad query range to cover entire week (Sunday 00:00:00 to Saturday 23:59:59)
+  // Pad query range to cover entire week (Sunday 00:00:00 to Saturday 23:59:59).
+  // The DB stores Pacific-time strings, but this week is the viewer's own —
+  // widen by a day on each side so an event whose Pacific string falls just
+  // outside the week (while still belonging to it in the viewer's timezone)
+  // isn't silently excluded. The client filters per-viewer-day from there.
   const pad = (n: number) => String(n).padStart(2, '0');
-  const startStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())} 00:00:00`;
-  const endStr = `${saturday.getFullYear()}-${pad(saturday.getMonth() + 1)}-${pad(saturday.getDate())} 23:59:59`;
+  const sundayStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`;
+  const saturdayStr = `${saturday.getFullYear()}-${pad(saturday.getMonth() + 1)}-${pad(saturday.getDate())}`;
+  const startStr = `${shiftDateStr(sundayStr, -1)} 00:00:00`;
+  const endStr = `${shiftDateStr(saturdayStr, 1)} 23:59:59`;
 
   const dbEvents = await db
     .select()

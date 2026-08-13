@@ -112,6 +112,16 @@ export function dateToServerDbString(d: Date): string {
   return utcMillisToDbString(d.getTime(), SERVER_TIMEZONE);
 }
 
+// Add N calendar days to a "YYYY-MM-DD" string. Pure calendar arithmetic —
+// no timezone involved, since a date-only string has no instant to convert.
+export function shiftDateStr(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const ms = Date.UTC(year, month - 1, day) + days * 24 * 60 * 60 * 1000;
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
 // "YYYY-MM-DD" for `Date.now() + dayOffsetDays * 24h`, as observed in `timeZone`.
 export function dateStrInTimeZone(timeZone: string, dayOffsetDays: number = 0): string {
   const ms = Date.now() + dayOffsetDays * 24 * 60 * 60 * 1000;
