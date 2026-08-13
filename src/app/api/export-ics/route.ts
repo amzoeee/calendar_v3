@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { events, tags } from '@/db/schema';
 import { eq, and, or, gte, lt } from 'drizzle-orm';
 import { generateIcs, IcsExportEvent } from '@/lib/ics';
+import { dbStringToUtcMillis } from '@/lib/timezone';
 import JSZip from 'jszip';
 
 interface EventWithDetails {
@@ -26,8 +27,8 @@ function filterEventsByDate(
     return eventList;
   }
 
-  const rangeStart = startDate ? new Date(`${startDate} 00:00:00`.replace(' ', 'T')).getTime() : null;
-  const rangeEnd = endDate ? new Date(`${endDate} 23:59:59`.replace(' ', 'T')).getTime() : null;
+  const rangeStart = startDate ? dbStringToUtcMillis(`${startDate} 00:00:00`) : null;
+  const rangeEnd = endDate ? dbStringToUtcMillis(`${endDate} 23:59:59`) : null;
 
   // Group events by recurrenceId
   const recurringGroups: Record<string, EventWithDetails[]> = {};
@@ -48,8 +49,8 @@ function filterEventsByDate(
 
   // Standalone filter
   for (const event of standalone) {
-    const eventStart = new Date(event.startDatetime.replace(' ', 'T')).getTime();
-    const eventEnd = new Date(event.endDatetime.replace(' ', 'T')).getTime();
+    const eventStart = dbStringToUtcMillis(event.startDatetime);
+    const eventEnd = dbStringToUtcMillis(event.endDatetime);
 
     let include = true;
     if (rangeStart && eventEnd < rangeStart) include = false;

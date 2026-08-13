@@ -27,8 +27,8 @@ function getOffsetMillis(utcMillis: number, timeZone: string): number {
 function zonedDatetimeToUtcMillis(dateTimeLocal: string, timeZone: string): number {
   const [datePart, timePart] = dateTimeLocal.split('T');
   const [year, month, day] = datePart.split('-').map(Number);
-  const [hour, minute] = (timePart || '00:00').split(':').map(Number);
-  const guess = Date.UTC(year, month - 1, day, hour, minute);
+  const [hour, minute, second] = (timePart || '00:00').split(':').map(Number);
+  const guess = Date.UTC(year, month - 1, day, hour, minute, second || 0);
 
   const offset1 = getOffsetMillis(guess, timeZone);
   let utcMillis = guess - offset1;
@@ -69,14 +69,14 @@ export function browserDatetimeToServerDbString(dateTimeLocal: string, browserTi
 // Convert a "YYYY-MM-DD HH:MM:SS" DB string (stored in `fromTimeZone`) into the
 // equivalent wall-clock string in `toTimeZone`.
 export function convertDbString(dbString: string, fromTimeZone: string, toTimeZone: string): string {
-  const dateTimeLocal = dbString.replace(' ', 'T').substring(0, 16);
+  const dateTimeLocal = dbString.replace(' ', 'T');
   const utcMillis = zonedDatetimeToUtcMillis(dateTimeLocal, fromTimeZone);
   return utcMillisToDbString(utcMillis, toTimeZone);
 }
 
 // UTC instant (ms) that a Pacific-stored "YYYY-MM-DD HH:MM:SS" DB string refers to.
 export function dbStringToUtcMillis(dbString: string, fromTimeZone: string = SERVER_TIMEZONE): number {
-  const dateTimeLocal = dbString.replace(' ', 'T').substring(0, 16);
+  const dateTimeLocal = dbString.replace(' ', 'T');
   return zonedDatetimeToUtcMillis(dateTimeLocal, fromTimeZone);
 }
 

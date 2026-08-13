@@ -24,8 +24,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.redirect(new URL('/settings?error=Please+upload+a+.ics+file', request.url));
     }
 
+    const browserTimeZone = (formData.get('browser_tz') as string) || undefined;
     const textContent = await file.text();
-    const parsedEvents = parseIcsContent(textContent);
+    const parsedEvents = parseIcsContent(textContent, browserTimeZone);
 
     let count = 0;
     for (const event of parsedEvents) {
