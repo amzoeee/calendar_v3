@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Search, X } from 'lucide-react';
+import { pacificDbStringToDate, formatDateInputValue } from '@/lib/timezone';
 
 interface Tag {
   id: number;
@@ -144,7 +145,7 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
     tag ? tags.find((t) => t.name === tag)?.color || '#6b7280' : '#6b7280';
 
   const formatWhen = (dt: string) => {
-    const d = new Date(dt.replace(' ', 'T'));
+    const d = pacificDbStringToDate(dt);
     const date = d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -155,7 +156,7 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
   };
 
   const goTo = (ev: EventResult) => {
-    const dateStr = ev.startDatetime.slice(0, 10);
+    const dateStr = formatDateInputValue(pacificDbStringToDate(ev.startDatetime));
     setOpen(false);
     setQuery('');
     setResults([]);

@@ -15,6 +15,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
 import { parseLogText, recalculatePendingEventsDate } from '@/lib/discord-log';
+import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 
 // ==========================================
 // Authentication Actions
@@ -252,28 +253,22 @@ export async function addEventAction(data: {
   endDatetime: string;
   recurrence: string;
   recurrenceEndDate: string;
+  timeZone: string;
 }) {
   const session = await requireAuth();
-  
+
   const title = data.title.trim() || '(no name)';
   const description = data.description || '';
   const tag = data.tag || null;
 
-  // Convert HTML local datetimes (YYYY-MM-DDTHH:MM) to DB format (YYYY-MM-DD HH:MM:SS)
-  const startDt = new Date(data.startDatetime);
-  let endDt = new Date(data.endDatetime);
+  // Convert HTML local date+time inputs (entered in the browser's timezone) to
+  // DB format (YYYY-MM-DD HH:MM:SS) in the server's timezone (Pacific).
+  const startStr = browserDatetimeToServerDbString(data.startDatetime, data.timeZone);
+  let endStr = browserDatetimeToServerDbString(data.endDatetime, data.timeZone);
 
-  if (endDt <= startDt) {
-    endDt = new Date(startDt.getTime() + 60 * 60 * 1000); // default 1 hour
+  if (endStr <= startStr) {
+    endStr = addHoursToDbString(startStr, 1); // default 1 hour
   }
-
-  const formatDb = (d: Date) => {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-  };
-
-  const startStr = formatDb(startDt);
-  const endStr = formatDb(endDt);
 
   if (data.recurrence) {
     const rruleParts = [`FREQ=${data.recurrence}`];
@@ -308,6 +303,7 @@ export async function updateEventAction(
     tag: string;
     startDatetime: string;
     endDatetime: string;
+    timeZone: string;
   }
 ) {
   const session = await requireAuth();
@@ -316,17 +312,12 @@ export async function updateEventAction(
   const description = data.description || '';
   const tag = data.tag || null;
 
-  const startDt = new Date(data.startDatetime);
-  let endDt = new Date(data.endDatetime);
+  const startStr = browserDatetimeToServerDbString(data.startDatetime, data.timeZone);
+  let endStr = browserDatetimeToServerDbString(data.endDatetime, data.timeZone);
 
-  if (endDt <= startDt) {
-    endDt = new Date(startDt.getTime() + 60 * 60 * 1000);
+  if (endStr <= startStr) {
+    endStr = addHoursToDbString(startStr, 1);
   }
-
-  const formatDb = (d: Date) => {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-  };
 
   await db
     .update(events)
@@ -334,8 +325,8 @@ export async function updateEventAction(
       title,
       description,
       tag,
-      startDatetime: formatDb(startDt),
-      endDatetime: formatDb(endDt),
+      startDatetime: startStr,
+      endDatetime: endStr,
     })
     .where(and(eq(events.id, id), eq(events.userId, session.userId)));
 

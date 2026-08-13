@@ -27,6 +27,7 @@ import {
   deleteRecurringSeriesAction,
   updateRecurringSeriesAction,
 } from '@/app/actions';
+import { getBrowserTimeZone, pacificDbStringToDate, formatDateInputValue, formatTimeInputValue } from '@/lib/timezone';
 
 interface Tag {
   id: number;
@@ -268,6 +269,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
             tag: s.editTag,
             startDatetime: `${s.editStartDate}T${s.editStartTime}`,
             endDatetime: `${s.editEndDate}T${s.editEndTime}`,
+            timeZone: getBrowserTimeZone(),
           }).then(() => {
             setActiveOverlayId(null);
             setEditingEvent(null);
@@ -427,8 +429,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     const dayEnd = new Date(activeDateObj.getFullYear(), activeDateObj.getMonth(), activeDateObj.getDate(), 23, 59, 59).getTime();
 
     for (const ev of initialEvents) {
-      const startDt = new Date(ev.startDatetime.replace(' ', 'T'));
-      const endDt = new Date(ev.endDatetime.replace(' ', 'T'));
+      const startDt = pacificDbStringToDate(ev.startDatetime);
+      const endDt = pacificDbStringToDate(ev.endDatetime);
 
       const clippedStart = Math.max(startDt.getTime(), dayStart);
       const clippedEnd = Math.min(endDt.getTime(), dayEnd);
@@ -461,8 +463,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
         duration_minutes: duration,
         start_time: startDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         end_time: endDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        start_datetime_local: ev.startDatetime.replace(' ', 'T').substring(0, 16),
-        end_datetime_local: ev.endDatetime.replace(' ', 'T').substring(0, 16),
+        start_datetime_local: `${formatDateInputValue(startDt)}T${formatTimeInputValue(startDt)}`,
+        end_datetime_local: `${formatDateInputValue(endDt)}T${formatTimeInputValue(endDt)}`,
         tag_color: tagColor,
         multi_day: startDt.toDateString() !== endDt.toDateString(),
         continues_before: startDt.getTime() < dayStart,
@@ -499,10 +501,12 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     setEditTitle(ev.title);
     setEditTag(ev.tag || '');
     setEditDesc(ev.description || '');
-    setEditStartDate(ev.startDatetime.substring(0, 10));
-    setEditStartTime(ev.startDatetime.substring(11, 16));
-    setEditEndDate(ev.endDatetime.substring(0, 10));
-    setEditEndTime(ev.endDatetime.substring(11, 16));
+    const startDt = pacificDbStringToDate(ev.startDatetime);
+    const endDt = pacificDbStringToDate(ev.endDatetime);
+    setEditStartDate(formatDateInputValue(startDt));
+    setEditStartTime(formatTimeInputValue(startDt));
+    setEditEndDate(formatDateInputValue(endDt));
+    setEditEndTime(formatTimeInputValue(endDt));
   };
 
   // Deep link from search: when arriving with ?event=<id>, the matching event is
@@ -554,6 +558,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       endDatetime: `${formEndDate}T${formEndTime}`,
       recurrence: formRecur,
       recurrenceEndDate: formRecurEnd,
+      timeZone: getBrowserTimeZone(),
     });
     // Reset basic input fields
     setFormTitle('');
@@ -572,6 +577,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       tag: editTag,
       startDatetime: `${editStartDate}T${editStartTime}`,
       endDatetime: `${editEndDate}T${editEndTime}`,
+      timeZone: getBrowserTimeZone(),
     });
     setActiveOverlayId(null);
     setEditingEvent(null);
