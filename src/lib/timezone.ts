@@ -161,6 +161,21 @@ export function formatTimeInputValue(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Human label for an event's time range, as observed in the host's local
+// timezone. Same-day events read "10:00 PM - 11:30 PM"; events that cross
+// midnight carry a date on each end ("Tue, Aug 12 10:00 PM - Wed, Aug 13
+// 07:00 AM") so a copy of the event rendered on each day it spans is still
+// unambiguous about when it actually starts and ends.
+export function formatEventTimeRange(start: Date, end: Date): string {
+  const time = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (start.toDateString() === end.toDateString()) {
+    return `${time(start)} - ${time(end)}`;
+  }
+  const dateLabel = (d: Date) =>
+    d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return `${dateLabel(start)} ${time(start)} - ${dateLabel(end)} ${time(end)}`;
+}
+
 // Add N hours to a "YYYY-MM-DD HH:MM:SS" DB string (plain wall-clock arithmetic,
 // no timezone lookup needed since it never crosses timezones).
 export function addHoursToDbString(dbString: string, hours: number): string {
