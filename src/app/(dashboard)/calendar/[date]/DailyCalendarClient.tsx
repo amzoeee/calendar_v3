@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
+import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -753,8 +754,24 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     </form>
   );
 
+  // Mobile paging: swipe the timeline sideways to change days, mirroring the
+  // arrow-key shortcuts above. Suspended while an editor is open so a gesture
+  // inside a sheet or modal can't page the day out from under it.
+  const swipeRef = useSwipeNavigation<HTMLDivElement>({
+    onSwipeLeft: () => {
+      saveScroll();
+      router.push(`/calendar/${nextDayStr}`);
+    },
+    onSwipeRight: () => {
+      saveScroll();
+      router.push(`/calendar/${prevDayStr}`);
+    },
+    enabled:
+      activeOverlayId === null && !showMobileAddSheet && !showEditRecurModal && !showDeleteRecurModal,
+  });
+
   return (
-    <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+    <div ref={swipeRef} className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
 
       {/* Side Pane: Event Form & Info (desktop only — mobile uses the FAB + bottom sheet below) */}
       <div className="hidden md:flex md:flex-col md:w-80 bg-card md:border-r border-border p-6 overflow-y-auto shrink-0 space-y-6">
