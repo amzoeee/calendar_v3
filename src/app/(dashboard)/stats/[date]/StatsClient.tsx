@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import EventSearch from '@/app/components/EventSearch';
+import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 
 interface Tag {
   id: number;
@@ -247,8 +248,17 @@ export default function StatsClient({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [router, prevUrl, nextUrl]);
 
+  // Mobile paging: swipe sideways to shift the range by its own length, same
+  // as the arrow keys above. The hook ignores gestures that start inside the
+  // horizontally scrollable bar chart, which owns that axis itself.
+  const swipeRef = useSwipeNavigation<HTMLDivElement>({
+    onSwipeLeft: () => router.push(nextUrl),
+    onSwipeRight: () => router.push(prevUrl),
+    enabled: !showMobileFilters,
+  });
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div ref={swipeRef} className="flex-1 flex flex-col overflow-hidden">
 
       {/* Header controls */}
       <div className="border-b border-border flex flex-col gap-3 px-3 md:px-6 py-3 shrink-0 glass-panel">

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
+import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -555,8 +556,23 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     attempt();
   }, [searchParams]);
 
+  // Mobile paging: swipe the agenda sideways to change weeks, mirroring the
+  // arrow-key shortcuts above. Suspended while an editor is open so a gesture
+  // inside a sheet or modal can't page the week out from under it.
+  const swipeRef = useSwipeNavigation<HTMLDivElement>({
+    onSwipeLeft: () => {
+      saveScroll();
+      router.push(`/weekly/${nextWeekStr}`);
+    },
+    onSwipeRight: () => {
+      saveScroll();
+      router.push(`/weekly/${prevWeekStr}`);
+    },
+    enabled: activeOverlayId === null && !showAddModal && !showEditRecurModal && !showDeleteRecurModal,
+  });
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative">
+    <div ref={swipeRef} className="flex-1 flex flex-col overflow-hidden relative">
 
       {/* Mobile FAB: opens the same Add Event modal used on desktop */}
       <button
