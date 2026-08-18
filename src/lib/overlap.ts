@@ -16,6 +16,8 @@ export interface PositionedEvent {
   duration_minutes?: number;
   start_time?: string;
   end_time?: string;
+  // Display label for the whole range; dated on both ends when multi-day.
+  time_range?: string;
   start_datetime_local?: string;
   end_datetime_local?: string;
   tag_color?: string;
