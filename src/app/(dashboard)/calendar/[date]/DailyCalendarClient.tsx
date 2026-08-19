@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import TagSelect from '@/app/components/TagSelect';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -475,7 +475,12 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     return calculateOverlapColumns(processed);
   };
 
-  const positionedEvents = getPositionedEvents();
+  // Positions here are in *minutes*, not pixels — zoom is applied at render
+  // time — so this survives zooming unchanged. Memoizing it keeps a zoom
+  // keystroke from re-deriving every event's dates, which is what made
+  // spamming the zoom keys lag.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const positionedEvents = useMemo(() => getPositionedEvents(), [date, initialEvents, tags]);
 
   // Tag color lookup
   const getTagColor = (tagName: string) => {
