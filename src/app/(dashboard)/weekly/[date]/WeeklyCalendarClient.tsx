@@ -161,17 +161,26 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   }, [activeOverlayId]);
 
   const changeZoom = (delta: number) => {
-    setZoomLevel((prev) => {
-      const next = Math.max(30, Math.min(300, prev + delta));
-      localStorage.setItem('calendarZoomLevel', String(next));
-      return next;
-    });
+    setZoomLevel((prev) => Math.max(30, Math.min(300, prev + delta)));
   };
 
   const resetZoom = () => {
     setZoomLevel(60);
-    localStorage.setItem('calendarZoomLevel', '60');
   };
+
+  // Persist the zoom level as an effect rather than from inside the setState
+  // updater — updaters must be pure (React may invoke them more than once).
+  // Writes are ~0.006ms, so doing this per change costs nothing measurable.
+  const zoomHydratedRef = useRef(false);
+  useEffect(() => {
+    // Skip the first run so the default 60 can't clobber the stored value
+    // before the load effect above has applied it.
+    if (!zoomHydratedRef.current) {
+      zoomHydratedRef.current = true;
+      return;
+    }
+    localStorage.setItem('calendarZoomLevel', String(zoomLevel));
+  }, [zoomLevel]);
 
   // Keyboard zoom (Cmd/Ctrl + '=', '-', '0'), arrow key navigation, and edit overlay shortcuts
   useEffect(() => {
