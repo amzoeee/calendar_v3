@@ -478,7 +478,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
           <h2 className="text-xl font-bold tracking-tight">Export Calendar</h2>
         </div>
         <p className="text-xs text-muted-foreground">
-          Export events as `.ics` files. Select "All Events" to download a ZIP archive containing separate files for each tag.
+          Export events as <code className="bg-secondary px-1 rounded text-primary">.ics</code> files. Select "All Events" to download a ZIP archive containing separate files for each tag.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
