@@ -5,6 +5,25 @@ import { createRecurringEvent } from '@/lib/recurring';
 import { db } from '@/db';
 import { events } from '@/db/schema';
 
+// Send the browser back to /settings after the multipart form POST.
+//
+// Deliberately a *relative* Location instead of NextResponse.redirect: that
+// helper needs an absolute URL, and the only one available here is built from
+// `request.url`, which behind the Caddy reverse proxy is the app's internal
+// origin (localhost:4000) rather than the public hostname — so the browser
+// was being sent to localhost. A relative Location is resolved against the
+// address bar, which is always the real origin.
+//
+// 303 (not the 307 NextResponse.redirect defaults to) so the browser follows
+// up with a GET; a 307 would replay the whole multipart upload at /settings.
+function redirectToSettings(params: Record<string, string>): NextResponse {
+  const query = new URLSearchParams(params).toString();
+  return new NextResponse(null, {
+    status: 303,
+    headers: { Location: `/settings?${query}` },
+  });
+}
+
 export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -17,11 +36,11 @@ export async function POST(request: NextRequest) {
     const tag = (formData.get('import_tag') as string) || '';
 
     if (!file || file.name === '') {
-      return NextResponse.redirect(new URL('/settings?error=No+file+uploaded', request.url));
+      return redirectToSettings({ error: 'No file uploaded' });
     }
 
     if (!file.name.endsWith('.ics')) {
-      return NextResponse.redirect(new URL('/settings?error=Please+upload+a+.ics+file', request.url));
+      return redirectToSettings({ error: 'Please upload a .ics file' });
     }
 
     const browserTimeZone = (formData.get('browser_tz') as string) || undefined;
@@ -55,10 +74,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.redirect(new URL(`/settings?success=Successfully+imported+${count}+events!`, request.url));
+    return redirectToSettings({ success: `Successfully imported ${count} events!` });
   } catch (e: any) {
-    return NextResponse.redirect(
-      new URL(`/settings?error=Error+importing+file:+${encodeURIComponent(e.message || '')}`, request.url)
-    );
+    return redirectToSettings({ error: `Error importing file: ${e.message || ''}` });
   }
 }
