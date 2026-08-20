@@ -25,7 +25,13 @@ import {
   deleteRecurringSeriesAction,
   updateRecurringSeriesAction,
 } from '@/app/actions';
-import { getBrowserTimeZone, pacificDbStringToDate, formatDateInputValue, formatTimeInputValue } from '@/lib/timezone';
+import {
+  getBrowserTimeZone,
+  pacificDbStringToDate,
+  formatDateInputValue,
+  formatTimeInputValue,
+  formatEventTimeRange,
+} from '@/lib/timezone';
 
 interface Tag {
   id: number;
@@ -372,6 +378,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
         duration_minutes: duration,
         start_time: startDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         end_time: endDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time_range: formatEventTimeRange(startDt, endDt),
         start_datetime_local: `${formatDateInputValue(startDt)}T${formatTimeInputValue(startDt)}`,
         end_datetime_local: `${formatDateInputValue(endDt)}T${formatTimeInputValue(endDt)}`,
         tag_color: tagColor,
@@ -684,17 +691,24 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                     <button
                       key={ev.id}
                       onClick={() => handleOpenEditMobile(ev)}
-                      className="w-full flex items-center gap-2.5 text-left px-2.5 py-2 rounded-lg bg-secondary/60 hover:bg-secondary cursor-pointer event-card-clickable"
+                      className="w-full flex items-start gap-2.5 text-left px-2.5 py-2 rounded-lg bg-secondary/60 hover:bg-secondary cursor-pointer event-card-clickable"
                     >
                       <Circle
-                        className="h-2.5 w-2.5 shrink-0"
+                        className="h-2.5 w-2.5 shrink-0 mt-1.5"
                         style={{ fill: ev.tag_color, color: ev.tag_color }}
                       />
-                      <span className="flex-1 min-w-0 truncate text-sm font-semibold text-foreground">
-                        {ev.title}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {ev.start_time}
+                      <span className="flex-1 min-w-0">
+                        <span className="block truncate text-sm font-semibold text-foreground">
+                          {ev.title}
+                        </span>
+                        {/* Full range, not just the start: an event that spans
+                            several days is rendered once per day it covers, so
+                            a bare start time reads identically on every one of
+                            them. The dated form only kicks in when the event
+                            actually crosses midnight. */}
+                        <span className="block text-xs text-muted-foreground">
+                          {ev.time_range}
+                        </span>
                       </span>
                     </button>
                   ))}
