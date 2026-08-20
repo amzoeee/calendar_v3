@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import TagSelect from '@/app/components/TagSelect';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   ChevronLeft,
   ChevronRight,
@@ -19,6 +19,7 @@ import {
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
+import { useDateNavigation } from '@/lib/useDateNavigation';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -44,8 +45,6 @@ interface DailyCalendarClientProps {
 }
 
 export default function DailyCalendarClient({ date, initialEvents, tags }: DailyCalendarClientProps) {
-  const router = useRouter();
-
   // --- Zoom level ---
   const [zoomLevel, setZoomLevel] = useState<number>(60); // px per hour
 
@@ -112,16 +111,22 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   editStateRef.current = { editTitle, editTag, editDesc, editStartDate, editStartTime, editEndDate, editEndTime };
 
   // --- Date navigation ---
-  const prevDayStr = new Date(new Date(date + 'T00:00:00').getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const nextDayStr = new Date(new Date(date + 'T00:00:00').getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const displayDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+  // Paging is debounced: `activeDate` is the day the user has paged to, which
+  // is `date` except during the moment a coalesced fetch is still catching up.
+  // Everything about *navigation* reads `activeDate` so a held arrow key keeps
+  // stepping forward; everything about the *events* keeps reading `date`,
+  // since those are what the server actually rendered.
+  const { activeDate, isNavigating, navigateTo } = useDateNavigation(date, '/calendar');
+  const prevDayStr = new Date(new Date(activeDate + 'T00:00:00').getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const nextDayStr = new Date(new Date(activeDate + 'T00:00:00').getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const displayDate = new Date(activeDate + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
   // Compact form for the mobile header — "Wed 8/5" instead of "Wednesday, August 5, 2026".
-  const displayDateCompact = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+  const displayDateCompact = new Date(activeDate + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'numeric',
     day: 'numeric',
@@ -296,11 +301,11 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
           saveScroll();
-          router.push(`/calendar/${prevDayStr}`);
+          navigateTo(prevDayStr);
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
           saveScroll();
-          router.push(`/calendar/${nextDayStr}`);
+          navigateTo(nextDayStr);
         } else if ((e.key === 'Delete' || e.key === 'Backspace') && activeOverlayId !== null && editingEvent) {
           e.preventDefault();
           if (editingEvent.recurrenceId) {
@@ -315,7 +320,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [router, prevDayStr, nextDayStr, activeOverlayId, editingEvent]);
+  }, [navigateTo, prevDayStr, nextDayStr, activeOverlayId, editingEvent]);
 
   // Click outside overlay listener to close the popover
   useEffect(() => {
@@ -760,11 +765,11 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const swipeRef = useSwipeNavigation<HTMLDivElement>({
     onSwipeLeft: () => {
       saveScroll();
-      router.push(`/calendar/${nextDayStr}`);
+      navigateTo(nextDayStr);
     },
     onSwipeRight: () => {
       saveScroll();
-      router.push(`/calendar/${prevDayStr}`);
+      navigateTo(prevDayStr);
     },
     enabled:
       activeOverlayId === null && !showMobileAddSheet && !showEditRecurModal && !showDeleteRecurModal,
@@ -827,7 +832,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
             <button
               onClick={() => {
                 saveScroll();
-                router.push(`/calendar/${prevDayStr}`);
+                navigateTo(prevDayStr);
               }}
               className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
             >
@@ -837,7 +842,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               onClick={() => {
                 saveScroll();
                 const today = new Date().toLocaleDateString('en-CA');
-                router.push(`/calendar/${today}`);
+                navigateTo(today);
               }}
               className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
             >
@@ -846,7 +851,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
             <button
               onClick={() => {
                 saveScroll();
-                router.push(`/calendar/${nextDayStr}`);
+                navigateTo(nextDayStr);
               }}
               className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
             >
@@ -926,7 +931,13 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
             </div>
 
             {/* Positioned Events Container */}
-            <div className="absolute left-16 right-0 top-0 h-full pointer-events-none">
+            {/* Faded while a debounced page is in flight — the header has
+                already moved to the new day, so these events are stale. */}
+            <div
+              className={`absolute left-16 right-0 top-0 h-full pointer-events-none transition-opacity ${
+                isNavigating ? 'opacity-30' : ''
+              }`}
+            >
               {positionedEvents.map((ev) => {
                 const widthPercent = 100 / (ev.overlap_total || 1);
                 const leftPercent = (ev.overlap_column || 0) * widthPercent;

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import TagSelect from '@/app/components/TagSelect';
 import {
   ChevronLeft,
@@ -17,6 +17,7 @@ import {
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
+import { useDateNavigation } from '@/lib/useDateNavigation';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -49,7 +50,6 @@ interface WeeklyCalendarClientProps {
 }
 
 export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, tags }: WeeklyCalendarClientProps) {
-  const router = useRouter();
 
   // --- Zoom & Scroll ---
   const [zoomLevel, setZoomLevel] = useState<number>(60);
@@ -110,10 +110,10 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   const [addRecur, setAddRecur] = useState('');
   const [addRecurEnd, setAddRecurEnd] = useState('');
 
-  // Get week dates (7 dates from Sunday)
-  const getWeekDates = (): Date[] => {
+  // Get week dates (7 dates from the given Sunday)
+  const getWeekDates = (sunday: string): Date[] => {
     const dates: Date[] = [];
-    const sun = new Date(sundayDate + 'T00:00:00');
+    const sun = new Date(sunday + 'T00:00:00');
     for (let i = 0; i < 7; i++) {
       dates.push(new Date(sun.getTime() + i * 24 * 60 * 60 * 1000));
     }
@@ -122,17 +122,22 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
   // Depends only on sundayDate, so it stays referentially stable across the
   // frequent re-renders that don't change the week (zoom, overlay state).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const weekDates = useMemo(() => getWeekDates(), [sundayDate]);
+  const weekDates = useMemo(() => getWeekDates(sundayDate), [sundayDate]);
 
-  // Navigation
-  const prevWeekStr = new Date(new Date(sundayDate + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const nextWeekStr = new Date(new Date(sundayDate + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const weekStartStr = weekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const weekEndStr = weekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // Navigation. Paging is debounced, so `activeSunday` is the week the user has
+  // paged to, which is `sundayDate` except while a coalesced fetch is catching
+  // up. Navigation and the header title read it so a held arrow key keeps
+  // stepping; the grid below keeps rendering `weekDates` — the week the server
+  // actually sent — dimmed until the new one arrives.
+  const { activeDate: activeSunday, isNavigating, navigateTo } = useDateNavigation(sundayDate, '/weekly');
+  const prevWeekStr = new Date(new Date(activeSunday + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const nextWeekStr = new Date(new Date(activeSunday + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const titleWeekDates = useMemo(() => getWeekDates(activeSunday), [activeSunday]);
+  const weekStartStr = titleWeekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const weekEndStr = titleWeekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   // Compact form for the mobile header — "8/2 - 8/8" instead of "Aug 2 - Aug 8, 2026".
-  const weekStartCompact = weekDates[0].toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
-  const weekEndCompact = weekDates[6].toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+  const weekStartCompact = titleWeekDates[0].toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+  const weekEndCompact = titleWeekDates[6].toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
 
   // Load state
   useEffect(() => {
@@ -246,11 +251,11 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
           saveScroll();
-          router.push(`/weekly/${prevWeekStr}`);
+          navigateTo(prevWeekStr);
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
           saveScroll();
-          router.push(`/weekly/${nextWeekStr}`);
+          navigateTo(nextWeekStr);
         } else if ((e.key === 'Delete' || e.key === 'Backspace') && activeOverlayId !== null && editingEvent) {
           e.preventDefault();
           if (editingEvent.recurrenceId) {
@@ -265,7 +270,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [router, prevWeekStr, nextWeekStr, activeOverlayId, editingEvent]);
+  }, [navigateTo, prevWeekStr, nextWeekStr, activeOverlayId, editingEvent]);
 
   const saveScroll = () => {
     if (timelineContainerRef.current) {
@@ -588,11 +593,11 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   const swipeRef = useSwipeNavigation<HTMLDivElement>({
     onSwipeLeft: () => {
       saveScroll();
-      router.push(`/weekly/${nextWeekStr}`);
+      navigateTo(nextWeekStr);
     },
     onSwipeRight: () => {
       saveScroll();
-      router.push(`/weekly/${prevWeekStr}`);
+      navigateTo(prevWeekStr);
     },
     enabled: activeOverlayId === null && !showAddModal && !showEditRecurModal && !showDeleteRecurModal,
   });
@@ -615,7 +620,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           <button
             onClick={() => {
               saveScroll();
-              router.push(`/weekly/${prevWeekStr}`);
+              navigateTo(prevWeekStr);
             }}
             className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
           >
@@ -624,8 +629,13 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           <button
             onClick={() => {
               saveScroll();
-              const todayStr = new Date().toLocaleDateString('en-CA');
-              router.push(`/weekly/${todayStr}?scrollToday=${Date.now()}`);
+              const now = new Date();
+              const todayStr = now.toLocaleDateString('en-CA');
+              // The route derives the week's Sunday itself, but the title needs
+              // it up front to show the right range while the fetch is queued.
+              const todaySunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay())
+                .toLocaleDateString('en-CA');
+              navigateTo(todaySunday, `/weekly/${todayStr}?scrollToday=${Date.now()}`);
             }}
             className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
           >
@@ -634,7 +644,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           <button
             onClick={() => {
               saveScroll();
-              router.push(`/weekly/${nextWeekStr}`);
+              navigateTo(nextWeekStr);
             }}
             className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
           >
@@ -677,7 +687,12 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
       {/* Mobile agenda list — the desktop hour grid doesn't fit 7 columns legibly on a
           phone, so mobile gets a scrollable day-by-day list instead. */}
-      <div ref={agendaContainerRef} className="md:hidden flex-1 overflow-y-auto calendar-scrollbar divide-y divide-border">
+      <div
+        ref={agendaContainerRef}
+        className={`md:hidden flex-1 overflow-y-auto calendar-scrollbar divide-y divide-border transition-opacity ${
+          isNavigating ? 'opacity-30' : ''
+        }`}
+      >
         {weekDates.map((day, idx) => {
           const isToday = day.toDateString() === today.toDateString();
           const dayEvents = positionedEventsByDay[idx];
@@ -736,7 +751,11 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       </div>
 
       {/* Frozen day-header row (outside scroll) — desktop only, see mobile agenda above */}
-      <div className="hidden md:flex shrink-0 border-b border-border bg-background">
+      <div
+        className={`hidden md:flex shrink-0 border-b border-border bg-background transition-opacity ${
+          isNavigating ? 'opacity-30' : ''
+        }`}
+      >
         {/* Spacer matching the time-labels sidebar width */}
         <div className="w-16 shrink-0 border-r border-border" />
         {/* Day headers */}
@@ -767,7 +786,9 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       {/* Scrollable timeline area — desktop only, see mobile agenda above */}
       <div
         ref={timelineContainerRef}
-        className="hidden md:block flex-1 overflow-y-auto calendar-scrollbar relative timeline-container"
+        className={`hidden md:block flex-1 overflow-y-auto calendar-scrollbar relative timeline-container transition-opacity ${
+          isNavigating ? 'opacity-30' : ''
+        }`}
         id="timeline-container"
       >
         {/* Weekly grid wrapper */}
