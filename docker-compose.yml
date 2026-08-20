@@ -9,8 +9,14 @@ services:
       - .env
     environment:
       - DATABASE_PATH=/app/data/calendar.db
+      - BACKUP_DIR=/backups
     volumes:
       - calendar-data:/app/data
+      # Database backups (see README). Deliberately a host path rather than a
+      # docker volume: it lives outside the app folder and outside the volume
+      # holding the live database, so it survives `docker compose down -v`.
+      # The host directory must be writable by uid 1001 (the container user).
+      - ${BACKUP_HOST_DIR:?set BACKUP_HOST_DIR in .env - see .env.example}:/backups
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
 

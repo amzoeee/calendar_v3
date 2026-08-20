@@ -110,6 +110,63 @@ If you have an existing `calendar.db` file from calendar_v2 (whether it was the 
 
 ---
 
+## Backups
+
+The deployed app backs its database up on its own. Every couple of days it
+writes a timestamped copy of `calendar.db` to a folder on the server, outside
+the calendar folder and outside the Docker volume holding the live database, so
+a bad migration or an accidental `docker compose down -v` can't take the copies
+with it.
+
+Old backups are **never** deleted -- every snapshot is kept. The database is
+small (a few MB), so a year of them is a couple hundred MB.
+
+This only runs in the Docker deployment. Running the app locally with
+`npm run dev` never writes backups.
+
+### One-time setup on the server
+
+Create the folder and let the container's user (uid 1001) write to it:
+
+```bash
+mkdir -p ~/calendar-backups
+sudo chown 1001:1001 ~/calendar-backups
+```
+
+Then add the full path to your `.env` (Compose doesn't understand `~`):
+
+```
+BACKUP_HOST_DIR=/home/your-user/calendar-backups
+```
+
+Bring the stack up and check it took:
+
+```bash
+docker compose up -d
+docker compose logs app | grep backup
+```
+
+You should see `[backup] enabled` on startup, and `[backup] wrote ...` about
+half a minute later the first time. Afterwards each start logs either a skip
+with the age of the newest backup, or a fresh one once that age passes two days.
+
+### Restoring from a backup
+
+Pick the snapshot you want from `~/calendar-backups`, then swap it in:
+
+```bash
+docker compose stop app
+docker run --rm -v calendar_v3_calendar-data:/data -v ~/calendar-backups:/backups \
+  alpine cp /backups/calendar-20260819-031500.db /data/calendar.db
+docker compose up -d app
+```
+
+Replace the filename with the backup you chose. Check the volume's real name
+with `docker volume ls` first if the stack wasn't started from a folder called
+`calendar_v3` -- Compose prefixes volume names with the folder name.
+
+---
+
 ## Features
 
 | Feature | Description |
