@@ -3,17 +3,44 @@
 // browser's timezone to Pacific before it's treated as the app's "local" time.
 export const SERVER_TIMEZONE = 'America/Los_Angeles';
 
+// Constructing an Intl.DateTimeFormat is expensive — it dominated the cost of
+// every date conversion here, and the calendar views convert two dates per
+// event on each render. The instances are stateless and safe to reuse, so
+// they're built once per (locale + options + timeZone) and cached.
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function getFormatter(
+  locale: string,
+  timeZone: string,
+  options: Intl.DateTimeFormatOptions
+): Intl.DateTimeFormat {
+  const key = `${locale}|${timeZone}|${options.hour ? 'dt' : 'd'}`;
+  let dtf = formatterCache.get(key);
+  if (!dtf) {
+    dtf = new Intl.DateTimeFormat(locale, { ...options, timeZone });
+    formatterCache.set(key, dtf);
+  }
+  return dtf;
+}
+
+const DATE_TIME_PARTS: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+};
+
+const DATE_PARTS: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+};
+
 function getOffsetMillis(utcMillis: number, timeZone: string): number {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
+  const dtf = getFormatter('en-US', timeZone, DATE_TIME_PARTS);
   const parts = dtf.formatToParts(new Date(utcMillis));
   const map: Record<string, string> = {};
   for (const part of parts) map[part.type] = part.value;
@@ -41,16 +68,7 @@ function zonedDatetimeToUtcMillis(dateTimeLocal: string, timeZone: string): numb
 
 // Format a UTC instant as a "YYYY-MM-DD HH:MM:SS" wall-clock string in `timeZone`.
 function utcMillisToDbString(utcMillis: number, timeZone: string): string {
-  const dtf = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
+  const dtf = getFormatter('en-CA', timeZone, DATE_TIME_PARTS);
   const parts = dtf.formatToParts(new Date(utcMillis));
   const map: Record<string, string> = {};
   for (const part of parts) map[part.type] = part.value;
@@ -88,13 +106,7 @@ export function instantForWallClock(dateTimeLocal: string, timeZone: string): nu
 
 // "YYYY-MM-DD" calendar day that a UTC instant falls on, as observed in `timeZone`.
 export function dayStrOfInstant(ms: number, timeZone: string): string {
-  const dtf = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return dtf.format(new Date(ms));
+  return getFormatter('en-CA', timeZone, DATE_PARTS).format(new Date(ms));
 }
 
 // A real Date instant for a Pacific-stored DB string. Since Date getters
@@ -125,13 +137,7 @@ export function shiftDateStr(dateStr: string, days: number): string {
 // "YYYY-MM-DD" for `Date.now() + dayOffsetDays * 24h`, as observed in `timeZone`.
 export function dateStrInTimeZone(timeZone: string, dayOffsetDays: number = 0): string {
   const ms = Date.now() + dayOffsetDays * 24 * 60 * 60 * 1000;
-  const dtf = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return dtf.format(new Date(ms));
+  return getFormatter('en-CA', timeZone, DATE_PARTS).format(new Date(ms));
 }
 
 // Detects the current browser's IANA timezone (e.g. "America/New_York").

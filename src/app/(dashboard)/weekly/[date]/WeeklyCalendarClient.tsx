@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TagSelect from '@/app/components/TagSelect';
 import {
@@ -113,7 +113,10 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     return dates;
   };
 
-  const weekDates = getWeekDates();
+  // Depends only on sundayDate, so it stays referentially stable across the
+  // frequent re-renders that don't change the week (zoom, overlay state).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const weekDates = useMemo(() => getWeekDates(), [sundayDate]);
 
   // Navigation
   const prevWeekStr = new Date(new Date(sundayDate + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
@@ -158,17 +161,26 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   }, [activeOverlayId]);
 
   const changeZoom = (delta: number) => {
-    setZoomLevel((prev) => {
-      const next = Math.max(30, Math.min(300, prev + delta));
-      localStorage.setItem('calendarZoomLevel', String(next));
-      return next;
-    });
+    setZoomLevel((prev) => Math.max(30, Math.min(300, prev + delta)));
   };
 
   const resetZoom = () => {
     setZoomLevel(60);
-    localStorage.setItem('calendarZoomLevel', '60');
   };
+
+  // Persist the zoom level as an effect rather than from inside the setState
+  // updater — updaters must be pure (React may invoke them more than once).
+  // Writes are ~0.006ms, so doing this per change costs nothing measurable.
+  const zoomHydratedRef = useRef(false);
+  useEffect(() => {
+    // Skip the first run so the default 60 can't clobber the stored value
+    // before the load effect above has applied it.
+    if (!zoomHydratedRef.current) {
+      zoomHydratedRef.current = true;
+      return;
+    }
+    localStorage.setItem('calendarZoomLevel', String(zoomLevel));
+  }, [zoomLevel]);
 
   // Keyboard zoom (Cmd/Ctrl + '=', '-', '0'), arrow key navigation, and edit overlay shortcuts
   useEffect(() => {
@@ -371,6 +383,20 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
     return calculateOverlapColumns(processed);
   };
+
+  // Positions here are in *minutes*, not pixels — zoom is applied at render
+  // time — so this survives zooming unchanged. Memoizing it keeps a zoom
+  // keystroke from re-deriving every event's dates 14 times over (7 days x
+  // both the mobile agenda and the desktop grid), which is what made spamming
+  // the zoom keys lag.
+  const positionedEventsByDay = useMemo(
+    () =>
+      weekDates.map((day) =>
+        getPositionedEventsForDay(day).sort((a, b) => (a.top_position || 0) - (b.top_position || 0))
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [weekDates, initialEvents, tags]
+  );
 
   const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
     saveScroll();
@@ -631,9 +657,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       <div ref={agendaContainerRef} className="md:hidden flex-1 overflow-y-auto calendar-scrollbar divide-y divide-border">
         {weekDates.map((day, idx) => {
           const isToday = day.toDateString() === today.toDateString();
-          const dayEvents = getPositionedEventsForDay(day).sort(
-            (a, b) => (a.top_position || 0) - (b.top_position || 0)
-          );
+          const dayEvents = positionedEventsByDay[idx];
           return (
             <div key={idx} className="px-4 py-3" {...(isToday ? { 'data-today-section': true } : {})}>
               <div className="flex items-center gap-2 mb-2">
@@ -739,7 +763,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           <div className="flex-1 grid grid-cols-7 h-full relative">
             {weekDates.map((day, colIdx) => {
               const isToday = day.toDateString() === new Date().toDateString();
-              const dayEvents = getPositionedEventsForDay(day);
+              const dayEvents = positionedEventsByDay[colIdx];
 
               return (
                 <div

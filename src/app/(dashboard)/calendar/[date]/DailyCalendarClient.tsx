@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import TagSelect from '@/app/components/TagSelect';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -142,19 +142,27 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     }
   }, []);
 
-  // Save zoom level when it changes
   const changeZoom = (delta: number) => {
-    setZoomLevel((prev) => {
-      const next = Math.max(30, Math.min(300, prev + delta));
-      localStorage.setItem('calendarZoomLevel', String(next));
-      return next;
-    });
+    setZoomLevel((prev) => Math.max(30, Math.min(300, prev + delta)));
   };
 
   const resetZoom = () => {
     setZoomLevel(60);
-    localStorage.setItem('calendarZoomLevel', '60');
   };
+
+  // Persist the zoom level as an effect rather than from inside the setState
+  // updater — updaters must be pure (React may invoke them more than once).
+  // Writes are ~0.006ms, so doing this per change costs nothing measurable.
+  const zoomHydratedRef = useRef(false);
+  useEffect(() => {
+    // Skip the first run so the default 60 can't clobber the stored value
+    // before the load effect above has applied it.
+    if (!zoomHydratedRef.current) {
+      zoomHydratedRef.current = true;
+      return;
+    }
+    localStorage.setItem('calendarZoomLevel', String(zoomLevel));
+  }, [zoomLevel]);
 
   // --- Pinch-to-zoom (mobile) ---
   // Desktop has the Zoom In/Out buttons in the side panel, which is hidden on
@@ -189,11 +197,6 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
 
     let startDist = 0;
     let startZoom = 0;
-    // Updated synchronously in onTouchMove (unlike zoomLevelRef, which only
-    // catches up via an effect after React commits) so onTouchEnd — which can
-    // fire in the same tick as the last onTouchMove on a fast pinch-release —
-    // always persists the zoom level that was actually last set.
-    let lastZoom = 0;
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 2) return;
@@ -203,7 +206,6 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       const anchorMin = ((centerClientY - rect.top + container.scrollTop) / zoom) * 60;
       startDist = touchDist(e.touches);
       startZoom = zoom;
-      lastZoom = zoom;
       pinchAnchorRef.current = { anchorMin, centerClientY };
     };
 
@@ -212,14 +214,13 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       e.preventDefault(); // stop the page itself from pinch-zooming
       const scale = touchDist(e.touches) / startDist;
       const newZoom = Math.max(30, Math.min(300, Math.round(startZoom * scale)));
-      lastZoom = newZoom;
       pinchAnchorRef.current.centerClientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       setZoomLevel(newZoom);
     };
 
     const onTouchEnd = (e: TouchEvent) => {
       if (e.touches.length < 2 && pinchAnchorRef.current) {
-        localStorage.setItem('calendarZoomLevel', String(lastZoom));
+        // Persistence is handled by the zoomLevel effect above.
         pinchAnchorRef.current = null;
         startDist = 0;
       }
@@ -475,7 +476,12 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     return calculateOverlapColumns(processed);
   };
 
-  const positionedEvents = getPositionedEvents();
+  // Positions here are in *minutes*, not pixels — zoom is applied at render
+  // time — so this survives zooming unchanged. Memoizing it keeps a zoom
+  // keystroke from re-deriving every event's dates, which is what made
+  // spamming the zoom keys lag.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const positionedEvents = useMemo(() => getPositionedEvents(), [date, initialEvents, tags]);
 
   // Tag color lookup
   const getTagColor = (tagName: string) => {
