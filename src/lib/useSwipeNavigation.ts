@@ -2,11 +2,15 @@ import { useEffect, useRef } from 'react';
 
 // A gesture has to travel this far horizontally before it counts as a swipe —
 // keeps taps and the small drags that come with scrolling from navigating.
-const MIN_DISTANCE_PX = 60;
-// ...and stay roughly horizontal. Vertical travel above this fraction of the
+// Kept short so a small deliberate flick pages without a full-width drag; the
+// off-axis ratio below is what actually keeps scrolling from triggering it.
+const MIN_DISTANCE_PX = 40;
+// ...and stay horizontal-dominant. Vertical travel above this fraction of the
 // horizontal travel means the user was scrolling the timeline/agenda, not
-// paging.
-const MAX_OFF_AXIS_RATIO = 0.6;
+// paging. At 1.0 the rule is simply "moved further sideways than up/down",
+// which is the most permissive this can get while still being a horizontal
+// gesture — going past 1.0 would start stealing vertical scrolls.
+const MAX_OFF_AXIS_RATIO = 1.0;
 // A slow drag across the screen is a fidget, not a flick.
 const MAX_DURATION_MS = 800;
 
