@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Archive,
   ArchiveRestore,
@@ -40,6 +40,40 @@ interface SettingsClientProps {
 
 export default function SettingsClient({ initialTags }: SettingsClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // --- ICS import result ---
+  // The ICS import is a plain multipart form POST, so the route reports its
+  // outcome by redirecting back here with `?success=` or `?error=`. Lift that
+  // into state on arrival and strip it from the URL: the banner stays until
+  // it's dismissed, but a refresh or a shared link won't resurrect the result
+  // of an import that already happened.
+  const successParam = searchParams.get('success');
+  const errorParam = searchParams.get('error');
+  const importParam = successParam ?? errorParam;
+  const [importResult, setImportResult] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  // Adjust-state-during-render so the message is captured before the effect
+  // below clears the query string out from under it.
+  const [prevImportParam, setPrevImportParam] = useState<string | null>(null);
+  if (importParam !== prevImportParam) {
+    setPrevImportParam(importParam);
+    if (importParam) {
+      setImportResult({ kind: successParam ? 'success' : 'error', text: importParam });
+    }
+  }
+  useEffect(() => {
+    if (importParam) router.replace('/settings', { scroll: false });
+  }, [importParam, router]);
+  // Import is the third section down, so the redirect lands the page well above
+  // the banner — scroll it into view, or the one thing the user is waiting for
+  // is the one thing they don't see. Instant rather than smooth: this lands on
+  // a fresh page load, where an animated scroll reads as the page moving on its
+  // own, and it needs no reduced-motion caveat. Runs on dismissal too, where the
+  // ref is already null and this is a no-op.
+  const importBannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    importBannerRef.current?.scrollIntoView({ block: 'center' });
+  }, [importResult]);
 
   // --- Tags list state ---
   const [tagsList, setTagsList] = useState<Tag[]>(initialTags);
@@ -391,6 +425,28 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
         <p className="text-xs text-muted-foreground">
           Import events from a Google Calendar <code className="bg-secondary px-1 rounded text-primary">.ics</code> file.
         </p>
+
+        {importResult && (
+          <div
+            ref={importBannerRef}
+            role="status"
+            className={`flex items-start gap-3 rounded-lg border px-3 py-2 text-xs ${
+              importResult.kind === 'success'
+                ? 'border-green-500/40 bg-green-500/10 text-green-300'
+                : 'border-red-500/40 bg-red-500/10 text-red-300'
+            }`}
+          >
+            <span className="flex-1 font-semibold">{importResult.text}</span>
+            <button
+              type="button"
+              onClick={() => setImportResult(null)}
+              className="shrink-0 text-current opacity-70 hover:opacity-100 cursor-pointer"
+              aria-label="Dismiss import message"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
 
         <form action="/api/import-ics" method="POST" encType="multipart/form-data" className="space-y-4">
           <input type="hidden" name="browser_tz" value={browserTz} />
