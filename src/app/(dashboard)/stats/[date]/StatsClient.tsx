@@ -78,8 +78,8 @@ export default function StatsClient({
   // Everything the header offers — the range title, the step targets, the range
   // inputs — reads it, so a held arrow key keeps stepping from where the user
   // is. The chart below keeps rendering the range the server actually sent,
-  // dimmed until the new one arrives.
-  const { active: activeRange, isNavigating, navigateTo } = useDateNavigation<Range>(
+  // until the new one arrives.
+  const { active: activeRange, navigateTo } = useDateNavigation<Range>(
     { start: startDate, end: endDate },
     (r) => buildUrl(r.start, r.end),
     (r) => `${r.start}|${r.end}`,
@@ -491,14 +491,8 @@ export default function StatsClient({
         </div>
       )}
 
-      {/* Main Page Area — faded while a debounced page is in flight, since the
-          header has already moved to the new range and these numbers are for
-          the old one. */}
-      <div
-        className={`flex-1 p-4 md:p-8 overflow-y-auto flex flex-col lg:flex-row gap-4 md:gap-8 transition-opacity ${
-          isNavigating ? 'opacity-30' : ''
-        }`}
-      >
+      {/* Main Page Area */}
+      <div className="flex-1 p-4 md:p-8 overflow-y-auto flex flex-col lg:flex-row gap-4 md:gap-8">
 
         {/* Stacked Bar Chart */}
         <div className="flex-1 bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">

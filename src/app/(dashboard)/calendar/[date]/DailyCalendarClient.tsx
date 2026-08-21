@@ -116,7 +116,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   // Everything about *navigation* reads `activeDate` so a held arrow key keeps
   // stepping forward; everything about the *events* keeps reading `date`,
   // since those are what the server actually rendered.
-  const { active: activeDate, isNavigating, navigateTo } = useDateNavigation(date, (d) => `/calendar/${d}`);
+  const { active: activeDate, navigateTo } = useDateNavigation(date, (d) => `/calendar/${d}`);
   const prevDayStr = new Date(new Date(activeDate + 'T00:00:00').getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const nextDayStr = new Date(new Date(activeDate + 'T00:00:00').getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const displayDate = new Date(activeDate + 'T00:00:00').toLocaleDateString('en-US', {
@@ -931,13 +931,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
             </div>
 
             {/* Positioned Events Container */}
-            {/* Faded while a debounced page is in flight — the header has
-                already moved to the new day, so these events are stale. */}
-            <div
-              className={`absolute left-16 right-0 top-0 h-full pointer-events-none transition-opacity ${
-                isNavigating ? 'opacity-30' : ''
-              }`}
-            >
+            <div className="absolute left-16 right-0 top-0 h-full pointer-events-none">
               {positionedEvents.map((ev) => {
                 const widthPercent = 100 / (ev.overlap_total || 1);
                 const leftPercent = (ev.overlap_column || 0) * widthPercent;
