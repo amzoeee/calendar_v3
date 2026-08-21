@@ -258,7 +258,7 @@ export default function StatsClient({
   });
 
   return (
-    <div ref={swipeRef} className="flex-1 flex flex-col overflow-hidden">
+    <div ref={swipeRef} className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
       {/* Header controls */}
       <div className="border-b border-border flex flex-col gap-3 px-3 md:px-6 py-3 shrink-0 glass-panel">
@@ -457,8 +457,12 @@ export default function StatsClient({
         </div>
       )}
 
-      {/* Main Page Area */}
-      <div className="flex-1 p-4 md:p-8 overflow-y-auto flex flex-col lg:flex-row gap-4 md:gap-8">
+      {/* Main Page Area. `min-h-0` so this is what scrolls — without it the
+          flex default of `min-height: auto` lets the content push the page past
+          the layout's <main>, which then scrolls instead. On a phone that hands
+          the scroll to the element the browser treats as the page root, whose
+          OS-drawn overlay scrollbar ignores our styling. */}
+      <div className="flex-1 min-h-0 p-4 md:p-8 overflow-y-auto flex flex-col lg:flex-row gap-4 md:gap-8">
 
         {/* Stacked Bar Chart */}
         <div className="flex-1 bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
@@ -469,7 +473,7 @@ export default function StatsClient({
 
           {/* Grid Chart — horizontally scrollable on mobile since 7 bars don't
               fit a phone width at a legible size (see the fixed inner width below) */}
-          <div className="flex-1 mt-8 overflow-x-auto md:overflow-visible calendar-scrollbar">
+          <div className="flex-1 mt-8 overflow-x-auto md:overflow-visible">
             <div className="relative h-full w-[460px] md:w-full">
 
             {/* Y Axis Guide Lines */}
