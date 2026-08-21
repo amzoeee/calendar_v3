@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Archive,
@@ -64,6 +64,16 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
   useEffect(() => {
     if (importParam) router.replace('/settings', { scroll: false });
   }, [importParam, router]);
+  // Import is the third section down, so the redirect lands the page well above
+  // the banner — scroll it into view, or the one thing the user is waiting for
+  // is the one thing they don't see. Instant rather than smooth: this lands on
+  // a fresh page load, where an animated scroll reads as the page moving on its
+  // own, and it needs no reduced-motion caveat. Runs on dismissal too, where the
+  // ref is already null and this is a no-op.
+  const importBannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    importBannerRef.current?.scrollIntoView({ block: 'center' });
+  }, [importResult]);
 
   // --- Tags list state ---
   const [tagsList, setTagsList] = useState<Tag[]>(initialTags);
@@ -418,6 +428,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
 
         {importResult && (
           <div
+            ref={importBannerRef}
             role="status"
             className={`flex items-start gap-3 rounded-lg border px-3 py-2 text-xs ${
               importResult.kind === 'success'
