@@ -54,10 +54,20 @@ body {
    Applied to everything that scrolls rather than to an opt-in class: the OS
    default bars are chunky and light enough to read as a rendering artefact on
    this dark UI, and they turned up in whichever container a small window
-   happened to overflow — a bottom sheet, a side pane, the page itself. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(136, 136, 136, 0.3) rgba(23, 23, 23, 0.5);
+   happened to overflow — a bottom sheet, a side pane, the page itself.
+
+   Chrome and Safari paint the bar from the ::-webkit-scrollbar pseudo-elements
+   below. Firefox knows only the standard properties — and Chrome *stops
+   honouring the pseudo-elements* on any element that sets `scrollbar-width` or
+   `scrollbar-color`, falling back to a wider bar of its own. So the standard
+   properties are fenced off to engines that have no pseudo-element support,
+   with opaque colours since Firefox composites a translucent thumb against its
+   own light default rather than against the page. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #55565a #171717;
+  }
 }
 
 *::-webkit-scrollbar {
