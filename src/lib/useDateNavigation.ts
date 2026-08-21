@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 // How long to wait after the last navigation input before actually fetching.
-// Long enough to swallow a burst of held or spammed arrow keys, short enough
-// that a single deliberate press starts loading before anyone notices.
-const NAV_DEBOUNCE_MS = 250;
+// Comfortably longer than the ~30ms OS key-repeat interval, so holding an arrow
+// key still coalesces into one fetch, while a single deliberate press starts
+// loading before anyone notices.
+const NAV_DEBOUNCE_MS = 150;
 
 /**
  * Debounced date paging for the date-ranged views.
@@ -66,9 +67,6 @@ export function useDateNavigation(date: string, basePath: string) {
     // What the header should show: where the user has paged to, which is the
     // rendered date except while a fetch is still catching up.
     activeDate: pending?.date ?? date,
-    // True while what's on screen belongs to a date other than the one the
-    // header is showing, so the view can mark itself as catching up.
-    isNavigating: pending !== null && pending.date !== date,
     navigateTo,
   };
 }

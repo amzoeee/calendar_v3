@@ -129,7 +129,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   // up. Navigation and the header title read it so a held arrow key keeps
   // stepping; the grid below keeps rendering `weekDates` — the week the server
   // actually sent — dimmed until the new one arrives.
-  const { activeDate: activeSunday, isNavigating, navigateTo } = useDateNavigation(sundayDate, '/weekly');
+  const { activeDate: activeSunday, navigateTo } = useDateNavigation(sundayDate, '/weekly');
   const prevWeekStr = new Date(new Date(activeSunday + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const nextWeekStr = new Date(new Date(activeSunday + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const titleWeekDates = useMemo(() => getWeekDates(activeSunday), [activeSunday]);
@@ -687,12 +687,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
       {/* Mobile agenda list — the desktop hour grid doesn't fit 7 columns legibly on a
           phone, so mobile gets a scrollable day-by-day list instead. */}
-      <div
-        ref={agendaContainerRef}
-        className={`md:hidden flex-1 overflow-y-auto calendar-scrollbar divide-y divide-border transition-opacity ${
-          isNavigating ? 'opacity-30' : ''
-        }`}
-      >
+      <div ref={agendaContainerRef} className="md:hidden flex-1 overflow-y-auto calendar-scrollbar divide-y divide-border">
         {weekDates.map((day, idx) => {
           const isToday = day.toDateString() === today.toDateString();
           const dayEvents = positionedEventsByDay[idx];
@@ -751,11 +746,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       </div>
 
       {/* Frozen day-header row (outside scroll) — desktop only, see mobile agenda above */}
-      <div
-        className={`hidden md:flex shrink-0 border-b border-border bg-background transition-opacity ${
-          isNavigating ? 'opacity-30' : ''
-        }`}
-      >
+      <div className="hidden md:flex shrink-0 border-b border-border bg-background">
         {/* Spacer matching the time-labels sidebar width */}
         <div className="w-16 shrink-0 border-r border-border" />
         {/* Day headers */}
@@ -786,9 +777,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       {/* Scrollable timeline area — desktop only, see mobile agenda above */}
       <div
         ref={timelineContainerRef}
-        className={`hidden md:block flex-1 overflow-y-auto calendar-scrollbar relative timeline-container transition-opacity ${
-          isNavigating ? 'opacity-30' : ''
-        }`}
+        className="hidden md:block flex-1 overflow-y-auto calendar-scrollbar relative timeline-container"
         id="timeline-container"
       >
         {/* Weekly grid wrapper */}
