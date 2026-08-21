@@ -231,10 +231,10 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
   }, [initialTags]);
 
   return (
-    <div className="flex-1 p-4 md:p-8 space-y-6 md:space-y-8 max-w-4xl mx-auto">
+    <div className="flex-1 p-4 lg:p-8 space-y-6 lg:space-y-8 max-w-4xl mx-auto">
 
       {/* Tag Management */}
-      <section className="bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
+      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">
         <div className="flex items-center gap-3">
           <Edit2 className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-bold tracking-tight">Tag Management</h2>
@@ -259,33 +259,33 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
                   <span className="text-sm font-semibold truncate text-foreground">{tag.name}</span>
                 </div>
                 
-                <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
                   <button
                     onClick={() => handleOpenEditModal(tag)}
                     aria-label="Edit tag"
                     title="Edit"
-                    className="p-1.5 md:px-2 md:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-foreground cursor-pointer transition flex items-center gap-1"
+                    className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-foreground cursor-pointer transition flex items-center gap-1"
                   >
                     <Edit2 className="h-3 w-3" />
-                    <span className="hidden md:inline">Edit</span>
+                    <span className="hidden lg:inline">Edit</span>
                   </button>
                   <button
                     onClick={() => handleArchive(tag.id, tag.name)}
                     aria-label="Archive tag"
                     title="Archive"
-                    className="p-1.5 md:px-2 md:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-amber-400 cursor-pointer transition flex items-center gap-1"
+                    className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-amber-400 cursor-pointer transition flex items-center gap-1"
                   >
                     <Archive className="h-3 w-3" />
-                    <span className="hidden md:inline">Archive</span>
+                    <span className="hidden lg:inline">Archive</span>
                   </button>
                   <button
                     onClick={() => handleDeleteTag(tag.id, tag.name)}
                     aria-label="Delete tag"
                     title="Delete"
-                    className="p-1.5 md:px-2 md:py-1 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 text-xs rounded font-semibold text-red-400 cursor-pointer transition flex items-center gap-1"
+                    className="p-1.5 lg:px-2 lg:py-1 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 text-xs rounded font-semibold text-red-400 cursor-pointer transition flex items-center gap-1"
                   >
                     <Trash2 className="h-3 w-3" />
-                    <span className="hidden md:inline">Delete</span>
+                    <span className="hidden lg:inline">Delete</span>
                   </button>
                 </div>
               </div>
@@ -311,24 +311,24 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
                     <span className="text-sm font-semibold truncate line-through text-muted-foreground">{tag.name}</span>
                   </div>
                   
-                  <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
                     <button
                       onClick={() => handleUnarchive(tag.id)}
                       aria-label="Unarchive tag"
                       title="Unarchive"
-                      className="p-1.5 md:px-2 md:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-foreground cursor-pointer transition flex items-center gap-1"
+                      className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-foreground cursor-pointer transition flex items-center gap-1"
                     >
                       <ArchiveRestore className="h-3 w-3" />
-                      <span className="hidden md:inline">Unarchive</span>
+                      <span className="hidden lg:inline">Unarchive</span>
                     </button>
                     <button
                       onClick={() => handleDeleteTag(tag.id, tag.name)}
                       aria-label="Delete tag"
                       title="Delete"
-                      className="p-1.5 md:px-2 md:py-1 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 text-xs rounded font-semibold text-red-400 cursor-pointer transition flex items-center gap-1"
+                      className="p-1.5 lg:px-2 lg:py-1 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 text-xs rounded font-semibold text-red-400 cursor-pointer transition flex items-center gap-1"
                     >
                       <Trash2 className="h-3 w-3" />
-                      <span className="hidden md:inline">Delete</span>
+                      <span className="hidden lg:inline">Delete</span>
                     </button>
                   </div>
                 </div>
@@ -342,7 +342,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
         {/* Add Tag Inline Form */}
         <div className="bg-secondary/25 border border-border/40 rounded-xl p-4 space-y-3">
           <h4 className="text-sm font-bold text-foreground">Add New Tag</h4>
-          <form onSubmit={handleAddTagSubmit} className="flex flex-col md:flex-row md:items-end gap-3">
+          <form onSubmit={handleAddTagSubmit} className="flex flex-col lg:flex-row lg:items-end gap-3">
             <div className="flex-1 w-full">
               <label className="block text-xs font-semibold text-muted-foreground uppercase">Tag Name</label>
               <input
@@ -383,7 +383,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
       </section>
 
       {/* Import Calendar */}
-      <section className="bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
+      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">
         <div className="flex items-center gap-3">
           <FileUp className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-bold tracking-tight">Import Google Calendar</h2>
@@ -394,7 +394,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
 
         <form action="/api/import-ics" method="POST" encType="multipart/form-data" className="space-y-4">
           <input type="hidden" name="browser_tz" value={browserTz} />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground uppercase">ICS File</label>
               <input
@@ -426,7 +426,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
       </section>
 
       {/* Import Discord Log */}
-      <section className="bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
+      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">
         <div className="flex items-center gap-3">
           <MessageSquareCode className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-bold tracking-tight">Import Discord Log</h2>
@@ -436,8 +436,8 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
         </p>
 
         <div className="space-y-4">
-          <div className="flex flex-col md:flex-row md:items-end gap-3">
-            <div className="w-full md:w-48">
+          <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+            <div className="w-full lg:w-48">
               <label className="block text-xs font-semibold text-muted-foreground uppercase">
                 Date Override <span className="text-muted-foreground font-normal">(optional)</span>
               </label>
@@ -472,7 +472,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
       </section>
 
       {/* Export Calendar */}
-      <section className="bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
+      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">
         <div className="flex items-center gap-3">
           <FileDown className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-bold tracking-tight">Export Calendar</h2>
@@ -481,7 +481,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
           Export events as <code className="bg-secondary px-1 rounded text-primary">.ics</code> files. Select "All Events" to download a ZIP archive containing separate files for each tag.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase">Filter by Tag</label>
             <select
@@ -527,8 +527,8 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
 
       {/* EDIT TAG MODAL */}
       {showEditModal && editingTag && (
-        <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50">
-          <div className="bg-card border border-border p-6 rounded-t-2xl md:rounded-lg w-full md:max-w-sm space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-end lg:items-center justify-center z-50">
+          <div className="bg-card border border-border p-6 rounded-t-2xl lg:rounded-lg w-full lg:max-w-sm space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <h3 className="text-lg font-bold text-foreground">Edit Tag</h3>
               <button
