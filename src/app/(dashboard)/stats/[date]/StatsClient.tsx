@@ -1,16 +1,22 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import EventSearch from '@/app/components/EventSearch';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
+import { useDateNavigation } from '@/lib/useDateNavigation';
 
 interface Tag {
   id: number;
   name: string;
   color: string;
   isArchived: number;
+}
+
+// The window the page is showing: `date` route param + `end` search param.
+interface Range {
+  start: string;
+  end: string;
 }
 
 interface StatsClientProps {
@@ -28,6 +34,10 @@ const toDateStr = (d: Date) =>
   `${String(d.getFullYear()).padStart(4, '0')}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const addDays = (d: Date, n: number) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const shiftRange = (r: Range, days: number): Range => ({
+  start: toDateStr(addDays(new Date(r.start + 'T00:00:00'), days)),
+  end: toDateStr(addDays(new Date(r.end + 'T00:00:00'), days)),
+});
 
 // A well-formed YYYY-MM-DD that is also a real calendar date with a sensible
 // (4-digit) year. Guards against partial entries like "0202-08-15" that the
@@ -45,8 +55,6 @@ export default function StatsClient({
   tagHoursByDay,
   tags,
 }: StatsClientProps) {
-  const router = useRouter();
-
   const start = new Date(startDate + 'T00:00:00');
   const end = new Date(endDate + 'T00:00:00');
 
@@ -65,50 +73,68 @@ export default function StatsClient({
   const buildUrl = (s: string, e: string) =>
     `/stats/${s}?end=${e}&weekdays_only=${weekdaysOnly}`;
 
-  // Navigation shifts the whole window by its own length.
-  const prevUrl = buildUrl(
-    toDateStr(addDays(start, -rangeLen)),
-    toDateStr(addDays(end, -rangeLen))
+  // Paging is debounced, so `activeRange` is the window the user has paged to,
+  // which is the rendered range except while a coalesced fetch is catching up.
+  // Everything the header offers — the range title, the step targets, the range
+  // inputs — reads it, so a held arrow key keeps stepping from where the user
+  // is. The chart below keeps rendering the range the server actually sent,
+  // dimmed until the new one arrives.
+  const { active: activeRange, isNavigating, navigateTo } = useDateNavigation<Range>(
+    { start: startDate, end: endDate },
+    (r) => buildUrl(r.start, r.end),
+    (r) => `${r.start}|${r.end}`,
   );
-  const nextUrl = buildUrl(
-    toDateStr(addDays(start, rangeLen)),
-    toDateStr(addDays(end, rangeLen))
+  const { start: activeStartStr, end: activeEndStr } = activeRange;
+  const activeStart = new Date(activeStartStr + 'T00:00:00');
+  const activeEnd = new Date(activeEndStr + 'T00:00:00');
+
+  // Navigation shifts the whole window by its own length. Shifting preserves
+  // that length, so the rendered range's `rangeLen` is also the length of
+  // wherever the user has paged to. Memoised because the keydown listener below
+  // is rebound whenever these change.
+  const prevPeriod = useMemo(
+    () => shiftRange({ start: activeStartStr, end: activeEndStr }, -rangeLen),
+    [activeStartStr, activeEndStr, rangeLen],
+  );
+  const nextPeriod = useMemo(
+    () => shiftRange({ start: activeStartStr, end: activeEndStr }, rangeLen),
+    [activeStartStr, activeEndStr, rangeLen],
   );
 
   // "Today" keeps the current window length but ends on today.
-  const todayUrl = () => {
+  const todayPeriod = (): Range => {
     const today = new Date();
     const e = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const s = addDays(e, -(rangeLen - 1));
-    return buildUrl(toDateStr(s), toDateStr(e));
+    return { start: toDateStr(s), end: toDateStr(e) };
   };
 
   // Preset ranges (keep the current end, extend the start into the past).
   const oneMonthStart = addDays(
-    new Date(end.getFullYear(), end.getMonth() - 1, end.getDate()),
+    new Date(activeEnd.getFullYear(), activeEnd.getMonth() - 1, activeEnd.getDate()),
     1
   );
   const presets: { label: string; start: string; active: boolean }[] = [
-    { label: '1 Week', start: toDateStr(addDays(end, -6)), active: rangeLen === 7 },
-    { label: '2 Weeks', start: toDateStr(addDays(end, -13)), active: rangeLen === 14 },
-    { label: '1 Month', start: toDateStr(oneMonthStart), active: startDate === toDateStr(oneMonthStart) },
+    { label: '1 Week', start: toDateStr(addDays(activeEnd, -6)), active: rangeLen === 7 },
+    { label: '2 Weeks', start: toDateStr(addDays(activeEnd, -13)), active: rangeLen === 14 },
+    { label: '1 Month', start: toDateStr(oneMonthStart), active: activeRange.start === toDateStr(oneMonthStart) },
   ];
 
   // Header date display.
-  const sameYear = start.getFullYear() === end.getFullYear();
-  const startDisplay = start.toLocaleDateString('en-US', {
+  const sameYear = activeStart.getFullYear() === activeEnd.getFullYear();
+  const startDisplay = activeStart.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     ...(sameYear ? {} : { year: 'numeric' }),
   });
-  const endDisplay = end.toLocaleDateString('en-US', {
+  const endDisplay = activeEnd.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
   // Compact form for the mobile header — "8/2 - 8/8" instead of "Aug 2 - Aug 8, 2026".
-  const startDisplayCompact = start.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
-  const endDisplayCompact = end.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+  const startDisplayCompact = activeStart.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+  const endDisplayCompact = activeEnd.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
 
   // Per-day totals (used for the tag averages panel below).
   const dayStats = rangeDates.map((day) => {
@@ -184,7 +210,13 @@ export default function StatsClient({
   };
 
   const handleToggleWeekdays = () => {
-    router.push(`/stats/${startDate}?end=${endDate}&weekdays_only=${!weekdaysOnly}`);
+    // Not a range change — same window, different filter — but it still goes
+    // through navigateTo so a page still sitting in the debounce can't land
+    // afterwards and undo it.
+    navigateTo(
+      activeRange,
+      `/stats/${activeRange.start}?end=${activeRange.end}&weekdays_only=${!weekdaysOnly}`,
+    );
   };
 
   // Mobile: the presets/custom-range/weekdays-only row is too much to show at
@@ -194,35 +226,37 @@ export default function StatsClient({
   // Local copies of the range inputs so typing doesn't navigate mid-entry
   // (which used to reset the field after a single digit). We only commit — and
   // navigate — on blur or Enter, mirroring the event add/edit forms.
+  // Tracked against the *active* range, so paging with the arrow keys carries
+  // the inputs along with the header instead of leaving them a page behind.
   const [localStart, setLocalStart] = useState(startDate);
   const [localEnd, setLocalEnd] = useState(endDate);
   const [prevRange, setPrevRange] = useState({ start: startDate, end: endDate });
-  if (prevRange.start !== startDate || prevRange.end !== endDate) {
-    setPrevRange({ start: startDate, end: endDate });
-    setLocalStart(startDate);
-    setLocalEnd(endDate);
+  if (prevRange.start !== activeRange.start || prevRange.end !== activeRange.end) {
+    setPrevRange({ start: activeRange.start, end: activeRange.end });
+    setLocalStart(activeRange.start);
+    setLocalEnd(activeRange.end);
   }
 
   const commitStart = () => {
     if (!isSensibleDate(localStart)) {
-      setLocalStart(startDate); // revert an incomplete/nonsensical entry
+      setLocalStart(activeRange.start); // revert an incomplete/nonsensical entry
       return;
     }
-    if (localStart === startDate) return;
+    if (localStart === activeRange.start) return;
     // Keep the end no earlier than the new start.
-    const newEnd = localStart > endDate ? localStart : endDate;
-    router.push(buildUrl(localStart, newEnd));
+    const newEnd = localStart > activeRange.end ? localStart : activeRange.end;
+    navigateTo({ start: localStart, end: newEnd });
   };
 
   const commitEnd = () => {
     if (!isSensibleDate(localEnd)) {
-      setLocalEnd(endDate); // revert an incomplete/nonsensical entry
+      setLocalEnd(activeRange.end); // revert an incomplete/nonsensical entry
       return;
     }
-    if (localEnd === endDate) return;
+    if (localEnd === activeRange.end) return;
     // Keep the start no later than the new end.
-    const newStart = localEnd < startDate ? localEnd : startDate;
-    router.push(buildUrl(newStart, localEnd));
+    const newStart = localEnd < activeRange.start ? localEnd : activeRange.start;
+    navigateTo({ start: newStart, end: localEnd });
   };
 
   // Keyboard arrow navigation — shifts by the range length.
@@ -236,24 +270,24 @@ export default function StatsClient({
       if (!isInput && !e.metaKey && !e.ctrlKey) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          router.push(prevUrl);
+          navigateTo(prevPeriod);
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
-          router.push(nextUrl);
+          navigateTo(nextPeriod);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [router, prevUrl, nextUrl]);
+  }, [navigateTo, prevPeriod, nextPeriod]);
 
   // Mobile paging: swipe sideways to shift the range by its own length, same
   // as the arrow keys above. The hook ignores gestures that start inside the
   // horizontally scrollable bar chart, which owns that axis itself.
   const swipeRef = useSwipeNavigation<HTMLDivElement>({
-    onSwipeLeft: () => router.push(nextUrl),
-    onSwipeRight: () => router.push(prevUrl),
+    onSwipeLeft: () => navigateTo(nextPeriod),
+    onSwipeRight: () => navigateTo(prevPeriod),
     enabled: !showMobileFilters,
   });
 
@@ -266,20 +300,20 @@ export default function StatsClient({
         <div className="flex items-center justify-between gap-2 md:gap-4 md:flex-wrap">
           <div className="flex items-center gap-1.5 md:gap-3">
             <button
-              onClick={() => router.push(prevUrl)}
+              onClick={() => navigateTo(prevPeriod)}
               className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
               aria-label="Previous period"
             >
               <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
             </button>
             <button
-              onClick={() => router.push(todayUrl())}
+              onClick={() => navigateTo(todayPeriod())}
               className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
             >
               Today
             </button>
             <button
-              onClick={() => router.push(nextUrl)}
+              onClick={() => navigateTo(nextPeriod)}
               className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
               aria-label="Next period"
             >
@@ -325,7 +359,7 @@ export default function StatsClient({
             {presets.map((p) => (
               <button
                 key={p.label}
-                onClick={() => router.push(buildUrl(p.start, endDate))}
+                onClick={() => navigateTo({ start: p.start, end: activeRange.end })}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${
                   p.active
                     ? 'bg-primary/20 border-primary text-primary'
@@ -400,7 +434,7 @@ export default function StatsClient({
                 {presets.map((p) => (
                   <button
                     key={p.label}
-                    onClick={() => router.push(buildUrl(p.start, endDate))}
+                    onClick={() => navigateTo({ start: p.start, end: activeRange.end })}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${
                       p.active
                         ? 'bg-primary/20 border-primary text-primary'
@@ -457,8 +491,14 @@ export default function StatsClient({
         </div>
       )}
 
-      {/* Main Page Area */}
-      <div className="flex-1 p-4 md:p-8 overflow-y-auto flex flex-col lg:flex-row gap-4 md:gap-8">
+      {/* Main Page Area — faded while a debounced page is in flight, since the
+          header has already moved to the new range and these numbers are for
+          the old one. */}
+      <div
+        className={`flex-1 p-4 md:p-8 overflow-y-auto flex flex-col lg:flex-row gap-4 md:gap-8 transition-opacity ${
+          isNavigating ? 'opacity-30' : ''
+        }`}
+      >
 
         {/* Stacked Bar Chart */}
         <div className="flex-1 bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
