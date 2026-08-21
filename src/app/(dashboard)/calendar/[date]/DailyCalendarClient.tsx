@@ -116,7 +116,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   // Everything about *navigation* reads `activeDate` so a held arrow key keeps
   // stepping forward; everything about the *events* keeps reading `date`,
   // since those are what the server actually rendered.
-  const { activeDate, isNavigating, navigateTo } = useDateNavigation(date, '/calendar');
+  const { active: activeDate, isNavigating, navigateTo } = useDateNavigation(date, (d) => `/calendar/${d}`);
   const prevDayStr = new Date(new Date(activeDate + 'T00:00:00').getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const nextDayStr = new Date(new Date(activeDate + 'T00:00:00').getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const displayDate = new Date(activeDate + 'T00:00:00').toLocaleDateString('en-US', {

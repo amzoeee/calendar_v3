@@ -129,7 +129,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   // up. Navigation and the header title read it so a held arrow key keeps
   // stepping; the grid below keeps rendering `weekDates` — the week the server
   // actually sent — dimmed until the new one arrives.
-  const { activeDate: activeSunday, isNavigating, navigateTo } = useDateNavigation(sundayDate, '/weekly');
+  const { active: activeSunday, isNavigating, navigateTo } = useDateNavigation(sundayDate, (d) => `/weekly/${d}`);
   const prevWeekStr = new Date(new Date(activeSunday + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const nextWeekStr = new Date(new Date(activeSunday + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
   const titleWeekDates = useMemo(() => getWeekDates(activeSunday), [activeSunday]);
