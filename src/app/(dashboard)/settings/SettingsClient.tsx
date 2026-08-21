@@ -231,7 +231,13 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
   }, [initialTags]);
 
   return (
-    <div className="flex-1 p-4 lg:p-8 space-y-6 lg:space-y-8 max-w-4xl mx-auto">
+    // Settings scrolls in its own container rather than letting the layout's
+    // <main> scroll, matching every other page. On a phone a viewport-filling
+    // <main> is the scroller the browser treats as the page root, and root
+    // scrollbars are OS-drawn overlays that ignore ::-webkit-scrollbar — so
+    // this page got a different-looking bar from the rest of the app.
+    <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 max-w-4xl mx-auto">
 
       {/* Tag Management */}
       <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">
@@ -583,6 +589,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
         </div>
       )}
 
+      </div>
     </div>
   );
 }
