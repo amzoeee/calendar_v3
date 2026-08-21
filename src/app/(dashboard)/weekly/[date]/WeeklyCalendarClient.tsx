@@ -677,7 +677,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
 
       {/* Mobile agenda list — the desktop hour grid doesn't fit 7 columns legibly on a
           phone, so mobile gets a scrollable day-by-day list instead. */}
-      <div ref={agendaContainerRef} className="md:hidden flex-1 overflow-y-auto calendar-scrollbar divide-y divide-border">
+      <div ref={agendaContainerRef} className="md:hidden flex-1 overflow-y-auto divide-y divide-border">
         {weekDates.map((day, idx) => {
           const isToday = day.toDateString() === today.toDateString();
           const dayEvents = positionedEventsByDay[idx];
@@ -767,7 +767,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       {/* Scrollable timeline area — desktop only, see mobile agenda above */}
       <div
         ref={timelineContainerRef}
-        className="hidden md:block flex-1 overflow-y-auto calendar-scrollbar relative timeline-container"
+        className="hidden md:block flex-1 overflow-y-auto relative timeline-container"
         id="timeline-container"
       >
         {/* Weekly grid wrapper */}

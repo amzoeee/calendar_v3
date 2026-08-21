@@ -870,7 +870,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
         {/* Scrollable Timeline Grid */}
         <div
           ref={timelineContainerRef}
-          className="flex-1 overflow-y-auto calendar-scrollbar relative timeline-container"
+          className="flex-1 overflow-y-auto relative timeline-container"
           id="timeline-container"
         >
           {/* Timeline Wrapper (24 hours * zoomLevel) */}

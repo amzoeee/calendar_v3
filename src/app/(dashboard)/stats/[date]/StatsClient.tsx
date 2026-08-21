@@ -469,7 +469,7 @@ export default function StatsClient({
 
           {/* Grid Chart — horizontally scrollable on mobile since 7 bars don't
               fit a phone width at a legible size (see the fixed inner width below) */}
-          <div className="flex-1 mt-8 overflow-x-auto md:overflow-visible calendar-scrollbar">
+          <div className="flex-1 mt-8 overflow-x-auto md:overflow-visible">
             <div className="relative h-full w-[460px] md:w-full">
 
             {/* Y Axis Guide Lines */}
