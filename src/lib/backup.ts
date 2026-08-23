@@ -29,26 +29,62 @@ const NAME_PATTERN = /^calendar-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.db$
 
 const globalForBackup = globalThis as unknown as { backupSchedulerStarted?: boolean };
 
-// Backups only run in the deployment: production build *and* an explicitly
-// configured, writable BACKUP_DIR (set from docker-compose.yml). `npm run dev`
-// and a bare local `npm start` both fall through to null and do nothing.
-export function getBackupDir(): string | null {
-  if (process.env.NODE_ENV !== 'production') return null;
-
-  const dir = process.env.BACKUP_DIR?.trim();
-  if (!dir) return null;
-
+// Creating a file is the only check that proves the directory is usable.
+// access(2) consults the permission bits alone, which can say "writable" while
+// the write is still refused — on a Docker Desktop bind mount the host carries
+// out the write as the desktop user rather than as the container's uid, so the
+// bits visible inside the container describe the wrong user entirely.
+function writeProbeError(dir: string): string | null {
+  const probe = path.join(dir, `.write-probe-${process.pid}`);
   try {
-    fs.accessSync(dir, fs.constants.W_OK);
+    fs.writeFileSync(probe, '');
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+  try {
+    fs.unlinkSync(probe);
   } catch {
-    console.error(
-      `[backup] BACKUP_DIR "${dir}" is missing or not writable — backups are OFF. ` +
-        'Create it on the host and give the container user (uid 1001) write access.',
-    );
-    return null;
+    // The write succeeded, which is what we were testing for.
+  }
+  return null;
+}
+
+// Backups only run in the deployment: a production build *and* a BACKUP_DIR
+// that exists and can actually be written to (docker-compose.yml sets it).
+// `npm run dev` and a bare local `npm start` both fall through to a reason.
+// Returning the reason rather than a bare null keeps the startup log specific —
+// "disabled" on its own can't be told apart from a misconfigured mount.
+export type BackupDirResult = { dir: string } | { dir: null; reason: string };
+
+export function resolveBackupDir(): BackupDirResult {
+  if (process.env.NODE_ENV !== 'production') {
+    return { dir: null, reason: 'not a production build' };
   }
 
-  return dir;
+  const dir = process.env.BACKUP_DIR?.trim();
+  if (!dir) {
+    return {
+      dir: null,
+      reason: 'BACKUP_DIR is not set — docker-compose.yml sets it in the deployment, so ' +
+        'a container started before it was added needs `docker compose up -d app` to pick it up',
+    };
+  }
+
+  if (!fs.existsSync(dir)) {
+    return { dir: null, reason: `BACKUP_DIR "${dir}" does not exist` };
+  }
+
+  const probeError = writeProbeError(dir);
+  if (probeError) {
+    return {
+      dir: null,
+      reason: `cannot write to BACKUP_DIR "${dir}" (${probeError}) — the host directory has to be ` +
+        "writable by whichever user the container's writes land as: your own user under Docker " +
+        'Desktop, or uid 1001 on a plain Linux host',
+    };
+  }
+
+  return { dir };
 }
 
 // UTC, so the filenames stay sortable and unambiguous across DST.
@@ -124,10 +160,7 @@ async function writeBackup(dir: string, now: Date): Promise<string> {
   return finalPath;
 }
 
-export async function runBackupIfDue(now = new Date()): Promise<void> {
-  const dir = getBackupDir();
-  if (!dir) return;
-
+export async function runBackupIfDue(dir: string, now = new Date()): Promise<void> {
   try {
     const latest = latestBackupAt(dir);
     if (latest !== null && now.getTime() - latest < DUE_AFTER_MS) {
@@ -148,16 +181,17 @@ export function startBackupScheduler(): void {
   if (globalForBackup.backupSchedulerStarted) return;
   globalForBackup.backupSchedulerStarted = true;
 
-  const dir = getBackupDir();
-  if (!dir) {
-    console.log('[backup] disabled (needs a production build and a writable BACKUP_DIR)');
+  const resolved = resolveBackupDir();
+  if (resolved.dir === null) {
+    console.log(`[backup] disabled — ${resolved.reason}`);
     return;
   }
 
+  const { dir } = resolved;
   console.log(`[backup] enabled — every ~2 days to ${dir}, keeping every snapshot`);
   sweepPartials(dir);
 
   // Delayed so a cold start serves requests before copying the database.
-  setTimeout(() => void runBackupIfDue(), STARTUP_DELAY_MS).unref();
-  setInterval(() => void runBackupIfDue(), HEARTBEAT_MS).unref();
+  setTimeout(() => void runBackupIfDue(dir), STARTUP_DELAY_MS).unref();
+  setInterval(() => void runBackupIfDue(dir), HEARTBEAT_MS).unref();
 }
