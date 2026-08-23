@@ -126,11 +126,20 @@ This only runs in the Docker deployment. Running the app locally with
 
 ### One-time setup on the server
 
-Create the folder and let the container's user (uid 1001) write to it:
+Create the folder:
 
 ```bash
 mkdir -p ~/calendar-backups
-sudo chown 1001:1001 ~/calendar-backups
+```
+
+**Leave it owned by your own user.** The container runs as uid 1001, but under
+Docker Desktop (macOS/Windows) the write is carried out on the host as *your*
+desktop user, so chowning the folder to 1001 takes write access away rather than
+granting it. Only on a plain Linux host, where the container writes as its own
+uid, do you need:
+
+```bash
+sudo chown 1001:1001 ~/calendar-backups   # Linux hosts only, not Docker Desktop
 ```
 
 Then add the full path to your `.env` (Compose doesn't understand `~`):
@@ -149,6 +158,16 @@ docker compose logs app | grep backup
 You should see `[backup] enabled` on startup, and `[backup] wrote ...` about
 half a minute later the first time. Afterwards each start logs either a skip
 with the age of the newest backup, or a fresh one once that age passes two days.
+
+If instead it logs `[backup] disabled`, the message names the cause. The two
+likely ones:
+
+- **`BACKUP_DIR is not set`** -- the container predates the backup feature.
+  Watchtower updates the image but never re-reads `docker-compose.yml`, so it
+  keeps recreating the container with its original settings. `git pull &&
+  docker compose up -d app` rebuilds it from the current file.
+- **`cannot write to BACKUP_DIR`** -- fix the folder's ownership as above, then
+  `docker compose restart app`.
 
 ### Restoring from a backup
 
