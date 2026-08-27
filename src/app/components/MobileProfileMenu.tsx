@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { LogOut } from 'lucide-react';
+import Link from 'next/link';
+import { LogOut, Settings as SettingsIcon } from 'lucide-react';
 
 /**
  * Rendered in a portal with fixed positioning so it escapes the dashboard
@@ -56,6 +57,15 @@ export default function MobileProfileMenu({
             className="w-44 z-[100] bg-card border border-border rounded-lg shadow-2xl p-2 space-y-1"
           >
             <p className="px-2 py-1 text-sm font-semibold text-foreground truncate">{username}</p>
+            {/* Settings lives here rather than in the tab bar — see MobileTabBar. */}
+            <Link
+              href="/settings"
+              onClick={() => setOpen(false)}
+              className="w-full flex items-center px-2 py-2 text-sm font-medium rounded-md text-foreground hover:bg-secondary transition-all gap-2"
+            >
+              <SettingsIcon className="h-4 w-4" />
+              Settings
+            </Link>
             <form action={logoutAction}>
               <button
                 type="submit"
