@@ -15,7 +15,8 @@ services:
       # Database backups (see README). Deliberately a host path rather than a
       # docker volume: it lives outside the app folder and outside the volume
       # holding the live database, so it survives `docker compose down -v`.
-      # The host directory must be writable by uid 1001 (the container user).
+      # The host directory must be writable by whichever user the container's
+      # writes land as: the desktop user under Docker Desktop, uid 1001 on Linux.
       - ${BACKUP_HOST_DIR:?set BACKUP_HOST_DIR in .env - see .env.example}:/backups
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
