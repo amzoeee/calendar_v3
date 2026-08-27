@@ -581,8 +581,12 @@ export default function StatsClient({
           </div>
         </div>
 
-        {/* Tag Averages Panel */}
-        <div className="w-full lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
+        {/* Tag Averages Panel. Stretching this card pins it to the row's
+            height, so once there are more tags than fit, the extra rows spill
+            out past its own border instead of making it taller. `lg:self-start`
+            lets it size to its rows; `lg:min-h-full` keeps the row height as a
+            floor, so a short list still matches the chart the way it used to. */}
+        <div className="w-full lg:self-start lg:min-h-full lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
           <div>
             <h2 className="text-lg font-bold">Daily Averages</h2>
             <p className="text-xs text-muted-foreground mt-1">
