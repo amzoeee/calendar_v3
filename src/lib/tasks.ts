@@ -12,6 +12,13 @@
  */
 export const MAX_TASK_DEPTH = 1;
 
+/**
+ * How many boards can sit side by side in the desktop view. Past three the
+ * columns get too narrow for a task title to survive on one line at common
+ * window widths.
+ */
+export const MAX_VISIBLE_BOARDS = 3;
+
 export type SortMode = 'manual' | 'alpha' | 'created' | 'remind' | 'deadline';
 
 // Sort modes offered in the UI today. `remind` and `deadline` are valid values

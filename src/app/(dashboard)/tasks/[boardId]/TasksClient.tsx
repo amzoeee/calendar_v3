@@ -22,6 +22,7 @@ import {
   ACTIVE_SORT_MODES,
   SORT_LABELS,
   MAX_TASK_DEPTH,
+  MAX_VISIBLE_BOARDS,
   type SortMode,
   type TaskRow,
   type TaskNode,
@@ -47,9 +48,13 @@ interface BoardSummary {
   name: string;
 }
 
+interface VisibleBoard extends BoardSummary {
+  sortMode: SortMode;
+}
+
 interface TasksClientProps {
   boards: BoardSummary[];
-  board: { id: number; name: string; sortMode: SortMode };
+  visibleBoards: VisibleBoard[];
   rows: TaskRow[];
 }
 
@@ -61,15 +66,30 @@ interface UndoState {
   restoreTo: boolean;
 }
 
-export default function TasksClient({ boards, board, rows }: TasksClientProps) {
+// Handlers a column needs from its parent. Bundled rather than passed one by
+// one, since every column gets exactly the same set.
+interface ColumnHandlers {
+  addTask: (boardId: number, title: string, parentId: number | null) => void;
+  requestCompletion: (node: TaskNode, completed: boolean) => void;
+  toggleStar: (row: TaskRow) => void;
+  saveTitle: (id: number, title: string) => void;
+  openEditor: (id: number) => void;
+  run: (fn: () => Promise<unknown>) => void;
+  editingId: number | null;
+  setEditingId: (id: number | null) => void;
+  subtaskParent: number | null;
+  setSubtaskParent: (id: number | null) => void;
+  selectedId: number | null;
+}
+
+export default function TasksClient({ boards, visibleBoards, rows }: TasksClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
   // Server rows are the source of truth; this mirror exists so ticking a box
   // strikes it through immediately instead of after a server round trip. The
   // reset happens during render rather than in an effect — React's documented
-  // way to adjust state when props change, and it avoids a frame where the
-  // list shows stale rows.
+  // way to adjust state when props change.
   const [localRows, setLocalRows] = useState<TaskRow[]>(rows);
   const [syncedRows, setSyncedRows] = useState<TaskRow[]>(rows);
   if (rows !== syncedRows) {
@@ -77,45 +97,38 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
     setLocalRows(rows);
   }
 
-  const [composerValue, setComposerValue] = useState('');
   const [subtaskParent, setSubtaskParent] = useState<number | null>(null);
-  const [subtaskValue, setSubtaskValue] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingValue, setEditingValue] = useState('');
-  const [showCompleted, setShowCompleted] = useState(false);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [confirmParent, setConfirmParent] = useState<{ node: TaskNode; open: number } | null>(null);
-  const [boardMenuOpen, setBoardMenuOpen] = useState(false);
   const [newBoardOpen, setNewBoardOpen] = useState(false);
 
-  const composerRef = useRef<HTMLInputElement>(null);
-  const subtaskRef = useRef<HTMLInputElement>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The first column's composer is what `n` and the mobile compose button aim at.
+  const firstComposerRef = useRef<HTMLInputElement>(null);
 
-  // ----- derived -----
+  const visibleIds = visibleBoards.map((b) => b.id);
+  const primary = visibleBoards[0];
 
-  const { openTree, completedTree } = useMemo(() => {
-    const open = localRows.filter((r) => !r.completedAt);
-    const done = localRows.filter((r) => r.completedAt);
-    return {
-      openTree: sortTaskTree(buildTaskTree(open), board.sortMode),
-      // Most recently finished first, regardless of the board's sort — the
-      // completed pile reads as a log, not as a list you're working through.
-      completedTree: sortTaskTree(buildTaskTree(done), 'manual').sort((a, b) =>
-        (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
-      ),
-    };
-  }, [localRows, board.sortMode]);
-
-  const openRows = useMemo(() => flattenTaskTree(openTree), [openTree]);
-  const completedRows = useMemo(() => flattenTaskTree(completedTree), [completedTree]);
   const selected = useMemo(
     () => localRows.find((r) => r.id === selectedId) ?? null,
     [localRows, selectedId]
   );
 
-  // ----- keyboard: `n` focuses the composer -----
+  // ----- navigation between board selections -----
+
+  const showOnly = (id: number) => router.push(`/tasks/${id}`);
+
+  const toggleColumn = (id: number) => {
+    const next = visibleIds.includes(id)
+      ? visibleIds.filter((v) => v !== id)
+      : [...visibleIds, id].slice(0, MAX_VISIBLE_BOARDS);
+    if (next.length === 0) return;
+    router.push(`/tasks/${next.join(',')}`);
+  };
+
+  // ----- keyboard -----
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -127,15 +140,11 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
       e.preventDefault();
-      composerRef.current?.focus();
+      firstComposerRef.current?.focus();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
-
-  useEffect(() => {
-    if (subtaskParent != null) subtaskRef.current?.focus();
-  }, [subtaskParent]);
 
   // ----- undo toast lifetime -----
 
@@ -166,10 +175,10 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
   const patchLocal = (ids: number[], patch: Partial<TaskRow>) =>
     setLocalRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, ...patch } : r)));
 
-  const addTask = (title: string, parentId: number | null) => {
+  const addTask = (boardId: number, title: string, parentId: number | null) => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    run(() => createTaskAction(board.id, trimmed, parentId));
+    run(() => createTaskAction(boardId, trimmed, parentId));
   };
 
   const applyCompletion = (node: TaskNode, completed: boolean, cascade: boolean) => {
@@ -240,146 +249,68 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
     run(() => deleteTaskAction(id));
   };
 
-  // ----- rendering -----
-
-  const renderRow = (node: TaskNode, done: boolean) => {
-    const isEditing = editingId === node.id;
-    const indent = node.depth * 28;
-
-    return (
-      <div key={node.id}>
-        <div
-          className={`group flex items-start gap-3 rounded-lg px-2 py-2 transition-colors ${
-            selectedId === node.id ? 'bg-secondary' : 'hover:bg-secondary/50'
-          }`}
-          style={{ paddingLeft: 8 + indent }}
-        >
-          <button
-            onClick={() => requestCompletion(node, !done)}
-            aria-label={done ? `Mark “${node.title}” not done` : `Mark “${node.title}” done`}
-            className={`mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
-              done
-                ? 'bg-primary border-primary text-primary-foreground'
-                : 'border-muted-foreground hover:border-foreground'
-            }`}
-          >
-            {done && <Check className="h-3 w-3" strokeWidth={3} />}
-          </button>
-
-          <div className="flex-1 min-w-0">
-            {isEditing ? (
-              <input
-                autoFocus
-                value={editingValue}
-                onChange={(e) => setEditingValue(e.target.value)}
-                onBlur={() => saveTitle(node.id, editingValue)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') saveTitle(node.id, editingValue);
-                  if (e.key === 'Escape') setEditingId(null);
-                }}
-                className="w-full bg-transparent border-b border-border text-sm text-foreground focus:outline-none focus:border-foreground py-0.5"
-              />
-            ) : (
-              <button
-                onClick={() => {
-                  setEditingId(node.id);
-                  setEditingValue(node.title);
-                }}
-                className={`block w-full text-left text-sm cursor-text ${
-                  done ? 'line-through text-muted-foreground' : 'text-foreground'
-                }`}
-              >
-                {node.title}
-              </button>
-            )}
-            {node.description && !isEditing && (
-              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0">
-            {node.depth < MAX_TASK_DEPTH && !done && (
-              <button
-                onClick={() => {
-                  setSubtaskParent(node.id);
-                  setSubtaskValue('');
-                }}
-                aria-label={`Add a subtask to “${node.title}”`}
-                title="Add subtask"
-                className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
-              >
-                <CornerDownRight className="h-3.5 w-3.5" />
-              </button>
-            )}
-            <button
-              onClick={() => toggleStar(node)}
-              aria-label={node.isStarred ? `Unstar “${node.title}”` : `Star “${node.title}”`}
-              aria-pressed={node.isStarred === 1}
-              className={`p-1 transition-colors cursor-pointer ${
-                node.isStarred ? 'text-amber-400' : 'text-muted-foreground/60 hover:text-foreground'
-              }`}
-            >
-              <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
-            </button>
-            <button
-              onClick={() => setSelectedId(node.id)}
-              aria-label={`Edit “${node.title}”`}
-              className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {subtaskParent === node.id && (
-          <div className="flex items-center gap-3 py-1" style={{ paddingLeft: 8 + indent + 28 }}>
-            <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <input
-              ref={subtaskRef}
-              value={subtaskValue}
-              onChange={(e) => setSubtaskValue(e.target.value)}
-              onBlur={() => {
-                addTask(subtaskValue, node.id);
-                setSubtaskParent(null);
-                setSubtaskValue('');
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  addTask(subtaskValue, node.id);
-                  setSubtaskValue('');
-                }
-                if (e.key === 'Escape') setSubtaskParent(null);
-              }}
-              placeholder="Subtask"
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground py-1"
-            />
-          </div>
-        )}
-
-        {node.children.map((child) => renderRow(child, Boolean(child.completedAt)))}
-      </div>
-    );
+  const handlers: ColumnHandlers = {
+    addTask,
+    requestCompletion,
+    toggleStar,
+    saveTitle,
+    openEditor: setSelectedId,
+    run,
+    editingId,
+    setEditingId,
+    subtaskParent,
+    setSubtaskParent,
+    selectedId,
   };
 
   return (
     <div className="flex-1 min-h-0 flex overflow-hidden">
-      {/* Boards rail (desktop) */}
+      {/* Boards rail. The name shows that board on its own; the checkbox adds
+          it beside the others, up to MAX_VISIBLE_BOARDS. */}
       <aside className="hidden md:flex w-56 shrink-0 border-r border-border flex-col">
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
-          {boards.map((b) => (
-            <button
-              key={b.id}
-              onClick={() => router.push(`/tasks/${b.id}`)}
-              aria-current={b.id === board.id ? 'page' : undefined}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium truncate transition-colors cursor-pointer ${
-                b.id === board.id
-                  ? 'bg-secondary text-foreground'
-                  : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-              }`}
-            >
-              {b.name}
-            </button>
-          ))}
+          {boards.map((b) => {
+            const shown = visibleIds.includes(b.id);
+            const atLimit = !shown && visibleIds.length >= MAX_VISIBLE_BOARDS;
+            return (
+              <div
+                key={b.id}
+                className={`flex items-center gap-1 rounded-lg transition-colors ${
+                  shown ? 'bg-secondary' : 'hover:bg-secondary/50'
+                }`}
+              >
+                <button
+                  onClick={() => showOnly(b.id)}
+                  aria-current={shown ? 'page' : undefined}
+                  title={`Show only ${b.name}`}
+                  className={`flex-1 min-w-0 text-left px-3 py-2 text-sm font-medium truncate cursor-pointer ${
+                    shown ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {b.name}
+                </button>
+                <button
+                  onClick={() => toggleColumn(b.id)}
+                  disabled={atLimit || (shown && visibleIds.length === 1)}
+                  aria-pressed={shown}
+                  title={
+                    atLimit
+                      ? `Showing ${MAX_VISIBLE_BOARDS} lists already`
+                      : shown
+                        ? `Hide ${b.name}`
+                        : `Show ${b.name} alongside`
+                  }
+                  className={`mr-2 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
+                    shown
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'border-muted-foreground hover:border-foreground'
+                  }`}
+                >
+                  {shown && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+                </button>
+              </div>
+            );
+          })}
         </div>
         <div className="p-3 border-t border-border">
           <button
@@ -392,182 +323,26 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
         </div>
       </aside>
 
-      {/* Main column */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* Header */}
-        <div className="shrink-0 border-b border-border px-4 md:px-8 py-4 flex items-center gap-3">
-          {/* Mobile: one board at a time, chosen from a dropdown */}
-          <div className="md:hidden flex-1 min-w-0">
-            <select
-              value={board.id}
-              onChange={(e) => {
-                if (e.target.value === 'new') setNewBoardOpen(true);
-                else router.push(`/tasks/${e.target.value}`);
-              }}
-              aria-label="Choose a list"
-              className="w-full bg-transparent text-lg font-bold text-foreground focus:outline-none cursor-pointer"
-            >
-              {boards.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-              <option value="new">+ New list…</option>
-            </select>
-          </div>
-
-          <h1 className="hidden md:block flex-1 min-w-0 truncate text-xl font-bold text-foreground">
-            {board.name}
-          </h1>
-
-          <select
-            value={board.sortMode}
-            onChange={(e) => run(() => setBoardSortAction(board.id, e.target.value))}
-            aria-label="Sort tasks"
-            className="bg-secondary border border-border rounded px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
-          >
-            {ACTIVE_SORT_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {SORT_LABELS[mode]}
-              </option>
-            ))}
-          </select>
-
-          <div className="relative">
-            <button
-              onClick={() => setBoardMenuOpen((o) => !o)}
-              aria-label="List options"
-              aria-expanded={boardMenuOpen}
-              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-            {boardMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setBoardMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1">
-                  <button
-                    onClick={() => {
-                      setBoardMenuOpen(false);
-                      const name = window.prompt('Rename list', board.name);
-                      if (name && name.trim()) run(() => renameBoardAction(board.id, name));
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-                  >
-                    Rename list
-                  </button>
-                  <button
-                    onClick={() => {
-                      setBoardMenuOpen(false);
-                      if (completedRows.length === 0) return;
-                      if (
-                        window.confirm(
-                          `Delete ${completedRows.length} completed task${completedRows.length === 1 ? '' : 's'} from “${board.name}”? Your stats keep the history.`
-                        )
-                      ) {
-                        run(() => deleteCompletedTasksAction(board.id));
-                      }
-                    }}
-                    disabled={completedRows.length === 0}
-                    className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Delete completed
-                  </button>
-                  <button
-                    onClick={() => {
-                      setBoardMenuOpen(false);
-                      if (boards.length <= 1) {
-                        window.alert('This is your only list, so it can’t be deleted.');
-                        return;
-                      }
-                      const others = boards.filter((b) => b.id !== board.id);
-                      const keep =
-                        localRows.length === 0 ||
-                        window.confirm(
-                          `“${board.name}” has ${localRows.length} task${localRows.length === 1 ? '' : 's'}.\n\nOK: move them to “${others[0].name}”.\nCancel: delete them with the list.`
-                        );
-                      run(async () => {
-                        await deleteBoardAction(board.id, keep ? others[0].id : null);
-                        router.push(`/tasks/${others[0].id}`);
-                      });
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm rounded text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
-                  >
-                    Delete list
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-2 md:px-6 py-4">
-          <div className="max-w-3xl mx-auto">
-            {/* Composer */}
-            <div className="flex items-center gap-3 px-2 py-2 mb-2 border-b border-border">
-              <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
-              <input
-                ref={composerRef}
-                value={composerValue}
-                onChange={(e) => setComposerValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    addTask(composerValue, null);
-                    setComposerValue('');
-                  }
-                  if (e.key === 'Escape') {
-                    setComposerValue('');
-                    composerRef.current?.blur();
-                  }
-                }}
-                placeholder="Add a task"
-                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
-              />
-            </div>
-
-            {openRows.length === 0 && (
-              <div className="py-16 text-center">
-                <ListChecks className="h-8 w-8 mx-auto text-muted-foreground/40 mb-3" />
-                <p className="text-sm text-muted-foreground">
-                  Nothing here yet. Add a task above, or press{' '}
-                  <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary text-xs">n</kbd>.
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-0.5">
-              {openTree.map((node) => renderRow(node, false))}
-            </div>
-
-            {completedRows.length > 0 && (
-              <div className="mt-6">
-                <button
-                  onClick={() => setShowCompleted((s) => !s)}
-                  aria-expanded={showCompleted}
-                  className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                >
-                  {showCompleted ? (
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  )}
-                  Completed ({completedRows.length})
-                </button>
-                {showCompleted && (
-                  <div className="space-y-0.5 mt-1">
-                    {completedTree.map((node) => renderRow(node, true))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Columns. Mobile shows the first board only — see the picker in its header. */}
+      <div className="flex-1 min-w-0 flex divide-x divide-border">
+        {visibleBoards.map((b, i) => (
+          <BoardColumn
+            key={b.id}
+            board={b}
+            boards={boards}
+            rows={localRows.filter((r) => r.boardId === b.id)}
+            handlers={handlers}
+            composerRef={i === 0 ? firstComposerRef : undefined}
+            onPickBoard={showOnly}
+            onNewBoard={() => setNewBoardOpen(true)}
+            isPrimary={b.id === primary.id}
+          />
+        ))}
       </div>
 
       {/* Mobile compose button, clear of the tab bar and the home indicator */}
       <button
-        onClick={() => composerRef.current?.focus()}
+        onClick={() => firstComposerRef.current?.focus()}
         aria-label="Add a task"
         className="md:hidden fixed right-5 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
         style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
@@ -722,7 +497,6 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
         </div>
       )}
 
-      {/* New list prompt */}
       {newBoardOpen && (
         <NewBoardDialog
           onCancel={() => setNewBoardOpen(false)}
@@ -760,6 +534,384 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One board's column: its own header, composer, list and Completed section.
+ * Everything that can only be true of one task at a time (which row is being
+ * renamed, which has the subtask composer open) lives in the parent; state
+ * that is genuinely per-column lives here.
+ */
+function BoardColumn({
+  board,
+  boards,
+  rows,
+  handlers,
+  composerRef,
+  onPickBoard,
+  onNewBoard,
+  isPrimary,
+}: {
+  board: VisibleBoard;
+  boards: BoardSummary[];
+  rows: TaskRow[];
+  handlers: ColumnHandlers;
+  composerRef?: React.RefObject<HTMLInputElement | null>;
+  onPickBoard: (id: number) => void;
+  onNewBoard: () => void;
+  isPrimary: boolean;
+}) {
+  const [composerValue, setComposerValue] = useState('');
+  const [subtaskValue, setSubtaskValue] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const localRef = useRef<HTMLInputElement>(null);
+  const inputRef = composerRef ?? localRef;
+  const subtaskRef = useRef<HTMLInputElement>(null);
+
+  const { subtaskParent, setSubtaskParent, editingId, setEditingId } = handlers;
+
+  useEffect(() => {
+    if (subtaskParent != null && rows.some((r) => r.id === subtaskParent)) {
+      subtaskRef.current?.focus();
+    }
+  }, [subtaskParent, rows]);
+
+  const { openTree, completedTree } = useMemo(() => {
+    const open = rows.filter((r) => !r.completedAt);
+    const done = rows.filter((r) => r.completedAt);
+    return {
+      openTree: sortTaskTree(buildTaskTree(open), board.sortMode),
+      // Most recently finished first, regardless of the board's sort — the
+      // completed pile reads as a log, not as a list you're working through.
+      completedTree: sortTaskTree(buildTaskTree(done), 'manual').sort((a, b) =>
+        (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
+      ),
+    };
+  }, [rows, board.sortMode]);
+
+  const openCount = useMemo(() => flattenTaskTree(openTree).length, [openTree]);
+  const completedRows = useMemo(() => flattenTaskTree(completedTree), [completedTree]);
+
+  const renderRow = (node: TaskNode, done: boolean) => {
+    const isEditing = editingId === node.id;
+    const indent = node.depth * 24;
+
+    return (
+      <div key={node.id}>
+        <div
+          className={`flex items-start gap-2.5 rounded-lg pr-1 py-2 transition-colors ${
+            handlers.selectedId === node.id ? 'bg-secondary' : 'hover:bg-secondary/50'
+          }`}
+          style={{ paddingLeft: 8 + indent }}
+        >
+          <button
+            onClick={() => handlers.requestCompletion(node, !done)}
+            aria-label={done ? `Mark “${node.title}” not done` : `Mark “${node.title}” done`}
+            className={`mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
+              done
+                ? 'bg-primary border-primary text-primary-foreground'
+                : 'border-muted-foreground hover:border-foreground'
+            }`}
+          >
+            {done && <Check className="h-3 w-3" strokeWidth={3} />}
+          </button>
+
+          <div className="flex-1 min-w-0">
+            {isEditing ? (
+              <EditableTitle
+                initial={node.title}
+                onCommit={(value) => handlers.saveTitle(node.id, value)}
+                onCancel={() => setEditingId(null)}
+              />
+            ) : (
+              <button
+                onClick={() => setEditingId(node.id)}
+                className={`block w-full text-left text-sm cursor-text break-words ${
+                  done ? 'line-through text-muted-foreground' : 'text-foreground'
+                }`}
+              >
+                {node.title}
+              </button>
+            )}
+            {node.description && !isEditing && (
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-0.5 shrink-0">
+            {node.depth < MAX_TASK_DEPTH && !done && (
+              <button
+                onClick={() => {
+                  setSubtaskParent(node.id);
+                  setSubtaskValue('');
+                }}
+                aria-label={`Add a subtask to “${node.title}”`}
+                title="Add subtask"
+                className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
+              >
+                <CornerDownRight className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button
+              onClick={() => handlers.toggleStar(node)}
+              aria-label={node.isStarred ? `Unstar “${node.title}”` : `Star “${node.title}”`}
+              aria-pressed={node.isStarred === 1}
+              className={`p-1 transition-colors cursor-pointer ${
+                node.isStarred ? 'text-amber-400' : 'text-muted-foreground/60 hover:text-foreground'
+              }`}
+            >
+              <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
+            </button>
+            <button
+              onClick={() => handlers.openEditor(node.id)}
+              aria-label={`Edit “${node.title}”`}
+              className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {subtaskParent === node.id && (
+          <div className="flex items-center gap-2.5 py-1" style={{ paddingLeft: 8 + indent + 24 }}>
+            <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <input
+              ref={subtaskRef}
+              value={subtaskValue}
+              onChange={(e) => setSubtaskValue(e.target.value)}
+              onBlur={() => {
+                handlers.addTask(board.id, subtaskValue, node.id);
+                setSubtaskParent(null);
+                setSubtaskValue('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handlers.addTask(board.id, subtaskValue, node.id);
+                  setSubtaskValue('');
+                }
+                if (e.key === 'Escape') setSubtaskParent(null);
+              }}
+              placeholder="Subtask"
+              className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-b border-border focus:border-foreground py-1"
+            />
+          </div>
+        )}
+
+        {node.children.map((child) => renderRow(child, Boolean(child.completedAt)))}
+      </div>
+    );
+  };
+
+  return (
+    <div className={`flex-1 min-w-0 flex flex-col ${isPrimary ? '' : 'hidden md:flex'}`}>
+      <div className="shrink-0 border-b border-border px-3 md:px-4 py-3 flex items-center gap-2">
+        {/* Mobile shows one list at a time, chosen here. */}
+        <div className="md:hidden flex-1 min-w-0">
+          <select
+            value={board.id}
+            onChange={(e) => {
+              if (e.target.value === 'new') onNewBoard();
+              else onPickBoard(Number(e.target.value));
+            }}
+            aria-label="Choose a list"
+            className="w-full bg-transparent text-lg font-bold text-foreground focus:outline-none cursor-pointer"
+          >
+            {boards.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+            <option value="new">+ New list…</option>
+          </select>
+        </div>
+
+        <h2 className="hidden md:block flex-1 min-w-0 truncate text-base font-bold text-foreground">
+          {board.name}
+          {openCount > 0 && (
+            <span className="ml-2 text-xs font-medium text-muted-foreground">{openCount}</span>
+          )}
+        </h2>
+
+        <select
+          value={board.sortMode}
+          onChange={(e) => handlers.run(() => setBoardSortAction(board.id, e.target.value))}
+          aria-label={`Sort ${board.name}`}
+          className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
+        >
+          {ACTIVE_SORT_MODES.map((mode) => (
+            <option key={mode} value={mode}>
+              {SORT_LABELS[mode]}
+            </option>
+          ))}
+        </select>
+
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={`${board.name} options`}
+            aria-expanded={menuOpen}
+            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1">
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    const name = window.prompt('Rename list', board.name);
+                    if (name && name.trim()) handlers.run(() => renameBoardAction(board.id, name));
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+                >
+                  Rename list
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    if (completedRows.length === 0) return;
+                    if (
+                      window.confirm(
+                        `Delete ${completedRows.length} completed task${completedRows.length === 1 ? '' : 's'} from “${board.name}”? Your stats keep the history.`
+                      )
+                    ) {
+                      handlers.run(() => deleteCompletedTasksAction(board.id));
+                    }
+                  }}
+                  disabled={completedRows.length === 0}
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Delete completed
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    if (boards.length <= 1) {
+                      window.alert('This is your only list, so it can’t be deleted.');
+                      return;
+                    }
+                    const others = boards.filter((b) => b.id !== board.id);
+                    const keep =
+                      rows.length === 0 ||
+                      window.confirm(
+                        `“${board.name}” has ${rows.length} task${rows.length === 1 ? '' : 's'}.\n\nOK: move them to “${others[0].name}”.\nCancel: delete them with the list.`
+                      );
+                    handlers.run(async () => {
+                      await deleteBoardAction(board.id, keep ? others[0].id : null);
+                    });
+                    onPickBoard(others[0].id);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
+                >
+                  Delete list
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 py-3">
+        <div className="flex items-center gap-2.5 px-2 py-2 mb-2 border-b border-border">
+          <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+          <input
+            ref={inputRef}
+            value={composerValue}
+            onChange={(e) => setComposerValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handlers.addTask(board.id, composerValue, null);
+                setComposerValue('');
+              }
+              if (e.key === 'Escape') {
+                setComposerValue('');
+                inputRef.current?.blur();
+              }
+            }}
+            placeholder="Add a task"
+            className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
+          />
+        </div>
+
+        {openTree.length === 0 && (
+          <div className="py-12 text-center px-3">
+            <ListChecks className="h-7 w-7 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-xs text-muted-foreground">
+              Nothing here yet. Add a task above
+              {isPrimary && (
+                <>
+                  , or press{' '}
+                  <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary">n</kbd>
+                </>
+              )}
+              .
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-0.5">{openTree.map((node) => renderRow(node, false))}</div>
+
+        {completedRows.length > 0 && (
+          <div className="mt-5">
+            <button
+              onClick={() => setShowCompleted((s) => !s)}
+              aria-expanded={showCompleted}
+              className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              {showCompleted ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
+              Completed ({completedRows.length})
+            </button>
+            {showCompleted && (
+              <div className="space-y-0.5 mt-1">
+                {completedTree.map((node) => renderRow(node, true))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Inline rename field. Holds its own draft so that typing in one row can't
+ * re-render every other row in the column.
+ */
+function EditableTitle({
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  onCommit: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+
+  return (
+    <input
+      autoFocus
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onCommit(value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCommit(value);
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          onCancel();
+        }
+      }}
+      className="w-full bg-transparent border-b border-border text-sm text-foreground focus:outline-none focus:border-foreground py-0.5"
+    />
   );
 }
 
