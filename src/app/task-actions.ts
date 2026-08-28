@@ -373,6 +373,118 @@ export async function deleteTaskAction(id: number): Promise<void> {
   refresh();
 }
 
+
+/**
+ * The subtree rooted at `id` with each row's depth and parent, root included.
+ * Used by moveTaskAction, which has to re-depth descendants and reject a move
+ * that would push any of them past MAX_TASK_DEPTH.
+ */
+async function subtreeRows(
+  id: number,
+  userId: number
+): Promise<{ id: number; parentId: number | null; depth: number }[]> {
+  return db.all<{ id: number; parentId: number | null; depth: number }>(sql`
+    WITH RECURSIVE sub(id) AS (
+      SELECT id FROM tasks WHERE id = ${id} AND user_id = ${userId}
+      UNION ALL
+      SELECT t.id FROM tasks t JOIN sub ON t.parent_id = sub.id
+    )
+    SELECT t.id AS id, t.parent_id AS parentId, t.depth AS depth
+    FROM tasks t JOIN sub ON t.id = sub.id
+  `);
+}
+
+/**
+ * Move a task — reparent it, move it between lists, reorder it among its
+ * siblings, or all three at once. This is what a drag commits, and what the
+ * keyboard reorder shortcuts call.
+ *
+ * `siblingIds` is the caller's desired order for the destination parent's
+ * children, moved task included. Sending the whole order rather than an index
+ * keeps the server from having to guess where a fractional position lands, and
+ * makes the write idempotent if the same drag is committed twice.
+ */
+export async function moveTaskAction(
+  id: number,
+  target: { boardId: number; parentId: number | null; siblingIds: number[] }
+): Promise<void> {
+  const session = await requireAuth();
+  const { boardId, parentId, siblingIds } = target;
+
+  const [board] = await db
+    .select({ id: taskBoards.id })
+    .from(taskBoards)
+    .where(and(eq(taskBoards.id, boardId), eq(taskBoards.userId, session.userId)))
+    .limit(1);
+  if (!board) throw new Error('List not found');
+
+  const subtree = await subtreeRows(id, session.userId);
+  if (subtree.length === 0) throw new Error('Task not found');
+
+  const moved = subtree.find((r) => r.id === id)!;
+  const subtreeIds = new Set(subtree.map((r) => r.id));
+
+  let newDepth = 0;
+  if (parentId != null) {
+    // Dropping a task inside its own subtree would orphan the whole branch.
+    if (subtreeIds.has(parentId)) throw new Error('A task cannot be nested inside itself');
+
+    const [parent] = await db
+      .select({ depth: tasks.depth, boardId: tasks.boardId })
+      .from(tasks)
+      .where(and(eq(tasks.id, parentId), eq(tasks.userId, session.userId)))
+      .limit(1);
+    if (!parent) throw new Error('Parent task not found');
+    if (parent.boardId !== boardId) throw new Error('Parent task is on another list');
+    newDepth = parent.depth + 1;
+  }
+
+  // The deepest descendant has to fit too, not just the task being dragged.
+  const height = Math.max(...subtree.map((r) => r.depth)) - moved.depth;
+  if (newDepth + height > MAX_TASK_DEPTH) {
+    throw new Error('That would nest subtasks deeper than allowed');
+  }
+
+  const shift = newDepth - moved.depth;
+  for (const row of subtree) {
+    const patch: { boardId: number; depth: number; parentId?: number | null } = {
+      boardId,
+      depth: row.depth + shift,
+    };
+    if (row.id === id) patch.parentId = parentId;
+    await db
+      .update(tasks)
+      .set(patch)
+      .where(and(eq(tasks.id, row.id), eq(tasks.userId, session.userId)));
+  }
+
+  // Rewrite the destination's sibling order. Ids that aren't the user's, or
+  // that no longer sit under this parent, are dropped rather than trusted.
+  const validSiblings = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, session.userId),
+        eq(tasks.boardId, boardId),
+        parentId == null ? isNull(tasks.parentId) : eq(tasks.parentId, parentId)
+      )
+    );
+  const allowed = new Set(validSiblings.map((r) => r.id));
+
+  let index = 0;
+  for (const siblingId of siblingIds) {
+    if (!allowed.has(siblingId)) continue;
+    await db
+      .update(tasks)
+      .set({ orderIndex: index })
+      .where(and(eq(tasks.id, siblingId), eq(tasks.userId, session.userId)));
+    index += 1;
+  }
+
+  refresh();
+}
+
 /** Move a task and everything under it to another board. */
 export async function moveTaskToBoardAction(id: number, boardId: number): Promise<void> {
   const session = await requireAuth();
