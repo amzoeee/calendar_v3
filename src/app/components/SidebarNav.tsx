@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Calendar as CalendarIcon,
+  LayoutGrid,
+  ListChecks,
   TrendingUp,
   Settings as SettingsIcon,
 } from 'lucide-react';
@@ -11,7 +13,8 @@ import { getNavLinks } from './navLinks';
 
 const ICONS: Record<string, typeof CalendarIcon> = {
   calendar: CalendarIcon,
-  weekly: CalendarIcon,
+  weekly: LayoutGrid,
+  tasks: ListChecks,
   stats: TrendingUp,
   settings: SettingsIcon,
 };

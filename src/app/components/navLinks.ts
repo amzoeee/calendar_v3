@@ -1,6 +1,9 @@
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Date-bearing views whose date should carry across view switches.
 const DATE_VIEWS = ['calendar', 'weekly', 'stats'];
+// Views with no date in their URL, which therefore highlight on their first
+// path segment alone.
+const DATELESS_VIEWS = ['settings', 'tasks'];
 
 export interface NavLink {
   key: string;
@@ -22,11 +25,13 @@ export function getNavLinks(pathname: string, todayStr: string): { links: NavLin
   const links: NavLink[] = [
     { key: 'calendar', href: `/calendar/${activeDate}`, label: 'Daily View' },
     { key: 'weekly', href: `/weekly/${activeDate}`, label: 'Weekly View' },
+    // Tasks carries no date. /tasks forwards to whichever list you had first.
+    { key: 'tasks', href: '/tasks', label: 'Tasks' },
     { key: 'stats', href: `/stats/${activeDate}`, label: 'Stats' },
     { key: 'settings', href: '/settings', label: 'Settings' },
   ];
 
-  const activeKey = segments[0] === 'settings' ? 'settings' : view;
+  const activeKey = DATELESS_VIEWS.includes(segments[0]) ? segments[0] : view;
 
   return { links, activeKey };
 }

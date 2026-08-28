@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { users, tags, events } from '@/db/schema';
+import { users, tags, events, taskBoards } from '@/db/schema';
 import { eq, and, asc, desc, sql, ne } from 'drizzle-orm';
 import {
   hashPassword,
@@ -57,6 +57,10 @@ export async function registerAction(prevState: any, formData: FormData) {
       { name: 'Important', color: '#dc3545', orderIndex: 4, userId: newUser.id },
     ];
     await db.insert(tags).values(defaultTags);
+
+    // Give the account a task list to land on. Accounts that predate tasks get
+    // theirs lazily instead — see ensureDefaultBoard in task-actions.ts.
+    await db.insert(taskBoards).values({ name: 'My Tasks', orderIndex: 1, userId: newUser.id });
 
     await createSession(newUser.id, username);
   } catch (e: any) {

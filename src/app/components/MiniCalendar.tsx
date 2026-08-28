@@ -12,8 +12,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Date-bearing views the mini calendar can navigate within.
 const DATE_VIEWS = ['calendar', 'weekly', 'stats'];
 // Views with no date of their own where the mini calendar still shows, but
-// day clicks fall back to the daily view (see `view` below).
-const DATELESS_VIEWS = ['settings'];
+// day clicks fall back to the daily view (see `view` below). Tasks is here
+// for the same reason Settings is: the sidebar shouldn't lose its month just
+// because the page you're on has no date.
+const DATELESS_VIEWS = ['settings', 'tasks'];
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
