@@ -1,6 +1,7 @@
 'use client';
 
 import React, {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -123,11 +124,31 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
   const [newBoardOpen, setNewBoardOpen] = useState(false);
 
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // The first column's composer is what `n` and the mobile compose button aim at.
-  const firstComposerRef = useRef<HTMLInputElement>(null);
+  // Each column's composer, so `n` can aim at the one under the pointer.
+  const composers = useRef(new Map<number, HTMLInputElement | null>());
+
+  const registerComposer = useCallback((boardId: number, el: HTMLInputElement | null) => {
+    if (el) composers.current.set(boardId, el);
+    else composers.current.delete(boardId);
+  }, []);
 
   const visibleIds = visibleBoards.map((b) => b.id);
   const primary = visibleBoards[0];
+
+  /**
+   * Focus the composer of whichever column the pointer is over, falling back
+   * to the leftmost — with several lists on screen, "add a task" has to mean
+   * "to the list I'm looking at". The hovered column is read straight off CSS
+   * :hover rather than tracked with a mousemove listener.
+   */
+  const focusComposer = useCallback(() => {
+    const hovered = document.querySelector<HTMLElement>('[data-board-column]:hover');
+    const hoveredId = hovered ? Number(hovered.dataset.boardId) : null;
+    const target =
+      (hoveredId != null ? composers.current.get(hoveredId) : null) ??
+      composers.current.get(primary.id);
+    target?.focus();
+  }, [primary.id]);
 
   const selected = useMemo(
     () => localRows.find((r) => r.id === selectedId) ?? null,
@@ -158,11 +179,11 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
       e.preventDefault();
-      firstComposerRef.current?.focus();
+      focusComposer();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [focusComposer]);
 
   // ----- undo toast lifetime -----
 
@@ -366,14 +387,14 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
 
       {/* Columns. Mobile shows the first board only — see the picker in its header. */}
       <div className="flex-1 min-w-0 flex divide-x divide-border">
-        {visibleBoards.map((b, i) => (
+        {visibleBoards.map((b) => (
           <BoardColumn
             key={b.id}
             board={b}
             boards={boards}
             rows={localRows.filter((r) => r.boardId === b.id)}
             handlers={handlers}
-            composerRef={i === 0 ? firstComposerRef : undefined}
+            registerComposer={registerComposer}
             onPickBoard={showOnly}
             onNewBoard={() => setNewBoardOpen(true)}
             isPrimary={b.id === primary.id}
@@ -397,7 +418,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
 
       {/* Mobile compose button, clear of the tab bar and the home indicator */}
       <button
-        onClick={() => firstComposerRef.current?.focus()}
+        onClick={() => composers.current.get(primary.id)?.focus()}
         aria-label="Add a task"
         className="md:hidden fixed right-5 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
         style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
@@ -597,7 +618,7 @@ function BoardColumn({
   boards,
   rows,
   handlers,
-  composerRef,
+  registerComposer,
   onPickBoard,
   onNewBoard,
   isPrimary,
@@ -606,7 +627,7 @@ function BoardColumn({
   boards: BoardSummary[];
   rows: TaskRow[];
   handlers: ColumnHandlers;
-  composerRef?: React.RefObject<HTMLInputElement | null>;
+  registerComposer: (boardId: number, el: HTMLInputElement | null) => void;
   onPickBoard: (id: number) => void;
   onNewBoard: () => void;
   isPrimary: boolean;
@@ -616,8 +637,7 @@ function BoardColumn({
   const [showCompleted, setShowCompleted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const localRef = useRef<HTMLInputElement>(null);
-  const inputRef = composerRef ?? localRef;
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
 
   const { subtaskParent, setSubtaskParent, editingId, setEditingId } = handlers;
@@ -958,7 +978,10 @@ function BoardColumn({
         <div className="flex items-center gap-2.5 px-2 py-2 mb-2 border-b border-border">
           <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
           <input
-            ref={inputRef}
+            ref={(el) => {
+              inputRef.current = el;
+              registerComposer(board.id, el);
+            }}
             value={composerValue}
             onChange={(e) => setComposerValue(e.target.value)}
             onKeyDown={(e) => {
