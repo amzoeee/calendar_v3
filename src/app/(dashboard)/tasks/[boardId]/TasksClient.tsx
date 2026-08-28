@@ -119,6 +119,10 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedId(null);
+        return;
+      }
       if (e.key !== 'n' || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
@@ -571,13 +575,23 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
         <Plus className="h-6 w-6" />
       </button>
 
-      {/* Detail panel: side sheet on desktop, bottom sheet on mobile */}
+      {/* Edit dialog. Deliberately not a sheet and not dimmed: it's a small
+          floating card that leaves the list visible behind it, and clicking
+          anywhere outside closes it. */}
       {selected && (
-        <div className="fixed inset-0 z-50 flex md:items-stretch md:justify-end items-end">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setSelectedId(null)} />
-          <div className="relative w-full md:w-96 md:h-full max-h-[85vh] md:max-h-none overflow-y-auto bg-card border-t md:border-t-0 md:border-l border-border rounded-t-2xl md:rounded-none p-5 pb-8 space-y-5">
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setSelectedId(null)}
+            aria-hidden="true"
+          />
+          <div
+            role="dialog"
+            aria-label="Edit task"
+            className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(26rem,calc(100vw-2rem))] max-h-[80vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-5 space-y-5"
+          >
             <div className="flex items-start justify-between gap-3">
-              <h2 className="text-sm font-bold text-foreground">Task details</h2>
+              <h2 className="text-sm font-bold text-foreground">Edit task</h2>
               <button
                 onClick={() => setSelectedId(null)}
                 aria-label="Close"
@@ -672,7 +686,7 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* "Some subtasks aren't done" confirmation */}
