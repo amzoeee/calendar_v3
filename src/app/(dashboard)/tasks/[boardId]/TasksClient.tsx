@@ -1,6 +1,13 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Check,
@@ -73,7 +80,7 @@ interface ColumnHandlers {
   requestCompletion: (node: TaskNode, completed: boolean) => void;
   toggleStar: (row: TaskRow) => void;
   saveTitle: (id: number, title: string) => void;
-  openEditor: (id: number) => void;
+  openEditor: (id: number, anchor: DOMRect) => void;
   run: (fn: () => Promise<unknown>) => void;
   editingId: number | null;
   setEditingId: (id: number | null) => void;
@@ -99,6 +106,9 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
 
   const [subtaskParent, setSubtaskParent] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Where the edit dialog was opened from, so it can sit beside that row
+  // instead of jumping to the middle of the screen.
+  const [editorAnchor, setEditorAnchor] = useState<DOMRect | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [confirmParent, setConfirmParent] = useState<{ node: TaskNode; open: number } | null>(null);
@@ -254,7 +264,10 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     requestCompletion,
     toggleStar,
     saveTitle,
-    openEditor: setSelectedId,
+    openEditor: (id, anchor) => {
+      setEditorAnchor(anchor);
+      setSelectedId(id);
+    },
     run,
     editingId,
     setEditingId,
@@ -350,118 +363,107 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
         <Plus className="h-6 w-6" />
       </button>
 
-      {/* Edit dialog. Deliberately not a sheet and not dimmed: it's a small
-          floating card that leaves the list visible behind it, and clicking
-          anywhere outside closes it. */}
       {selected && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setSelectedId(null)}
-            aria-hidden="true"
-          />
-          <div
-            role="dialog"
-            aria-label="Edit task"
-            className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(26rem,calc(100vw-2rem))] max-h-[80vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-5 space-y-5"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-sm font-bold text-foreground">Edit task</h2>
-              <button
-                onClick={() => setSelectedId(null)}
-                aria-label="Close"
-                className="text-muted-foreground hover:text-foreground cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <label className="block space-y-1.5">
-              <span className="text-xs font-semibold text-muted-foreground">Title</span>
-              <input
-                key={`title-${selected.id}`}
-                defaultValue={selected.title}
-                onBlur={(e) => saveTitle(selected.id, e.target.value)}
-                className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </label>
-
-            <label className="block space-y-1.5">
-              <span className="text-xs font-semibold text-muted-foreground">Notes</span>
-              <textarea
-                key={`desc-${selected.id}`}
-                defaultValue={selected.description ?? ''}
-                rows={4}
-                onBlur={(e) => {
-                  const next = e.target.value.trim() || null;
-                  if (next === (selected.description ?? null)) return;
-                  patchLocal([selected.id], { description: next });
-                  run(() => updateTaskAction(selected.id, { description: next }));
-                }}
-                className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
-              />
-            </label>
-
-            <label className="block space-y-1.5">
-              <span className="text-xs font-semibold text-muted-foreground">List</span>
-              <select
-                value={selected.boardId}
-                onChange={(e) => {
-                  const target = Number(e.target.value);
-                  setSelectedId(null);
-                  run(() => moveTaskToBoardAction(selected.id, target));
-                }}
-                className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
-              >
-                {boards.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {selected.depth < MAX_TASK_DEPTH && (
-              <button
-                onClick={() => {
-                  setSubtaskParent(selected.id);
-                  setSelectedId(null);
-                }}
-                className="flex items-center gap-2 text-sm text-foreground hover:opacity-80 transition-opacity cursor-pointer"
-              >
-                <CornerDownRight className="h-4 w-4" />
-                Add subtask
-              </button>
-            )}
-
+        <EditTaskDialog
+          anchor={editorAnchor}
+          onClose={() => setSelectedId(null)}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-sm font-bold text-foreground">Edit task</h2>
             <button
-              onClick={() => toggleStar(selected)}
-              className="flex items-center gap-2 text-sm text-foreground hover:text-amber-400 transition-colors cursor-pointer"
+              onClick={() => setSelectedId(null)}
+              aria-label="Close"
+              className="text-muted-foreground hover:text-foreground cursor-pointer"
             >
-              <Star
-                className={`h-4 w-4 ${selected.isStarred ? 'text-amber-400' : ''}`}
-                fill={selected.isStarred ? 'currentColor' : 'none'}
-              />
-              {selected.isStarred ? 'Starred' : 'Add star'}
+              <X className="h-4 w-4" />
             </button>
-
-            <div className="pt-2 border-t border-border">
-              <button
-                onClick={() => {
-                  const subs = localRows.filter((r) => r.parentId === selected.id).length;
-                  const message = subs
-                    ? `Delete “${selected.title}” and its ${subs} subtask${subs === 1 ? '' : 's'}?`
-                    : `Delete “${selected.title}”?`;
-                  if (window.confirm(message)) removeTask(selected.id);
-                }}
-                className="flex items-center gap-2 px-3 py-2 -ml-3 rounded text-sm font-medium text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete task
-              </button>
-            </div>
           </div>
-        </>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-muted-foreground">Title</span>
+            <input
+              key={`title-${selected.id}`}
+              defaultValue={selected.title}
+              onBlur={(e) => saveTitle(selected.id, e.target.value)}
+              className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-muted-foreground">Notes</span>
+            <textarea
+              key={`desc-${selected.id}`}
+              defaultValue={selected.description ?? ''}
+              rows={4}
+              onBlur={(e) => {
+                const next = e.target.value.trim() || null;
+                if (next === (selected.description ?? null)) return;
+                patchLocal([selected.id], { description: next });
+                run(() => updateTaskAction(selected.id, { description: next }));
+              }}
+              className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
+            />
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-muted-foreground">List</span>
+            <select
+              value={selected.boardId}
+              onChange={(e) => {
+                const target = Number(e.target.value);
+                setSelectedId(null);
+                run(() => moveTaskToBoardAction(selected.id, target));
+              }}
+              className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+            >
+              {boards.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selected.depth < MAX_TASK_DEPTH && (
+            <button
+              onClick={() => {
+                setSubtaskParent(selected.id);
+                setSelectedId(null);
+              }}
+              className="flex items-center gap-2 text-sm text-foreground hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <CornerDownRight className="h-4 w-4" />
+              Add subtask
+            </button>
+          )}
+
+          <button
+            onClick={() => toggleStar(selected)}
+            className="flex items-center gap-2 text-sm text-foreground hover:text-amber-400 transition-colors cursor-pointer"
+          >
+            <Star
+              className={`h-4 w-4 ${selected.isStarred ? 'text-amber-400' : ''}`}
+              fill={selected.isStarred ? 'currentColor' : 'none'}
+            />
+            {selected.isStarred ? 'Starred' : 'Add star'}
+          </button>
+
+          <div className="pt-2 border-t border-border">
+            <button
+              onClick={() => {
+                const subs = localRows.filter((r) => r.parentId === selected.id).length;
+                const message = subs
+                  ? `Delete “${selected.title}” and its ${subs} subtask${subs === 1 ? '' : 's'}?`
+                  : `Delete “${selected.title}”?`;
+                if (window.confirm(message)) removeTask(selected.id);
+              }}
+              className="flex items-center gap-2 px-3 py-2 -ml-3 rounded text-sm font-medium text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete task
+            </button>
+          </div>
+        </EditTaskDialog>
       )}
 
       {/* "Some subtasks aren't done" confirmation */}
@@ -666,7 +668,7 @@ function BoardColumn({
               <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
             </button>
             <button
-              onClick={() => handlers.openEditor(node.id)}
+              onClick={(e) => handlers.openEditor(node.id, e.currentTarget.getBoundingClientRect())}
               aria-label={`Edit “${node.title}”`}
               className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
             >
@@ -912,6 +914,82 @@ function EditableTitle({
       }}
       className="w-full bg-transparent border-b border-border text-sm text-foreground focus:outline-none focus:border-foreground py-0.5"
     />
+  );
+}
+
+/**
+ * The edit dialog, positioned beside whatever opened it rather than centred —
+ * a card that jumps to the middle of the screen loses the connection to the
+ * row you clicked, especially with three columns on screen.
+ *
+ * It anchors off the trigger's bounding box rather than the pointer position,
+ * so opening it from the keyboard lands somewhere sensible too. The card is
+ * measured after mount and clamped into the viewport; that happens in a layout
+ * effect, before paint, so it never renders in the wrong place first. This
+ * component is only mounted once a task is selected, which also keeps
+ * useLayoutEffect off the server-rendered path.
+ */
+function EditTaskDialog({
+  anchor,
+  onClose,
+  children,
+}: {
+  anchor: DOMRect | null;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const GAP = 8;
+    const MARGIN = 12;
+    const { width, height } = el.getBoundingClientRect();
+
+    if (!anchor) {
+      // No trigger to anchor to (shouldn't happen in practice) — centre it.
+      setPos({
+        left: Math.max(MARGIN, (window.innerWidth - width) / 2),
+        top: Math.max(MARGIN, (window.innerHeight - height) / 2),
+      });
+      return;
+    }
+
+    // Prefer sitting to the right of the trigger; fall back to its left when
+    // that would overflow, which is the common case since the button lives at
+    // the right edge of a column.
+    let left = anchor.right + GAP;
+    if (left + width > window.innerWidth - MARGIN) left = anchor.left - width - GAP;
+    left = Math.max(MARGIN, Math.min(left, window.innerWidth - width - MARGIN));
+
+    // Top-aligned with the row, pulled up only as far as needed to fit.
+    let top = anchor.top - GAP;
+    top = Math.max(MARGIN, Math.min(top, window.innerHeight - height - MARGIN));
+
+    setPos({ left, top });
+  }, [anchor]);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden="true" />
+      <div
+        ref={ref}
+        role="dialog"
+        aria-label="Edit task"
+        style={{
+          left: pos?.left ?? 0,
+          top: pos?.top ?? 0,
+          // Hidden for the single frame between mount and measurement.
+          visibility: pos ? 'visible' : 'hidden',
+        }}
+        className="fixed z-50 w-[min(24rem,calc(100vw-1.5rem))] max-h-[80vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-5 space-y-5"
+      >
+        {children}
+      </div>
+    </>
   );
 }
 
