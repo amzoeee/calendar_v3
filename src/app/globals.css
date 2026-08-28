@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 :root {
+  /* The app is dark-only. Without this, the browser assumes a light page and
+     paints every piece of UI it owns to match: native scrollbars, <select>
+     popups, date pickers. It also means a scroll container that somehow misses
+     the rules below still gets a dark bar rather than a bright one. */
+  color-scheme: dark;
+
   --background: #0d0d0d;
   --foreground: #f0f0f0;
   --card: #171717;
