@@ -302,7 +302,7 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
                 }}
                 aria-label={`Add a subtask to “${node.title}”`}
                 title="Add subtask"
-                className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-foreground transition-opacity cursor-pointer p-1"
+                className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
               >
                 <CornerDownRight className="h-3.5 w-3.5" />
               </button>
@@ -311,18 +311,16 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
               onClick={() => toggleStar(node)}
               aria-label={node.isStarred ? `Unstar “${node.title}”` : `Star “${node.title}”`}
               aria-pressed={node.isStarred === 1}
-              className={`p-1 transition-opacity cursor-pointer ${
-                node.isStarred
-                  ? 'text-amber-400'
-                  : 'opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-foreground'
+              className={`p-1 transition-colors cursor-pointer ${
+                node.isStarred ? 'text-amber-400' : 'text-muted-foreground/60 hover:text-foreground'
               }`}
             >
               <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
             </button>
             <button
               onClick={() => setSelectedId(node.id)}
-              aria-label={`Details for “${node.title}”`}
-              className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-foreground transition-opacity cursor-pointer p-1"
+              aria-label={`Edit “${node.title}”`}
+              className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
@@ -633,6 +631,19 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
                 ))}
               </select>
             </label>
+
+            {selected.depth < MAX_TASK_DEPTH && (
+              <button
+                onClick={() => {
+                  setSubtaskParent(selected.id);
+                  setSelectedId(null);
+                }}
+                className="flex items-center gap-2 text-sm text-foreground hover:opacity-80 transition-opacity cursor-pointer"
+              >
+                <CornerDownRight className="h-4 w-4" />
+                Add subtask
+              </button>
+            )}
 
             <button
               onClick={() => toggleStar(selected)}
