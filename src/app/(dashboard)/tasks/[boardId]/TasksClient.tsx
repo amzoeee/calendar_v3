@@ -175,7 +175,6 @@ export default function TasksClient({ boards, board, rows }: TasksClientProps) {
       ? flattenTaskTree([node]).filter((n) => Boolean(n.completedAt) !== completed).map((n) => n.id)
       : [node.id];
     patchLocal(optimistic, { completedAt: completed ? dateToServerDbString(new Date()) : null });
-    if (completed) setShowCompleted(false);
 
     startTransition(async () => {
       const changed = await toggleTaskCompletionAction(node.id, completed, cascade);
