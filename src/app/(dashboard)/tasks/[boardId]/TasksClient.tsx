@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
   CornerDownRight,
+  GripVertical,
   ListChecks,
   MoreHorizontal,
   Plus,
@@ -47,8 +48,10 @@ import {
   deleteBoardAction,
   setBoardSortAction,
   deleteCompletedTasksAction,
+  moveTaskAction,
 } from '@/app/task-actions';
 import { dateToServerDbString } from '@/lib/timezone';
+import { useTaskDrag, type DropTarget } from './useTaskDrag';
 
 interface BoardSummary {
   id: number;
@@ -65,12 +68,12 @@ interface TasksClientProps {
   rows: TaskRow[];
 }
 
-// What the Undo toast needs to put things back: the ids a completion toggle
-// actually changed, and the state to restore them to.
+// The Undo toast carries the action that reverses whatever just happened, so
+// each raiser decides what "undo" means for it. `undo: null` renders the
+// message without a button — better than offering one that does nothing.
 interface UndoState {
   message: string;
-  ids: number[];
-  restoreTo: boolean;
+  undo: (() => void) | null;
 }
 
 // Handlers a column needs from its parent. Bundled rather than passed one by
@@ -81,6 +84,11 @@ interface ColumnHandlers {
   toggleStar: (row: TaskRow) => void;
   saveTitle: (id: number, title: string) => void;
   openEditor: (id: number, anchor: DOMRect) => void;
+  moveTask: (id: number, target: DropTarget) => void;
+  dragHandleProps: (id: number, subtreeIds: number[], height: number) => {
+    onPointerDown: (e: React.PointerEvent) => void;
+  };
+  draggingId: number | null;
   run: (fn: () => Promise<unknown>) => void;
   editingId: number | null;
   setEditingId: (id: number | null) => void;
@@ -208,8 +216,12 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
               ? `Completed “${node.title}” and ${changed.length - 1} subtask${changed.length > 2 ? 's' : ''}`
               : `Completed “${node.title}”`
             : `Moved “${node.title}” back to your list`,
-          ids: changed,
-          restoreTo: !completed,
+          undo: () => {
+            patchLocal(changed, {
+              completedAt: completed ? null : dateToServerDbString(new Date()),
+            });
+            run(() => setTaskCompletionAction(changed, !completed));
+          },
         });
       }
       router.refresh();
@@ -229,14 +241,6 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     applyCompletion(node, completed, true);
   };
 
-  const undoCompletion = () => {
-    if (!undo) return;
-    const { ids, restoreTo } = undo;
-    patchLocal(ids, { completedAt: restoreTo ? dateToServerDbString(new Date()) : null });
-    dismissUndo();
-    run(() => setTaskCompletionAction(ids, restoreTo));
-  };
-
   const saveTitle = (id: number, title: string) => {
     const trimmed = title.trim();
     setEditingId(null);
@@ -253,6 +257,27 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     run(() => setTaskStarredAction(row.id, next === 1));
   };
 
+  // Manual ordering is the only thing a drag can express, so a board sorted
+  // some other way is switched over rather than the drop being refused —
+  // refusing is what makes reordering feel broken in most task apps.
+  const moveTask = (id: number, target: DropTarget) => {
+    const board = visibleBoards.find((b) => b.id === target.boardId);
+    const needsManual = board != null && board.sortMode !== 'manual';
+    run(async () => {
+      if (needsManual) await setBoardSortAction(target.boardId, 'manual');
+      await moveTaskAction(id, target);
+    });
+    if (needsManual && board) {
+      const previous = board.sortMode;
+      raiseUndo({
+        message: `Switched “${board.name}” to My order so it could be reordered`,
+        undo: () => run(() => setBoardSortAction(board.id, previous)),
+      });
+    }
+  };
+
+  const drag = useTaskDrag({ onCommit: moveTask });
+
   const removeTask = (id: number) => {
     setSelectedId(null);
     setLocalRows((prev) => prev.filter((r) => r.id !== id && r.parentId !== id));
@@ -268,6 +293,9 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
       setEditorAnchor(anchor);
       setSelectedId(id);
     },
+    moveTask,
+    dragHandleProps: drag.handleProps,
+    draggingId: drag.activeId,
     run,
     editingId,
     setEditingId,
@@ -352,6 +380,20 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
           />
         ))}
       </div>
+
+      {/* Drop indicator. An overlay rather than a placeholder row, so showing
+          it can't reflow the list the pointer is hit-testing against. */}
+      {drag.indicator && (
+        <div
+          aria-hidden="true"
+          className="fixed z-[80] h-0.5 rounded-full bg-primary pointer-events-none"
+          style={{
+            left: drag.indicator.left,
+            top: drag.indicator.top - 1,
+            width: drag.indicator.width,
+          }}
+        />
+      )}
 
       {/* Mobile compose button, clear of the tab bar and the home indicator */}
       <button
@@ -520,12 +562,17 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
           style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
         >
           <span className="text-sm text-foreground truncate">{undo.message}</span>
-          <button
-            onClick={undoCompletion}
-            className="text-sm font-semibold text-foreground underline underline-offset-2 hover:opacity-80 shrink-0 cursor-pointer"
-          >
-            Undo
-          </button>
+          {undo.undo && (
+            <button
+              onClick={() => {
+                undo.undo?.();
+                dismissUndo();
+              }}
+              className="text-sm font-semibold text-foreground underline underline-offset-2 hover:opacity-80 shrink-0 cursor-pointer"
+            >
+              Undo
+            </button>
+          )}
           <button
             onClick={dismissUndo}
             aria-label="Dismiss"
@@ -597,18 +644,102 @@ function BoardColumn({
   const openCount = useMemo(() => flattenTaskTree(openTree).length, [openTree]);
   const completedRows = useMemo(() => flattenTaskTree(completedTree), [completedTree]);
 
+  /** The list `id` sits in, at whatever depth it lives. */
+  const siblingListOf = (id: number): TaskNode[] | null => {
+    const walk = (list: TaskNode[]): TaskNode[] | null => {
+      if (list.some((n) => n.id === id)) return list;
+      for (const n of list) {
+        const found = walk(n.children);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(openTree);
+  };
+
+  /**
+   * Keyboard equivalents of the drag gestures, available while renaming a row.
+   * Written against parent/child rather than "top level vs subtask" so they
+   * keep working if MAX_TASK_DEPTH is ever raised.
+   */
+  const keyboardMove = (node: TaskNode, action: 'up' | 'down' | 'indent' | 'outdent') => {
+    const siblings = siblingListOf(node.id);
+    if (!siblings) return;
+    const ids = siblings.map((n) => n.id);
+    const i = ids.indexOf(node.id);
+
+    if (action === 'up' || action === 'down') {
+      const j = action === 'up' ? i - 1 : i + 1;
+      if (j < 0 || j >= ids.length) return;
+      const next = [...ids];
+      next.splice(i, 1);
+      next.splice(j, 0, node.id);
+      handlers.moveTask(node.id, {
+        boardId: board.id,
+        parentId: node.parentId,
+        siblingIds: next,
+      });
+      return;
+    }
+
+    if (action === 'indent') {
+      const prev = siblings[i - 1];
+      // Only a leaf can be indented — a task with children would take them
+      // past the depth limit along with it.
+      if (!prev || node.children.length > 0 || node.depth >= MAX_TASK_DEPTH) return;
+      handlers.moveTask(node.id, {
+        boardId: board.id,
+        parentId: prev.id,
+        siblingIds: [...prev.children.map((c) => c.id), node.id],
+      });
+      return;
+    }
+
+    if (node.parentId == null) return;
+    const parentSiblings = siblingListOf(node.parentId);
+    if (!parentSiblings) return;
+    const parentNode = parentSiblings.find((n) => n.id === node.parentId)!;
+    const next = parentSiblings.map((n) => n.id);
+    // Lands immediately after what used to be its parent.
+    next.splice(next.indexOf(parentNode.id) + 1, 0, node.id);
+    handlers.moveTask(node.id, {
+      boardId: board.id,
+      parentId: parentNode.parentId,
+      siblingIds: next,
+    });
+  };
+
   const renderRow = (node: TaskNode, done: boolean) => {
     const isEditing = editingId === node.id;
     const indent = node.depth * 24;
+    const descendants = flattenTaskTree([node]);
+    const subtreeIds = descendants.map((n) => n.id);
+    // Deepest level below this task: a parent can't be nested, a leaf can.
+    const height = Math.max(...descendants.map((n) => n.depth)) - node.depth;
+    const dragging = handlers.draggingId != null && subtreeIds.includes(handlers.draggingId);
 
     return (
       <div key={node.id}>
         <div
-          className={`flex items-start gap-2.5 rounded-lg pr-1 py-2 transition-colors ${
+          data-task-row
+          data-task-id={node.id}
+          data-board-id={board.id}
+          data-parent-id={node.parentId ?? ''}
+          data-depth={node.depth}
+          className={`group/row flex items-start gap-1.5 rounded-lg pr-1 py-2 transition-colors ${
             handlers.selectedId === node.id ? 'bg-secondary' : 'hover:bg-secondary/50'
-          }`}
-          style={{ paddingLeft: 8 + indent }}
+          } ${dragging ? 'opacity-40' : ''}`}
+          style={{ paddingLeft: 2 + indent }}
         >
+          <button
+            {...handlers.dragHandleProps(node.id, subtreeIds, height)}
+            aria-label={`Reorder “${node.title}”`}
+            title="Drag to reorder, or right to make it a subtask"
+            className="mt-0.5 shrink-0 text-muted-foreground/30 hover:text-foreground transition-colors cursor-grab active:cursor-grabbing touch-none p-0.5"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+
           <button
             onClick={() => handlers.requestCompletion(node, !done)}
             aria-label={done ? `Mark “${node.title}” not done` : `Mark “${node.title}” done`}
@@ -627,6 +758,7 @@ function BoardColumn({
                 initial={node.title}
                 onCommit={(value) => handlers.saveTitle(node.id, value)}
                 onCancel={() => setEditingId(null)}
+                onMove={(action) => keyboardMove(node, action)}
               />
             ) : (
               <button
@@ -678,7 +810,7 @@ function BoardColumn({
         </div>
 
         {subtaskParent === node.id && (
-          <div className="flex items-center gap-2.5 py-1" style={{ paddingLeft: 8 + indent + 24 }}>
+          <div className="flex items-center gap-2.5 py-1" style={{ paddingLeft: 22 + indent + 24 }}>
             <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <input
               ref={subtaskRef}
@@ -708,7 +840,11 @@ function BoardColumn({
   };
 
   return (
-    <div className={`flex-1 min-w-0 flex flex-col ${isPrimary ? '' : 'hidden md:flex'}`}>
+    <div
+      data-board-column
+      data-board-id={board.id}
+      className={`flex-1 min-w-0 flex flex-col ${isPrimary ? '' : 'hidden md:flex'}`}
+    >
       <div className="shrink-0 border-b border-border px-3 md:px-4 py-3 flex items-center gap-2">
         {/* Mobile shows one list at a time, chosen here. */}
         <div className="md:hidden flex-1 min-w-0">
@@ -892,12 +1028,22 @@ function EditableTitle({
   initial,
   onCommit,
   onCancel,
+  onMove,
 }: {
   initial: string;
   onCommit: (value: string) => void;
   onCancel: () => void;
+  onMove: (action: 'up' | 'down' | 'indent' | 'outdent') => void;
 }) {
   const [value, setValue] = useState(initial);
+
+  // Renaming is where a row already has focus, so it's where the keyboard
+  // equivalents of the drag gestures live. Each one saves the name first, so
+  // the move can't strand a half-typed edit.
+  const move = (action: 'up' | 'down' | 'indent' | 'outdent') => {
+    onCommit(value);
+    onMove(action);
+  };
 
   return (
     <input
@@ -910,6 +1056,14 @@ function EditableTitle({
         if (e.key === 'Escape') {
           e.stopPropagation();
           onCancel();
+        }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          move(e.shiftKey ? 'outdent' : 'indent');
+        }
+        if ((e.metaKey || e.ctrlKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+          e.preventDefault();
+          move(e.key === 'ArrowUp' ? 'up' : 'down');
         }
       }}
       className="w-full bg-transparent border-b border-border text-sm text-foreground focus:outline-none focus:border-foreground py-0.5"
