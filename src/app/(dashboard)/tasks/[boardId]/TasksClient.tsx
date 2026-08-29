@@ -479,7 +479,7 @@ export default function TasksClient({
       {selected && (
         <EditTaskDialog at={editorAt} onClose={() => setSelectedId(null)}>
           <div className="flex items-start justify-between gap-3">
-            <h2 className="text-sm font-bold text-foreground">Edit task</h2>
+            <h2 className="text-xs font-bold text-foreground">Edit task</h2>
             <button
               onClick={() => setSelectedId(null)}
               aria-label="Close"
@@ -490,17 +490,17 @@ export default function TasksClient({
           </div>
 
           <label className="block space-y-1">
-            <span className="text-xs font-semibold text-muted-foreground">Title</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Title</span>
             <input
               key={`title-${selected.id}`}
               defaultValue={selected.title}
               onBlur={(e) => saveTitle(selected.id, e.target.value)}
-              className="w-full rounded bg-secondary border border-border px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full rounded bg-secondary border border-border px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </label>
 
           <label className="block space-y-1">
-            <span className="text-xs font-semibold text-muted-foreground">Notes</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Notes</span>
             <textarea
               key={`desc-${selected.id}`}
               defaultValue={selected.description ?? ''}
@@ -511,12 +511,12 @@ export default function TasksClient({
                 patchLocal([selected.id], { description: next });
                 run(() => updateTaskAction(selected.id, { description: next }));
               }}
-              className="w-full rounded bg-secondary border border-border px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
+              className="w-full rounded bg-secondary border border-border px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
             />
           </label>
 
           <div className="space-y-1">
-            <span className="text-xs font-semibold text-muted-foreground">Tags</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tags</span>
             <TagPicker
               all={availableTags}
               selected={localTags[selected.id] ?? []}
@@ -525,7 +525,7 @@ export default function TasksClient({
           </div>
 
           <label className="block space-y-1">
-            <span className="text-xs font-semibold text-muted-foreground">List</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">List</span>
             <select
               value={selected.boardId}
               onChange={(e) => {
@@ -533,7 +533,7 @@ export default function TasksClient({
                 setSelectedId(null);
                 run(() => moveTaskToBoardAction(selected.id, target));
               }}
-              className="w-full rounded bg-secondary border border-border px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+              className="w-full rounded bg-secondary border border-border px-2.5 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
             >
               {boards.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -549,19 +549,19 @@ export default function TasksClient({
                 setSubtaskParent(selected.id);
                 setSelectedId(null);
               }}
-              className="flex items-center gap-2 text-sm text-foreground hover:opacity-80 transition-opacity cursor-pointer"
+              className="flex items-center gap-2 text-xs text-foreground hover:opacity-80 transition-opacity cursor-pointer"
             >
-              <CornerDownRight className="h-4 w-4" />
+              <CornerDownRight className="h-3.5 w-3.5" />
               Add subtask
             </button>
           )}
 
           <button
             onClick={() => toggleStar(selected)}
-            className="flex items-center gap-2 text-sm text-foreground hover:text-amber-400 transition-colors cursor-pointer"
+            className="flex items-center gap-2 text-xs text-foreground hover:text-amber-400 transition-colors cursor-pointer"
           >
             <Star
-              className={`h-4 w-4 ${selected.isStarred ? 'text-amber-400' : ''}`}
+              className={`h-3.5 w-3.5 ${selected.isStarred ? 'text-amber-400' : ''}`}
               fill={selected.isStarred ? 'currentColor' : 'none'}
             />
             {selected.isStarred ? 'Starred' : 'Add star'}
@@ -576,7 +576,7 @@ export default function TasksClient({
                   : `Delete “${selected.title}”?`;
                 if (window.confirm(message)) removeTask(selected.id);
               }}
-              className="flex items-center gap-2 px-3 py-2 -ml-3 rounded text-sm font-medium text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-xs font-medium text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
             >
               <Trash2 className="h-4 w-4" />
               Delete task
@@ -1448,7 +1448,7 @@ function EditTaskDialog({
           // Hidden for the single frame between mount and measurement.
           visibility: pos ? 'visible' : 'hidden',
         }}
-        className="fixed z-50 w-[min(21rem,calc(100vw-1.5rem))] max-h-[70vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-4 space-y-3.5"
+        className="fixed z-50 w-[min(18rem,calc(100vw-1.5rem))] max-h-[65vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-3.5 space-y-3"
       >
         {children}
       </div>
@@ -1516,12 +1516,12 @@ function TagPicker({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Find a tag"
-          className="w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded bg-secondary border border-border px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
       )}
-      <div className="max-h-32 overflow-y-auto rounded border border-border">
+      <div className="max-h-28 overflow-y-auto rounded border border-border">
         {matches.length === 0 && (
-          <p className="px-2 py-2 text-xs text-muted-foreground">No tag matches “{query}”.</p>
+          <p className="px-2 py-2 text-[11px] text-muted-foreground">No tag matches “{query}”.</p>
         )}
         {matches.map((t) => {
           const on = selected.includes(t.id);
@@ -1529,7 +1529,7 @@ function TagPicker({
             <button
               key={t.id}
               onClick={() => onChange(on ? selected.filter((x) => x !== t.id) : [...selected, t.id])}
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-secondary transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2 px-2 py-1 text-xs hover:bg-secondary transition-colors cursor-pointer"
             >
               <span
                 className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
