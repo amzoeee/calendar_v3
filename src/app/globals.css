@@ -66,13 +66,24 @@ body {
    below. Firefox knows only the standard properties — and Chrome *stops
    honouring the pseudo-elements* on any element that sets `scrollbar-width` or
    `scrollbar-color`, falling back to a wider bar of its own. So the standard
-   properties are fenced off to engines that have no pseudo-element support,
-   with opaque colours since Firefox composites a translucent thumb against its
-   own light default rather than against the page. */
+   properties are fenced off to engines that have no pseudo-element support.
+
+   Everything here is opaque or fully transparent, never translucent. A
+   translucent thumb composites against whatever surface it happens to sit on,
+   so the same scrollbar came out a different shade over the page background
+   than over a card or an input — which is exactly the inconsistency these
+   rules exist to remove. The values below are what the old translucent thumb
+   composited to over the page background, so the common case looks unchanged.
+
+   The four pseudo-elements are all named deliberately. -corner (where a
+   horizontal and vertical bar meet) and -resizer (the grip on a resizable
+   textarea) are drawn by the browser if left alone, and on a dark UI that
+   means a bright square: the resizer on the task notes field was visibly
+   white before it was listed here. */
 @supports not selector(::-webkit-scrollbar) {
   * {
     scrollbar-width: thin;
-    scrollbar-color: #55565a #171717;
+    scrollbar-color: #333333 transparent;
   }
 }
 
@@ -82,16 +93,26 @@ body {
 }
 
 *::-webkit-scrollbar-track {
-  background: rgba(23, 23, 23, 0.5);
+  background: transparent;
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(136, 136, 136, 0.3);
+  background: #333333;
   border-radius: 3px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(136, 136, 136, 0.5);
+  background: #4a4a4a;
+}
+
+/* Where a horizontal and a vertical bar meet. */
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* The drag grip on a resizable <textarea>. */
+*::-webkit-resizer {
+  background: transparent;
 }
 
 /* Custom Calendar Grid Styles */
