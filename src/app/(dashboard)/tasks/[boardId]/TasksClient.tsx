@@ -20,6 +20,7 @@ import {
   MoreHorizontal,
   Plus,
   Star,
+  Tag as TagIcon,
   Trash2,
   X,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ import {
   SORT_LABELS,
   MAX_TASK_DEPTH,
   MAX_VISIBLE_BOARDS,
+  VISIBLE_BOARDS_COOKIE,
   type SortMode,
   type TaskRow,
   type TaskNode,
@@ -50,9 +52,11 @@ import {
   setBoardSortAction,
   deleteCompletedTasksAction,
   moveTaskAction,
+  setTaskTagsAction,
 } from '@/app/task-actions';
 import { dateToServerDbString } from '@/lib/timezone';
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
+import { clampOverlayX } from '@/lib/overlayPosition';
 
 interface BoardSummary {
   id: number;
@@ -63,10 +67,18 @@ interface VisibleBoard extends BoardSummary {
   sortMode: SortMode;
 }
 
+export interface TaskTag {
+  id: number;
+  name: string;
+  color: string;
+}
+
 interface TasksClientProps {
   boards: BoardSummary[];
   visibleBoards: VisibleBoard[];
   rows: TaskRow[];
+  availableTags: TaskTag[];
+  tagsByTask: Record<number, number[]>;
 }
 
 // The Undo toast carries the action that reverses whatever just happened, so
@@ -84,13 +96,14 @@ interface ColumnHandlers {
   requestCompletion: (node: TaskNode, completed: boolean) => void;
   toggleStar: (row: TaskRow) => void;
   saveTitle: (id: number, title: string) => void;
-  openEditor: (id: number, anchor: DOMRect) => void;
+  openEditor: (id: number, at: { x: number; y: number }) => void;
   moveTask: (id: number, target: DropTarget) => void;
   dragHandleProps: (id: number, subtreeIds: number[], height: number) => {
     onPointerDown: (e: React.PointerEvent) => void;
   };
   draggingId: number | null;
   run: (fn: () => Promise<unknown>) => void;
+  tagsFor: (taskId: number) => TaskTag[];
   editingId: number | null;
   setEditingId: (id: number | null) => void;
   subtaskParent: number | null;
@@ -98,7 +111,13 @@ interface ColumnHandlers {
   selectedId: number | null;
 }
 
-export default function TasksClient({ boards, visibleBoards, rows }: TasksClientProps) {
+export default function TasksClient({
+  boards,
+  visibleBoards,
+  rows,
+  availableTags,
+  tagsByTask,
+}: TasksClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -113,11 +132,30 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     setLocalRows(rows);
   }
 
+  const [localTags, setLocalTags] = useState<Record<number, number[]>>(tagsByTask);
+  const [syncedTags, setSyncedTags] = useState<Record<number, number[]>>(tagsByTask);
+  if (tagsByTask !== syncedTags) {
+    setSyncedTags(tagsByTask);
+    setLocalTags(tagsByTask);
+  }
+
+  const tagById = useMemo(
+    () => new Map(availableTags.map((t) => [t.id, t])),
+    [availableTags]
+  );
+  const tagsFor = (taskId: number): TaskTag[] =>
+    (localTags[taskId] ?? []).map((id) => tagById.get(id)).filter((t): t is TaskTag => !!t);
+
+  const setTags = (taskId: number, tagIds: number[]) => {
+    setLocalTags((prev) => ({ ...prev, [taskId]: tagIds }));
+    run(() => setTaskTagsAction(taskId, tagIds));
+  };
+
   const [subtaskParent, setSubtaskParent] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  // Where the edit dialog was opened from, so it can sit beside that row
-  // instead of jumping to the middle of the screen.
-  const [editorAnchor, setEditorAnchor] = useState<DOMRect | null>(null);
+  // The point the edit dialog was opened from — its top-left corner lands
+  // here, the way the calendar's event overlay does.
+  const [editorAt, setEditorAt] = useState<{ x: number; y: number } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [confirmParent, setConfirmParent] = useState<{ node: TaskNode; open: number } | null>(null);
@@ -134,6 +172,15 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
 
   const visibleIds = visibleBoards.map((b) => b.id);
   const primary = visibleBoards[0];
+
+  // Mirror the visible set into a cookie so /tasks can restore it on the
+  // server next time. Written from the rendered set rather than from the click
+  // handlers, so arriving via a pasted URL or the back button is remembered
+  // too. Runs after paint, since nothing on this page reads it back.
+  const visibleKey = visibleIds.join(',');
+  useEffect(() => {
+    document.cookie = `${VISIBLE_BOARDS_COOKIE}=${visibleKey}; path=/; max-age=31536000; SameSite=Lax`;
+  }, [visibleKey]);
 
   /**
    * Focus the composer of whichever column the pointer is over, falling back
@@ -310,8 +357,9 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     requestCompletion,
     toggleStar,
     saveTitle,
-    openEditor: (id, anchor) => {
-      setEditorAnchor(anchor);
+    tagsFor,
+    openEditor: (id, at) => {
+      setEditorAt(at);
       setSelectedId(id);
     },
     moveTask,
@@ -329,7 +377,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     <div className="flex-1 min-h-0 flex overflow-hidden">
       {/* Boards rail. The name shows that board on its own; the checkbox adds
           it beside the others, up to MAX_VISIBLE_BOARDS. */}
-      <aside className="hidden md:flex w-56 shrink-0 border-r border-border flex-col">
+      <aside className="hidden md:flex w-44 shrink-0 border-r border-border flex-col">
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
           {boards.map((b) => {
             const shown = visibleIds.includes(b.id);
@@ -345,7 +393,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
                   onClick={() => showOnly(b.id)}
                   aria-current={shown ? 'page' : undefined}
                   title={`Show only ${b.name}`}
-                  className={`flex-1 min-w-0 text-left px-3 py-2 text-sm font-medium truncate cursor-pointer ${
+                  className={`flex-1 min-w-0 text-left pl-2.5 pr-1 py-2 text-sm font-medium truncate cursor-pointer ${
                     shown ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -362,7 +410,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
                         ? `Hide ${b.name}`
                         : `Show ${b.name} alongside`
                   }
-                  className={`mr-2 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
+                  className={`mr-2.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
                     shown
                       ? 'bg-primary border-primary text-primary-foreground'
                       : 'border-muted-foreground hover:border-foreground'
@@ -393,6 +441,8 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
             board={b}
             boards={boards}
             rows={localRows.filter((r) => r.boardId === b.id)}
+            availableTags={availableTags}
+            collapsed={visibleBoards.length > 1}
             handlers={handlers}
             registerComposer={registerComposer}
             onPickBoard={showOnly}
@@ -427,12 +477,9 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
       </button>
 
       {selected && (
-        <EditTaskDialog
-          anchor={editorAnchor}
-          onClose={() => setSelectedId(null)}
-        >
+        <EditTaskDialog at={editorAt} onClose={() => setSelectedId(null)}>
           <div className="flex items-start justify-between gap-3">
-            <h2 className="text-sm font-bold text-foreground">Edit task</h2>
+            <h2 className="text-base md:text-xs font-bold text-foreground">Edit task</h2>
             <button
               onClick={() => setSelectedId(null)}
               aria-label="Close"
@@ -442,34 +489,43 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
             </button>
           </div>
 
-          <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-muted-foreground">Title</span>
+          <label className="block space-y-1">
+            <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Title</span>
             <input
               key={`title-${selected.id}`}
               defaultValue={selected.title}
               onBlur={(e) => saveTitle(selected.id, e.target.value)}
-              className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full rounded bg-secondary border border-border px-2.5 py-2 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </label>
 
-          <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-muted-foreground">Notes</span>
+          <label className="block space-y-1">
+            <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Notes</span>
             <textarea
               key={`desc-${selected.id}`}
               defaultValue={selected.description ?? ''}
-              rows={4}
+              rows={3}
               onBlur={(e) => {
                 const next = e.target.value.trim() || null;
                 if (next === (selected.description ?? null)) return;
                 patchLocal([selected.id], { description: next });
                 run(() => updateTaskAction(selected.id, { description: next }));
               }}
-              className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
+              className="w-full rounded bg-secondary border border-border px-2.5 py-2 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
             />
           </label>
 
-          <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-muted-foreground">List</span>
+          <div className="space-y-1">
+            <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tags</span>
+            <TagPicker
+              all={availableTags}
+              selected={localTags[selected.id] ?? []}
+              onChange={(ids) => setTags(selected.id, ids)}
+            />
+          </div>
+
+          <label className="block space-y-1">
+            <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">List</span>
             <select
               value={selected.boardId}
               onChange={(e) => {
@@ -477,7 +533,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
                 setSelectedId(null);
                 run(() => moveTaskToBoardAction(selected.id, target));
               }}
-              className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+              className="w-full rounded bg-secondary border border-border px-2.5 py-2 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
             >
               {boards.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -493,19 +549,19 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
                 setSubtaskParent(selected.id);
                 setSelectedId(null);
               }}
-              className="flex items-center gap-2 text-sm text-foreground hover:opacity-80 transition-opacity cursor-pointer"
+              className="flex items-center gap-2 text-sm md:text-xs text-foreground hover:opacity-80 transition-opacity cursor-pointer"
             >
-              <CornerDownRight className="h-4 w-4" />
+              <CornerDownRight className="h-3.5 w-3.5" />
               Add subtask
             </button>
           )}
 
           <button
             onClick={() => toggleStar(selected)}
-            className="flex items-center gap-2 text-sm text-foreground hover:text-amber-400 transition-colors cursor-pointer"
+            className="flex items-center gap-2 text-sm md:text-xs text-foreground hover:text-amber-400 transition-colors cursor-pointer"
           >
             <Star
-              className={`h-4 w-4 ${selected.isStarred ? 'text-amber-400' : ''}`}
+              className={`h-3.5 w-3.5 ${selected.isStarred ? 'text-amber-400' : ''}`}
               fill={selected.isStarred ? 'currentColor' : 'none'}
             />
             {selected.isStarred ? 'Starred' : 'Add star'}
@@ -520,7 +576,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
                   : `Delete “${selected.title}”?`;
                 if (window.confirm(message)) removeTask(selected.id);
               }}
-              className="flex items-center gap-2 px-3 py-2 -ml-3 rounded text-sm font-medium text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs font-medium text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
             >
               <Trash2 className="h-4 w-4" />
               Delete task
@@ -563,9 +619,11 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
       )}
 
       {newBoardOpen && (
-        <NewBoardDialog
+        <BoardNameDialog
+          heading="New list"
+          submitLabel="Create"
           onCancel={() => setNewBoardOpen(false)}
-          onCreate={(name) => {
+          onSubmit={(name) => {
             setNewBoardOpen(false);
             run(async () => {
               const id = await createBoardAction(name);
@@ -617,7 +675,9 @@ function BoardColumn({
   board,
   boards,
   rows,
+  availableTags,
   handlers,
+  collapsed,
   registerComposer,
   onPickBoard,
   onNewBoard,
@@ -626,7 +686,9 @@ function BoardColumn({
   board: VisibleBoard;
   boards: BoardSummary[];
   rows: TaskRow[];
+  availableTags: TaskTag[];
   handlers: ColumnHandlers;
+  collapsed: boolean;
   registerComposer: (boardId: number, el: HTMLInputElement | null) => void;
   onPickBoard: (id: number) => void;
   onNewBoard: () => void;
@@ -636,6 +698,10 @@ function BoardColumn({
   const [subtaskValue, setSubtaskValue] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
+  const [starredOnly, setStarredOnly] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
@@ -648,9 +714,72 @@ function BoardColumn({
     }
   }, [subtaskParent, rows]);
 
+  // Only the tags actually in use on this list. Derived rather than
+  // configured, so the menu stays short by construction and never lists a tag
+  // that would filter everything away.
+  const tagsInUse = useMemo(() => {
+    const present = new Set<number>();
+    for (const r of rows) for (const t of handlers.tagsFor(r.id)) present.add(t.id);
+    return availableTags.filter((t) => present.has(t.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, availableTags]);
+
+  const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0);
+
+  /**
+   * Filtering keeps a matching task's family with it, in both directions:
+   *
+   * - **Ancestors**, so a matching subtask still appears under its parent. On
+   *   its own a matched subtask loses the only thing that said what it was
+   *   part of.
+   * - **Descendants**, so a matched task is never shown looking childless.
+   *
+   * A task is therefore shown when it matches, when anything in its subtree
+   * matches, or when any of its ancestors match.
+   */
+  const visibleRows = useMemo(() => {
+    if (activeFilters === 0) return rows;
+
+    const matches = (r: TaskRow) => {
+      if (starredOnly && !r.isStarred) return false;
+      if (filterTagIds.length === 0) return true;
+      // OR across selected tags: a task matches if it carries any of them.
+      return handlers.tagsFor(r.id).some((t) => filterTagIds.includes(t.id));
+    };
+
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const keep = new Set<number>();
+
+    for (const row of rows) {
+      if (!matches(row)) continue;
+      keep.add(row.id);
+      for (let p = row.parentId; p != null; p = byId.get(p)?.parentId ?? null) {
+        if (keep.has(p) || !byId.has(p)) break;
+        keep.add(p);
+      }
+    }
+
+    // Descendants of anything matched. Walked breadth-first rather than
+    // recursively so it stays correct at any depth.
+    let frontier = rows.filter((r) => matches(r)).map((r) => r.id);
+    while (frontier.length > 0) {
+      const next: number[] = [];
+      for (const row of rows) {
+        if (row.parentId != null && frontier.includes(row.parentId) && !keep.has(row.id)) {
+          keep.add(row.id);
+          next.push(row.id);
+        }
+      }
+      frontier = next;
+    }
+
+    return rows.filter((r) => keep.has(r.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, filterTagIds, starredOnly, activeFilters]);
+
   const { openTree, completedTree } = useMemo(() => {
-    const open = rows.filter((r) => !r.completedAt);
-    const done = rows.filter((r) => r.completedAt);
+    const open = visibleRows.filter((r) => !r.completedAt);
+    const done = visibleRows.filter((r) => r.completedAt);
     return {
       openTree: sortTaskTree(buildTaskTree(open), board.sortMode),
       // Most recently finished first, regardless of the board's sort — the
@@ -659,7 +788,7 @@ function BoardColumn({
         (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
       ),
     };
-  }, [rows, board.sortMode]);
+  }, [visibleRows, board.sortMode]);
 
   const openCount = useMemo(() => flattenTaskTree(openTree).length, [openTree]);
   const completedRows = useMemo(() => flattenTaskTree(completedTree), [completedTree]);
@@ -729,9 +858,13 @@ function BoardColumn({
     });
   };
 
-  const renderRow = (node: TaskNode, done: boolean) => {
+  // `level` is the row's position in the tree being rendered, which is not
+  // always node.depth: buildTaskTree promotes a row whose parent isn't in the
+  // list to the top level, and such a row has to render flush rather than
+  // indented under nothing.
+  const renderRow = (node: TaskNode, done: boolean, level = 0) => {
     const isEditing = editingId === node.id;
-    const indent = node.depth * 24;
+    const indent = level * 24;
     const descendants = flattenTaskTree([node]);
     const subtreeIds = descendants.map((n) => n.id);
     // Deepest level below this task: a parent can't be nested, a leaf can.
@@ -793,6 +926,7 @@ function BoardColumn({
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
+            <TagChips tags={handlers.tagsFor(node.id)} />
           </div>
 
           <div className="flex items-center gap-0.5 shrink-0">
@@ -820,7 +954,15 @@ function BoardColumn({
               <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
             </button>
             <button
-              onClick={(e) => handlers.openEditor(node.id, e.currentTarget.getBoundingClientRect())}
+              onClick={(e) => {
+                // A keyboard-activated click reports 0,0 — fall back to the
+                // button itself so the dialog doesn't fly to the corner.
+                const r = e.currentTarget.getBoundingClientRect();
+                handlers.openEditor(
+                  node.id,
+                  e.detail === 0 ? { x: r.left, y: r.top } : { x: e.clientX, y: e.clientY }
+                );
+              }}
               aria-label={`Edit “${node.title}”`}
               className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
             >
@@ -854,10 +996,98 @@ function BoardColumn({
           </div>
         )}
 
-        {node.children.map((child) => renderRow(child, Boolean(child.completedAt)))}
+        {node.children.map((child) =>
+          renderRow(child, Boolean(child.completedAt), level + 1)
+        )}
       </div>
     );
   };
+
+  const hasFilterables = tagsInUse.length > 0 || starredOnly || rows.some((r) => r.isStarred);
+
+  // Sort and filter are rendered either as their own header controls or as
+  // sections of the overflow menu, depending on how much room the column has.
+  // Defined once here so the two placements can't drift apart.
+  const checkbox = (on: boolean) => (
+    <span
+      className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
+        on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'
+      }`}
+    >
+      {on && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+    </span>
+  );
+
+  const filterOptions = (
+    <>
+      <button
+        onClick={() => setStarredOnly((v) => !v)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+      >
+        {checkbox(starredOnly)}
+        <Star className="h-3.5 w-3.5 text-amber-400" fill="currentColor" />
+        Starred
+      </button>
+
+      {tagsInUse.map((t) => {
+        const on = filterTagIds.includes(t.id);
+        return (
+          <button
+            key={t.id}
+            onClick={() =>
+              setFilterTagIds((prev) => (on ? prev.filter((x) => x !== t.id) : [...prev, t.id]))
+            }
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+          >
+            {checkbox(on)}
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: t.color }}
+            />
+            <span className="truncate">{t.name}</span>
+          </button>
+        );
+      })}
+
+      {activeFilters > 0 && (
+        <button
+          onClick={() => {
+            setFilterTagIds([]);
+            setStarredOnly(false);
+          }}
+          className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
+        >
+          Clear filters
+        </button>
+      )}
+    </>
+  );
+
+  const sortOptions = (
+    <>
+      {ACTIVE_SORT_MODES.map((mode) => (
+        <button
+          key={mode}
+          onClick={() => {
+            setMenuOpen(false);
+            handlers.run(() => setBoardSortAction(board.id, mode));
+          }}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+        >
+          <span className="h-3.5 w-3.5 shrink-0 flex items-center justify-center">
+            {board.sortMode === mode && <Check className="h-3 w-3" strokeWidth={3} />}
+          </span>
+          {SORT_LABELS[mode]}
+        </button>
+      ))}
+    </>
+  );
+
+  const sectionLabel = (text: string) => (
+    <p className="px-2 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {text}
+    </p>
+  );
 
   return (
     <div
@@ -893,37 +1123,85 @@ function BoardColumn({
           )}
         </h2>
 
-        <select
-          value={board.sortMode}
-          onChange={(e) => handlers.run(() => setBoardSortAction(board.id, e.target.value))}
-          aria-label={`Sort ${board.name}`}
-          className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
-        >
-          {ACTIVE_SORT_MODES.map((mode) => (
-            <option key={mode} value={mode}>
-              {SORT_LABELS[mode]}
-            </option>
-          ))}
-        </select>
+        {!collapsed && hasFilterables && (
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setFilterOpen((o) => !o)}
+              aria-expanded={filterOpen}
+              aria-label={`Filter ${board.name}`}
+              className={`flex items-center gap-1 px-2 py-1 rounded border text-xs transition-colors cursor-pointer ${
+                activeFilters > 0
+                  ? 'bg-secondary border-foreground/30 text-foreground'
+                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <TagIcon className="h-3 w-3" />
+              {activeFilters > 0 ? activeFilters : 'Filter'}
+            </button>
+            {filterOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1 max-h-72 overflow-y-auto">
+                  {filterOptions}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {!collapsed && (
+          <select
+            value={board.sortMode}
+            onChange={(e) => handlers.run(() => setBoardSortAction(board.id, e.target.value))}
+            aria-label={`Sort ${board.name}`}
+            className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
+          >
+            {ACTIVE_SORT_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {SORT_LABELS[mode]}
+              </option>
+            ))}
+          </select>
+        )}
 
         <div className="relative">
           <button
             onClick={() => setMenuOpen((o) => !o)}
             aria-label={`${board.name} options`}
             aria-expanded={menuOpen}
-            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            className="relative p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
           >
             <MoreHorizontal className="h-4 w-4" />
+            {/* With the filter folded away, this dot is the only thing saying
+                the list is showing a subset. */}
+            {collapsed && activeFilters > 0 && (
+              <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-foreground" />
+            )}
           </button>
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1">
+              <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1 max-h-[70vh] overflow-y-auto">
+                {/* Side by side, the columns are too narrow for their own sort
+                    and filter controls, so both fold in here. */}
+                {collapsed && (
+                  <>
+                    {sectionLabel('Sort')}
+                    {sortOptions}
+                    {hasFilterables && (
+                      <>
+                        <div className="my-1 border-t border-border" />
+                        {sectionLabel('Filter')}
+                        {filterOptions}
+                      </>
+                    )}
+                    <div className="my-1 border-t border-border" />
+                  </>
+                )}
                 <button
                   onClick={() => {
                     setMenuOpen(false);
-                    const name = window.prompt('Rename list', board.name);
-                    if (name && name.trim()) handlers.run(() => renameBoardAction(board.id, name));
+                    setRenaming(true);
                   }}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
                 >
@@ -974,8 +1252,21 @@ function BoardColumn({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 py-3">
-        <div className="flex items-center gap-2.5 px-2 py-2 mb-2 border-b border-border">
+      {renaming && (
+        <BoardNameDialog
+          heading="Rename list"
+          initialValue={board.name}
+          submitLabel="Rename"
+          onCancel={() => setRenaming(false)}
+          onSubmit={(name) => {
+            setRenaming(false);
+            if (name !== board.name) handlers.run(() => renameBoardAction(board.id, name));
+          }}
+        />
+      )}
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 pt-1 pb-3">
+        <div className="flex items-center gap-2.5 px-2 py-1.5 mb-1.5 border-b border-border">
           <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
           <input
             ref={(el) => {
@@ -1003,14 +1294,16 @@ function BoardColumn({
           <div className="py-12 text-center px-3">
             <ListChecks className="h-7 w-7 mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-xs text-muted-foreground">
-              Nothing here yet. Add a task above
-              {isPrimary && (
+              {activeFilters > 0
+                ? 'No tasks match the filter.'
+                : 'Nothing here yet. Add a task above'}
+              {activeFilters === 0 && isPrimary && (
                 <>
                   , or press{' '}
                   <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary">n</kbd>
                 </>
               )}
-              .
+              {activeFilters === 0 && '.'}
             </p>
           </div>
         )}
@@ -1095,39 +1388,53 @@ function EditableTitle({
 }
 
 /**
- * The edit dialog, positioned beside whatever opened it rather than centred —
- * a card that jumps to the middle of the screen loses the connection to the
- * row you clicked, especially with three columns on screen.
+ * The edit dialog, in two shapes.
  *
- * It anchors off the trigger's bounding box rather than the pointer position,
- * so opening it from the keyboard lands somewhere sensible too. The card is
- * measured after mount and clamped into the viewport; that happens in a layout
- * effect, before paint, so it never renders in the wrong place first. This
- * component is only mounted once a task is selected, which also keeps
- * useLayoutEffect off the server-rendered path.
+ * On a pointer-sized screen it's a popover whose top-left corner lands on the
+ * point you clicked — the same gesture the calendar's event overlay uses, and
+ * it shares clampOverlayX with it so the horizontal edge behaviour is
+ * literally the same code. Anchoring to the pointer matters more with three
+ * columns on screen: a card that jumps to the middle of the window loses which
+ * list it belongs to.
+ *
+ * On a phone there's no cursor to stem from and no room to float, so it
+ * becomes a bottom sheet, matching the event editor on the daily view.
+ *
+ * The shape is chosen from a media query rather than by rendering both and
+ * hiding one: the fields are uncontrolled (defaultValue plus onBlur), so a
+ * second copy would quietly hold a stale draft.
  */
 function EditTaskDialog({
-  anchor,
+  at,
   onClose,
   children,
 }: {
-  anchor: DOMRect | null;
+  at: { x: number; y: number } | null;
   onClose: () => void;
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  // Matches Tailwind's `md`. Safe to default to the popover: this component
+  // only ever mounts after a click, so it never server-renders.
+  const [isWide, setIsWide] = useState(true);
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const apply = () => setIsWide(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
 
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !isWide) return;
 
-    const GAP = 8;
-    const MARGIN = 12;
+    const MARGIN = 10;
     const { width, height } = el.getBoundingClientRect();
 
-    if (!anchor) {
-      // No trigger to anchor to (shouldn't happen in practice) — centre it.
+    if (!at) {
       setPos({
         left: Math.max(MARGIN, (window.innerWidth - width) / 2),
         top: Math.max(MARGIN, (window.innerHeight - height) / 2),
@@ -1135,19 +1442,29 @@ function EditTaskDialog({
       return;
     }
 
-    // Prefer sitting to the right of the trigger; fall back to its left when
-    // that would overflow, which is the common case since the button lives at
-    // the right edge of a column.
-    let left = anchor.right + GAP;
-    if (left + width > window.innerWidth - MARGIN) left = anchor.left - width - GAP;
-    left = Math.max(MARGIN, Math.min(left, window.innerWidth - width - MARGIN));
-
-    // Top-aligned with the row, pulled up only as far as needed to fit.
-    let top = anchor.top - GAP;
-    top = Math.max(MARGIN, Math.min(top, window.innerHeight - height - MARGIN));
+    const left = clampOverlayX(at.x, window.innerWidth, width);
+    // Same idea vertically: keep the corner on the click unless that would
+    // push the card off the bottom, then lift it just enough to fit.
+    const top = Math.max(MARGIN, Math.min(at.y, window.innerHeight - height - MARGIN));
 
     setPos({ left, top });
-  }, [anchor]);
+  }, [at, isWide]);
+
+  if (!isWide) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end">
+        <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden="true" />
+        <div
+          role="dialog"
+          aria-label="Edit task"
+          className="relative w-full max-h-[85vh] overflow-y-auto bg-card border-t border-border rounded-t-2xl p-5 pb-8 space-y-4"
+        >
+          <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
+          {children}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1162,7 +1479,7 @@ function EditTaskDialog({
           // Hidden for the single frame between mount and measurement.
           visibility: pos ? 'visible' : 'hidden',
         }}
-        className="fixed z-50 w-[min(24rem,calc(100vw-1.5rem))] max-h-[80vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-5 space-y-5"
+        className="fixed z-50 w-[min(18rem,calc(100vw-1.5rem))] max-h-[65vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-3.5 space-y-3"
       >
         {children}
       </div>
@@ -1170,27 +1487,141 @@ function EditTaskDialog({
   );
 }
 
-function NewBoardDialog({
-  onCancel,
-  onCreate,
+/**
+ * A row's tags. Two chips at most before collapsing to a count — a task with
+ * five tags shouldn't push its own title out of the row.
+ *
+ * Names are shown at every width. They used to be hidden below `sm`, on the
+ * reasoning that a phone is narrow — which had it backwards: a phone shows one
+ * list across the full window, so it has *more* room per column than three
+ * lists side by side on a desktop. Long names truncate instead.
+ */
+function TagChips({ tags }: { tags: TaskTag[] }) {
+  if (tags.length === 0) return null;
+  const shown = tags.slice(0, 2);
+  const extra = tags.length - shown.length;
+
+  return (
+    <div className="flex items-center gap-1.5 mt-1 min-w-0">
+      {shown.map((t) => (
+        <span key={t.id} className="flex items-center gap-1 min-w-0">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: t.color }}
+            title={t.name}
+          />
+          <span className="text-[10px] leading-none text-muted-foreground truncate max-w-[8rem]">
+            {t.name}
+          </span>
+        </span>
+      ))}
+      {extra > 0 && (
+        <span className="text-[10px] leading-none text-muted-foreground shrink-0">+{extra}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Tag picker for the edit dialog. A searchable list rather than a chip row:
+ * event tags and task tags share one set, so this can easily be twenty
+ * entries, and twenty chips is a wall.
+ */
+function TagPicker({
+  all,
+  selected,
+  onChange,
 }: {
-  onCancel: () => void;
-  onCreate: (name: string) => void;
+  all: TaskTag[];
+  selected: number[];
+  onChange: (ids: number[]) => void;
 }) {
-  const [name, setName] = useState('');
+  const [query, setQuery] = useState('');
+  const matches = all.filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  if (all.length === 0) {
+    return <p className="text-xs text-muted-foreground">No tags yet — add some in Settings.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {all.length > 6 && (
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Find a tag"
+          className="w-full rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-xs md:text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+      )}
+      <div className="max-h-44 md:max-h-28 overflow-y-auto rounded border border-border">
+        {matches.length === 0 && (
+          <p className="px-2 py-2 text-[11px] text-muted-foreground">No tag matches “{query}”.</p>
+        )}
+        {matches.map((t) => {
+          const on = selected.includes(t.id);
+          return (
+            <button
+              key={t.id}
+              onClick={() => onChange(on ? selected.filter((x) => x !== t.id) : [...selected, t.id])}
+              className="w-full flex items-center gap-2 px-2 py-1.5 md:py-1 text-sm md:text-xs hover:bg-secondary transition-colors cursor-pointer"
+            >
+              <span
+                className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
+                  on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'
+                }`}
+              >
+                {on && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+              </span>
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: t.color }}
+              />
+              <span className="truncate">{t.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Naming a list, whether it's new or being renamed. Replaces window.prompt,
+ * which can't be styled, ignores the app's theme, and on some browsers is
+ * suppressed outright.
+ */
+function BoardNameDialog({
+  heading,
+  initialValue = '',
+  submitLabel,
+  onCancel,
+  onSubmit,
+}: {
+  heading: string;
+  initialValue?: string;
+  submitLabel: string;
+  onCancel: () => void;
+  onSubmit: (name: string) => void;
+}) {
+  const [name, setName] = useState(initialValue);
+  const trimmed = name.trim();
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
       <div className="relative w-full max-w-sm bg-card border border-border rounded-xl p-5 space-y-4 shadow-2xl">
-        <h2 className="text-sm font-bold text-foreground">New list</h2>
+        <h2 className="text-sm font-bold text-foreground">{heading}</h2>
         <input
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && name.trim()) onCreate(name);
-            if (e.key === 'Escape') onCancel();
+            if (e.key === 'Enter' && trimmed) onSubmit(trimmed);
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              onCancel();
+            }
           }}
           placeholder="List name"
           className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
@@ -1203,11 +1634,11 @@ function NewBoardDialog({
             Cancel
           </button>
           <button
-            onClick={() => name.trim() && onCreate(name)}
-            disabled={!name.trim()}
+            onClick={() => trimmed && onSubmit(trimmed)}
+            disabled={!trimmed}
             className="px-3 py-2 rounded text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Create
+            {submitLabel}
           </button>
         </div>
       </div>

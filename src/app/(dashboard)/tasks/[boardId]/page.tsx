@@ -1,6 +1,6 @@
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';
-import { taskBoards, tasks as tasksTable } from '@/db/schema';
+import { taskBoards, tasks as tasksTable, taskTags, tags as tagsTable } from '@/db/schema';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import TasksClient from './TasksClient';
@@ -80,8 +80,37 @@ export default async function TasksBoardPage({ params }: PageProps) {
     )
     .orderBy(asc(tasksTable.orderIndex), asc(tasksTable.id));
 
+  // Tags available to tasks, and which tasks carry them. Two small queries
+  // rather than a join, so a task with three tags doesn't triple its row.
+  const availableTags = await db
+    .select({ id: tagsTable.id, name: tagsTable.name, color: tagsTable.color })
+    .from(tagsTable)
+    .where(
+      and(
+        eq(tagsTable.userId, session.userId),
+        eq(tagsTable.isArchived, 0),
+        inArray(tagsTable.scope, ['task', 'both'])
+      )
+    )
+    .orderBy(asc(tagsTable.orderIndex), asc(tagsTable.id));
+
+  const taskIds = rows.map((r) => r.id);
+  const tagLinks = taskIds.length
+    ? await db
+        .select({ taskId: taskTags.taskId, tagId: taskTags.tagId })
+        .from(taskTags)
+        .where(inArray(taskTags.taskId, taskIds))
+    : [];
+
+  const tagsByTask: Record<number, number[]> = {};
+  for (const link of tagLinks) {
+    (tagsByTask[link.taskId] ??= []).push(link.tagId);
+  }
+
   return (
     <TasksClient
+      availableTags={availableTags}
+      tagsByTask={tagsByTask}
       boards={boards.map((b) => ({ id: b.id, name: b.name }))}
       visibleBoards={selected.map((b) => ({
         id: b.id,

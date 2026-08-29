@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { taskBoards, tasks, taskCompletions } from '@/db/schema';
+import { taskBoards, tasks, taskCompletions, taskTags, tags } from '@/db/schema';
 import { eq, and, sql, isNull, isNotNull, inArray } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
@@ -481,6 +481,44 @@ export async function moveTaskAction(
       .where(and(eq(tasks.id, siblingId), eq(tasks.userId, session.userId)));
     index += 1;
   }
+
+  refresh();
+}
+
+/**
+ * Replace a task's tags.
+ *
+ * The join table keys on tag id, so this is a plain delete-and-reinsert — no
+ * cascading of names the way events.tag needs. Tag ids that aren't the
+ * caller's are dropped rather than trusted.
+ */
+export async function setTaskTagsAction(taskId: number, tagIds: number[]): Promise<void> {
+  const session = await requireAuth();
+
+  const [task] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)))
+    .limit(1);
+  if (!task) throw new Error('Task not found');
+
+  await db.delete(taskTags).where(eq(taskTags.taskId, taskId));
+
+  if (tagIds.length === 0) {
+    refresh();
+    return;
+  }
+
+  const owned = await db
+    .select({ id: tags.id })
+    .from(tags)
+    .where(and(inArray(tags.id, tagIds), eq(tags.userId, session.userId)));
+  const allowed = new Set(owned.map((t) => t.id));
+
+  const rows = [...new Set(tagIds)]
+    .filter((id) => allowed.has(id))
+    .map((tagId) => ({ taskId, tagId }));
+  if (rows.length > 0) await db.insert(taskTags).values(rows);
 
   refresh();
 }
