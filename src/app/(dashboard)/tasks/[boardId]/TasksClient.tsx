@@ -20,6 +20,7 @@ import {
   MoreHorizontal,
   Plus,
   Star,
+  Tag as TagIcon,
   Trash2,
   X,
 } from 'lucide-react';
@@ -51,6 +52,7 @@ import {
   setBoardSortAction,
   deleteCompletedTasksAction,
   moveTaskAction,
+  setTaskTagsAction,
 } from '@/app/task-actions';
 import { dateToServerDbString } from '@/lib/timezone';
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
@@ -65,10 +67,18 @@ interface VisibleBoard extends BoardSummary {
   sortMode: SortMode;
 }
 
+export interface TaskTag {
+  id: number;
+  name: string;
+  color: string;
+}
+
 interface TasksClientProps {
   boards: BoardSummary[];
   visibleBoards: VisibleBoard[];
   rows: TaskRow[];
+  availableTags: TaskTag[];
+  tagsByTask: Record<number, number[]>;
 }
 
 // The Undo toast carries the action that reverses whatever just happened, so
@@ -93,6 +103,7 @@ interface ColumnHandlers {
   };
   draggingId: number | null;
   run: (fn: () => Promise<unknown>) => void;
+  tagsFor: (taskId: number) => TaskTag[];
   editingId: number | null;
   setEditingId: (id: number | null) => void;
   subtaskParent: number | null;
@@ -100,7 +111,13 @@ interface ColumnHandlers {
   selectedId: number | null;
 }
 
-export default function TasksClient({ boards, visibleBoards, rows }: TasksClientProps) {
+export default function TasksClient({
+  boards,
+  visibleBoards,
+  rows,
+  availableTags,
+  tagsByTask,
+}: TasksClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -114,6 +131,25 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     setSyncedRows(rows);
     setLocalRows(rows);
   }
+
+  const [localTags, setLocalTags] = useState<Record<number, number[]>>(tagsByTask);
+  const [syncedTags, setSyncedTags] = useState<Record<number, number[]>>(tagsByTask);
+  if (tagsByTask !== syncedTags) {
+    setSyncedTags(tagsByTask);
+    setLocalTags(tagsByTask);
+  }
+
+  const tagById = useMemo(
+    () => new Map(availableTags.map((t) => [t.id, t])),
+    [availableTags]
+  );
+  const tagsFor = (taskId: number): TaskTag[] =>
+    (localTags[taskId] ?? []).map((id) => tagById.get(id)).filter((t): t is TaskTag => !!t);
+
+  const setTags = (taskId: number, tagIds: number[]) => {
+    setLocalTags((prev) => ({ ...prev, [taskId]: tagIds }));
+    run(() => setTaskTagsAction(taskId, tagIds));
+  };
 
   const [subtaskParent, setSubtaskParent] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -321,6 +357,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     requestCompletion,
     toggleStar,
     saveTitle,
+    tagsFor,
     openEditor: (id, at) => {
       setEditorAt(at);
       setSelectedId(id);
@@ -404,6 +441,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
             board={b}
             boards={boards}
             rows={localRows.filter((r) => r.boardId === b.id)}
+            availableTags={availableTags}
             handlers={handlers}
             registerComposer={registerComposer}
             onPickBoard={showOnly}
@@ -475,6 +513,15 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
               className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
             />
           </label>
+
+          <div className="space-y-1.5">
+            <span className="text-xs font-semibold text-muted-foreground">Tags</span>
+            <TagPicker
+              all={availableTags}
+              selected={localTags[selected.id] ?? []}
+              onChange={(ids) => setTags(selected.id, ids)}
+            />
+          </div>
 
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold text-muted-foreground">List</span>
@@ -625,6 +672,7 @@ function BoardColumn({
   board,
   boards,
   rows,
+  availableTags,
   handlers,
   registerComposer,
   onPickBoard,
@@ -634,6 +682,7 @@ function BoardColumn({
   board: VisibleBoard;
   boards: BoardSummary[];
   rows: TaskRow[];
+  availableTags: TaskTag[];
   handlers: ColumnHandlers;
   registerComposer: (boardId: number, el: HTMLInputElement | null) => void;
   onPickBoard: (id: number) => void;
@@ -644,6 +693,9 @@ function BoardColumn({
   const [subtaskValue, setSubtaskValue] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
+  const [starredOnly, setStarredOnly] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
@@ -656,9 +708,32 @@ function BoardColumn({
     }
   }, [subtaskParent, rows]);
 
+  // Only the tags actually in use on this list. Derived rather than
+  // configured, so the menu stays short by construction and never lists a tag
+  // that would filter everything away.
+  const tagsInUse = useMemo(() => {
+    const present = new Set<number>();
+    for (const r of rows) for (const t of handlers.tagsFor(r.id)) present.add(t.id);
+    return availableTags.filter((t) => present.has(t.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, availableTags]);
+
+  const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0);
+
+  const visibleRows = useMemo(() => {
+    if (activeFilters === 0) return rows;
+    return rows.filter((r) => {
+      if (starredOnly && !r.isStarred) return false;
+      if (filterTagIds.length === 0) return true;
+      // OR across selected tags: a task matches if it carries any of them.
+      return handlers.tagsFor(r.id).some((t) => filterTagIds.includes(t.id));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, filterTagIds, starredOnly, activeFilters]);
+
   const { openTree, completedTree } = useMemo(() => {
-    const open = rows.filter((r) => !r.completedAt);
-    const done = rows.filter((r) => r.completedAt);
+    const open = visibleRows.filter((r) => !r.completedAt);
+    const done = visibleRows.filter((r) => r.completedAt);
     return {
       openTree: sortTaskTree(buildTaskTree(open), board.sortMode),
       // Most recently finished first, regardless of the board's sort — the
@@ -667,7 +742,7 @@ function BoardColumn({
         (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
       ),
     };
-  }, [rows, board.sortMode]);
+  }, [visibleRows, board.sortMode]);
 
   const openCount = useMemo(() => flattenTaskTree(openTree).length, [openTree]);
   const completedRows = useMemo(() => flattenTaskTree(completedTree), [completedTree]);
@@ -801,6 +876,7 @@ function BoardColumn({
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
+            <TagChips tags={handlers.tagsFor(node.id)} />
           </div>
 
           <div className="flex items-center gap-0.5 shrink-0">
@@ -908,6 +984,94 @@ function BoardColumn({
             <span className="ml-2 text-xs font-medium text-muted-foreground">{openCount}</span>
           )}
         </h2>
+
+        {(tagsInUse.length > 0 || starredOnly || rows.some((r) => r.isStarred)) && (
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setFilterOpen((o) => !o)}
+              aria-expanded={filterOpen}
+              aria-label={`Filter ${board.name}`}
+              className={`flex items-center gap-1 px-2 py-1 rounded border text-xs transition-colors cursor-pointer ${
+                activeFilters > 0
+                  ? 'bg-secondary border-foreground/30 text-foreground'
+                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <TagIcon className="h-3 w-3" />
+              {activeFilters > 0 ? activeFilters : 'Filter'}
+            </button>
+            {filterOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1 max-h-72 overflow-y-auto">
+                  <button
+                    onClick={() => setStarredOnly((v) => !v)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+                  >
+                    <span
+                      className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
+                        starredOnly
+                          ? 'bg-primary border-primary text-primary-foreground'
+                          : 'border-muted-foreground'
+                      }`}
+                    >
+                      {starredOnly && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+                    </span>
+                    <Star className="h-3.5 w-3.5 text-amber-400" fill="currentColor" />
+                    Starred
+                  </button>
+
+                  {tagsInUse.length > 0 && <div className="my-1 border-t border-border" />}
+
+                  {tagsInUse.map((t) => {
+                    const on = filterTagIds.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() =>
+                          setFilterTagIds((prev) =>
+                            on ? prev.filter((x) => x !== t.id) : [...prev, t.id]
+                          )
+                        }
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+                      >
+                        <span
+                          className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
+                            on
+                              ? 'bg-primary border-primary text-primary-foreground'
+                              : 'border-muted-foreground'
+                          }`}
+                        >
+                          {on && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+                        </span>
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: t.color }}
+                        />
+                        <span className="truncate">{t.name}</span>
+                      </button>
+                    );
+                  })}
+
+                  {activeFilters > 0 && (
+                    <>
+                      <div className="my-1 border-t border-border" />
+                      <button
+                        onClick={() => {
+                          setFilterTagIds([]);
+                          setStarredOnly(false);
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        Clear filters
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         <select
           value={board.sortMode}
@@ -1019,14 +1183,16 @@ function BoardColumn({
           <div className="py-12 text-center px-3">
             <ListChecks className="h-7 w-7 mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-xs text-muted-foreground">
-              Nothing here yet. Add a task above
-              {isPrimary && (
+              {activeFilters > 0
+                ? 'No tasks match the filter.'
+                : 'Nothing here yet. Add a task above'}
+              {activeFilters === 0 && isPrimary && (
                 <>
                   , or press{' '}
                   <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary">n</kbd>
                 </>
               )}
-              .
+              {activeFilters === 0 && '.'}
             </p>
           </div>
         )}
@@ -1176,6 +1342,101 @@ function EditTaskDialog({
         {children}
       </div>
     </>
+  );
+}
+
+/**
+ * A row's tags. Two chips at most before collapsing to a count — a task with
+ * five tags shouldn't push its own title out of the row. On narrow screens the
+ * names go entirely and only the colour dots remain, which the tag palette
+ * already makes legible.
+ */
+function TagChips({ tags }: { tags: TaskTag[] }) {
+  if (tags.length === 0) return null;
+  const shown = tags.slice(0, 2);
+  const extra = tags.length - shown.length;
+
+  return (
+    <div className="flex items-center gap-1 mt-1 flex-wrap">
+      {shown.map((t) => (
+        <span key={t.id} className="flex items-center gap-1">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: t.color }}
+            title={t.name}
+          />
+          <span className="hidden sm:inline text-[10px] leading-none text-muted-foreground">
+            {t.name}
+          </span>
+        </span>
+      ))}
+      {extra > 0 && (
+        <span className="text-[10px] leading-none text-muted-foreground">+{extra}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Tag picker for the edit dialog. A searchable list rather than a chip row:
+ * event tags and task tags share one set, so this can easily be twenty
+ * entries, and twenty chips is a wall.
+ */
+function TagPicker({
+  all,
+  selected,
+  onChange,
+}: {
+  all: TaskTag[];
+  selected: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const matches = all.filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  if (all.length === 0) {
+    return <p className="text-xs text-muted-foreground">No tags yet — add some in Settings.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {all.length > 6 && (
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Find a tag"
+          className="w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+      )}
+      <div className="max-h-40 overflow-y-auto rounded border border-border">
+        {matches.length === 0 && (
+          <p className="px-2 py-2 text-xs text-muted-foreground">No tag matches “{query}”.</p>
+        )}
+        {matches.map((t) => {
+          const on = selected.includes(t.id);
+          return (
+            <button
+              key={t.id}
+              onClick={() => onChange(on ? selected.filter((x) => x !== t.id) : [...selected, t.id])}
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-secondary transition-colors cursor-pointer"
+            >
+              <span
+                className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
+                  on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'
+                }`}
+              >
+                {on && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+              </span>
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: t.color }}
+              />
+              <span className="truncate">{t.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
