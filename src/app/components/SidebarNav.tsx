@@ -26,7 +26,13 @@ const ICONS: Record<string, typeof CalendarIcon> = {
  * instead of snapping back to today. Falls back to `todayStr` when the current
  * page carries no date (e.g. Settings).
  */
-export default function SidebarNav({ todayStr }: { todayStr: string }) {
+export default function SidebarNav({
+  todayStr,
+  dueCount = 0,
+}: {
+  todayStr: string;
+  dueCount?: number;
+}) {
   const pathname = usePathname();
   const { links, activeKey } = getNavLinks(pathname, todayStr);
 
@@ -47,7 +53,15 @@ export default function SidebarNav({ todayStr }: { todayStr: string }) {
             }`}
           >
             <Icon className="h-5 w-5 text-muted-foreground" />
-            {label}
+            <span className="flex-1">{label}</span>
+            {key === 'tasks' && dueCount > 0 && (
+              <span
+                aria-label={`${dueCount} due`}
+                className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-semibold leading-none"
+              >
+                {dueCount}
+              </span>
+            )}
           </Link>
         );
       })}

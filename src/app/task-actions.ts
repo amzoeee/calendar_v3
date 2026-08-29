@@ -5,7 +5,9 @@ import { taskBoards, tasks, taskCompletions, taskTags, tags } from '@/db/schema'
 import { eq, and, sql, isNull, isNotNull, inArray } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
-import { dateToServerDbString } from '@/lib/timezone';
+import { dateToServerDbString, browserDatetimeToServerDbString } from '@/lib/timezone';
+import { getViewerTimeZone } from '@/lib/server-timezone';
+import { computeRemindAt, END_OF_DAY } from '@/lib/taskSchedule';
 import { MAX_TASK_DEPTH, type SortMode } from '@/lib/tasks';
 
 const VALID_SORT_MODES: SortMode[] = ['manual', 'alpha', 'created', 'remind', 'deadline'];
@@ -519,6 +521,101 @@ export async function setTaskTagsAction(taskId: number, tagIds: number[]): Promi
     .filter((id) => allowed.has(id))
     .map((tagId) => ({ taskId, tagId }));
   if (rows.length > 0) await db.insert(taskTags).values(rows);
+
+  refresh();
+}
+
+/**
+ * Set (or clear) a task's deadline and reminder.
+ *
+ * Everything arrives as wall-clock values in the viewer's timezone, the way
+ * they were typed, and is converted to the app's Pacific strings here — the
+ * same round trip event times make.
+ *
+ * `remindAt` is materialised rather than derived on read. It keeps the
+ * eventual reminder scheduler to a plain indexed comparison instead of
+ * per-row arithmetic, and it lets the UI show the literal outcome ("Reminds
+ * Tue, Sep 2 at 6:00 PM") rather than an offset the reader has to apply.
+ */
+export async function setTaskScheduleAction(
+  taskId: number,
+  input: {
+    /** "YYYY-MM-DD" as the viewer typed it, or null to clear the deadline. */
+    dueDate: string | null;
+    /** "HH:MM", or null for a deadline that names only a day. */
+    dueTime: string | null;
+    remindOffsetMinutes: number | null;
+    remindOffsetDays: number | null;
+    /** "HH:MM", paired with remindOffsetDays. */
+    remindTimeOfDay: string | null;
+  }
+): Promise<void> {
+  const session = await requireAuth();
+
+  const [task] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)))
+    .limit(1);
+  if (!task) throw new Error('Task not found');
+
+  if (!input.dueDate) {
+    // No deadline means no reminder — an offset from nothing has no meaning.
+    await db
+      .update(tasks)
+      .set({
+        dueDatetime: null,
+        dueHasTime: 0,
+        remindAt: null,
+        remindOffsetMinutes: null,
+        remindOffsetDays: null,
+        remindTimeOfDay: null,
+      })
+      .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)));
+    refresh();
+    return;
+  }
+
+  const tz = await getViewerTimeZone();
+  const hasTime = Boolean(input.dueTime);
+
+  // A day-only deadline is stored at the end of that day, so it still sorts
+  // and compares against timed ones without special-casing.
+  const dueDatetime = browserDatetimeToServerDbString(
+    `${input.dueDate}T${input.dueTime ?? END_OF_DAY}`,
+    tz
+  );
+
+  // The reminder's time of day was typed in the viewer's timezone too. It
+  // needs a date to resolve against, and the deadline's own date is the one
+  // that matters here.
+  let remindTimeOfDay: string | null = null;
+  if (input.remindTimeOfDay) {
+    const asPacific = browserDatetimeToServerDbString(
+      `${input.dueDate}T${input.remindTimeOfDay}`,
+      tz
+    );
+    remindTimeOfDay = asPacific.split(' ')[1].slice(0, 5);
+  }
+
+  const remindAt = computeRemindAt(
+    dueDatetime,
+    input.remindOffsetMinutes,
+    input.remindOffsetDays,
+    remindTimeOfDay
+  );
+
+  await db
+    .update(tasks)
+    .set({
+      dueDatetime,
+      dueHasTime: hasTime ? 1 : 0,
+      remindAt,
+      remindOffsetMinutes: input.remindOffsetMinutes,
+      remindOffsetDays: input.remindOffsetDays,
+      remindTimeOfDay,
+    })
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)));
 
   refresh();
 }

@@ -1,14 +1,15 @@
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';
-import { events } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { events, tasks } from '@/db/schema';
+import { eq, and, sql, isNotNull, isNull, lte } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import MiniCalendar from '@/app/components/MiniCalendar';
 import SidebarNav from '@/app/components/SidebarNav';
 import MobileTabBar from '@/app/components/MobileTabBar';
 import MobileProfileMenu from '@/app/components/MobileProfileMenu';
 import TimezoneSync from '@/app/components/TimezoneSync';
-import { todayForViewer } from '@/lib/server-timezone';
+import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
+import { dbStringToUtcMillis, dayStrOfInstant, shiftDateStr } from '@/lib/timezone';
 import {
   LogOut,
   Sparkles,
@@ -42,6 +43,27 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
   const todayStr = await todayForViewer();
 
+  // Tasks due today or already overdue, for the badge on the Tasks tab.
+  // Deadlines are Pacific strings but "today" is the viewer's day, so the
+  // query casts a wide net by one day on each side and the exact comparison
+  // happens per row in the viewer's own timezone — the same shape the stats
+  // page uses for the same reason.
+  const viewerTimeZone = await getViewerTimeZone();
+  const dueRows = await db
+    .select({ dueDatetime: tasks.dueDatetime })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, session.userId),
+        isNull(tasks.completedAt),
+        isNotNull(tasks.dueDatetime),
+        lte(tasks.dueDatetime, `${shiftDateStr(todayStr, 1)} 23:59:59`)
+      )
+    );
+  const dueCount = dueRows.filter(
+    (r) => dayStrOfInstant(dbStringToUtcMillis(r.dueDatetime!), viewerTimeZone) <= todayStr
+  ).length;
+
   return (
     <div className="flex h-dvh bg-background text-foreground overflow-hidden">
       <TimezoneSync />
@@ -60,7 +82,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
           <MiniCalendar />
 
           {/* Navigation (preserves the currently-viewed date across views) */}
-          <SidebarNav todayStr={todayStr} />
+          <SidebarNav todayStr={todayStr} dueCount={dueCount} />
         </div>
 
         {/* User profile & Logout */}
@@ -154,7 +176,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         </main>
       </div>
 
-      <MobileTabBar todayStr={todayStr} />
+      <MobileTabBar todayStr={todayStr} dueCount={dueCount} />
     </div>
   );
 }

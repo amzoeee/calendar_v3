@@ -28,10 +28,13 @@ export const VISIBLE_BOARDS_COOKIE = 'taskBoards';
 
 export type SortMode = 'manual' | 'alpha' | 'created' | 'remind' | 'deadline';
 
-// Sort modes offered in the UI today. `remind` and `deadline` are valid values
-// the schema and sorter already understand, but there is nothing to sort by
-// until deadlines land, so they stay out of the dropdown until then.
-export const ACTIVE_SORT_MODES: SortMode[] = ['manual', 'alpha', 'created'];
+export const ACTIVE_SORT_MODES: SortMode[] = [
+  'manual',
+  'alpha',
+  'created',
+  'deadline',
+  'remind',
+];
 
 export const SORT_LABELS: Record<SortMode, string> = {
   manual: 'My order',
@@ -52,6 +55,9 @@ export interface TaskRow {
   dueDatetime: string | null;
   dueHasTime: number;
   remindAt: string | null;
+  remindOffsetMinutes: number | null;
+  remindOffsetDays: number | null;
+  remindTimeOfDay: string | null;
   isStarred: number;
   completedAt: string | null;
   createdAt: string | null;
