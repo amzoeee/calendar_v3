@@ -29,7 +29,13 @@ const SHORT_LABELS: Record<string, string> = {
   stats: 'Stats',
 };
 
-export default function MobileTabBar({ todayStr }: { todayStr: string }) {
+export default function MobileTabBar({
+  todayStr,
+  dueCount = 0,
+}: {
+  todayStr: string;
+  dueCount?: number;
+}) {
   const pathname = usePathname();
   const { links, activeKey } = getNavLinks(pathname, todayStr);
 
@@ -49,7 +55,17 @@ export default function MobileTabBar({ todayStr }: { todayStr: string }) {
                 active ? 'text-foreground' : 'text-muted-foreground'
               }`}
             >
-              <Icon className="h-5 w-5" />
+              <span className="relative">
+                <Icon className="h-5 w-5" />
+                {key === 'tasks' && dueCount > 0 && (
+                  <span
+                    aria-label={`${dueCount} due`}
+                    className="absolute -top-1 -right-2 min-w-[1rem] px-1 rounded-full bg-amber-500 text-black text-[9px] font-bold leading-4 text-center"
+                  >
+                    {dueCount}
+                  </span>
+                )}
+              </span>
               {SHORT_LABELS[key]}
             </Link>
           );
