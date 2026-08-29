@@ -1489,9 +1489,12 @@ function EditTaskDialog({
 
 /**
  * A row's tags. Two chips at most before collapsing to a count — a task with
- * five tags shouldn't push its own title out of the row. On narrow screens the
- * names go entirely and only the colour dots remain, which the tag palette
- * already makes legible.
+ * five tags shouldn't push its own title out of the row.
+ *
+ * Names are shown at every width. They used to be hidden below `sm`, on the
+ * reasoning that a phone is narrow — which had it backwards: a phone shows one
+ * list across the full window, so it has *more* room per column than three
+ * lists side by side on a desktop. Long names truncate instead.
  */
 function TagChips({ tags }: { tags: TaskTag[] }) {
   if (tags.length === 0) return null;
@@ -1499,21 +1502,21 @@ function TagChips({ tags }: { tags: TaskTag[] }) {
   const extra = tags.length - shown.length;
 
   return (
-    <div className="flex items-center gap-1 mt-1 flex-wrap">
+    <div className="flex items-center gap-1.5 mt-1 min-w-0">
       {shown.map((t) => (
-        <span key={t.id} className="flex items-center gap-1">
+        <span key={t.id} className="flex items-center gap-1 min-w-0">
           <span
             className="h-2 w-2 shrink-0 rounded-full"
             style={{ backgroundColor: t.color }}
             title={t.name}
           />
-          <span className="hidden sm:inline text-[10px] leading-none text-muted-foreground">
+          <span className="text-[10px] leading-none text-muted-foreground truncate max-w-[8rem]">
             {t.name}
           </span>
         </span>
       ))}
       {extra > 0 && (
-        <span className="text-[10px] leading-none text-muted-foreground">+{extra}</span>
+        <span className="text-[10px] leading-none text-muted-foreground shrink-0">+{extra}</span>
       )}
     </div>
   );
