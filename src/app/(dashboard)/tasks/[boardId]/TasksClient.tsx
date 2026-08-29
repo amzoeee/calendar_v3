@@ -329,7 +329,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     <div className="flex-1 min-h-0 flex overflow-hidden">
       {/* Boards rail. The name shows that board on its own; the checkbox adds
           it beside the others, up to MAX_VISIBLE_BOARDS. */}
-      <aside className="hidden md:flex w-56 shrink-0 border-r border-border flex-col">
+      <aside className="hidden md:flex w-44 shrink-0 border-r border-border flex-col">
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
           {boards.map((b) => {
             const shown = visibleIds.includes(b.id);
@@ -345,7 +345,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
                   onClick={() => showOnly(b.id)}
                   aria-current={shown ? 'page' : undefined}
                   title={`Show only ${b.name}`}
-                  className={`flex-1 min-w-0 text-left px-3 py-2 text-sm font-medium truncate cursor-pointer ${
+                  className={`flex-1 min-w-0 text-left pl-2.5 pr-1 py-2 text-sm font-medium truncate cursor-pointer ${
                     shown ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -362,7 +362,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
                         ? `Hide ${b.name}`
                         : `Show ${b.name} alongside`
                   }
-                  className={`mr-2 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
+                  className={`mr-2.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
                     shown
                       ? 'bg-primary border-primary text-primary-foreground'
                       : 'border-muted-foreground hover:border-foreground'
