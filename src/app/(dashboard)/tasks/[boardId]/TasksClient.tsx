@@ -891,6 +891,7 @@ function BoardColumn({
     // Deepest level below this task: a parent can't be nested, a leaf can.
     const height = Math.max(...descendants.map((n) => n.depth)) - node.depth;
     const dragging = handlers.draggingId != null && subtreeIds.includes(handlers.draggingId);
+    const rowTags = handlers.tagsFor(node.id);
 
     return (
       <div key={node.id}>
@@ -947,10 +948,17 @@ function BoardColumn({
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
-            <div className="flex items-center gap-2 flex-wrap">
-              <DueChip due={node.dueDatetime} hasTime={node.dueHasTime === 1} done={done} />
-              <TagChips tags={handlers.tagsFor(node.id)} />
-            </div>
+            {(node.dueDatetime || rowTags.length > 0) && (
+              /* gap-x/gap-y separately: a single `gap` on a wrapping flex
+                 applies to both axes, so the deadline wrapping above the tags
+                 opened a full row-gap between them. The top margin lives here
+                 rather than on the chips, so a task with neither doesn't carry
+                 an empty strip. */
+              <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                <DueChip due={node.dueDatetime} hasTime={node.dueHasTime === 1} done={done} />
+                <TagChips tags={rowTags} />
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-0.5 shrink-0">
@@ -1726,7 +1734,7 @@ function TagChips({ tags }: { tags: TaskTag[] }) {
   const extra = tags.length - shown.length;
 
   return (
-    <div className="flex items-center gap-1.5 mt-1 min-w-0">
+    <div className="flex items-center gap-1.5 min-w-0">
       {shown.map((t) => (
         <span key={t.id} className="flex items-center gap-1 min-w-0">
           <span
