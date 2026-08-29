@@ -442,6 +442,7 @@ export default function TasksClient({
             boards={boards}
             rows={localRows.filter((r) => r.boardId === b.id)}
             availableTags={availableTags}
+            collapsed={visibleBoards.length > 1}
             handlers={handlers}
             registerComposer={registerComposer}
             onPickBoard={showOnly}
@@ -674,6 +675,7 @@ function BoardColumn({
   rows,
   availableTags,
   handlers,
+  collapsed,
   registerComposer,
   onPickBoard,
   onNewBoard,
@@ -684,6 +686,7 @@ function BoardColumn({
   rows: TaskRow[];
   availableTags: TaskTag[];
   handlers: ColumnHandlers;
+  collapsed: boolean;
   registerComposer: (boardId: number, el: HTMLInputElement | null) => void;
   onPickBoard: (id: number) => void;
   onNewBoard: () => void;
@@ -997,6 +1000,92 @@ function BoardColumn({
     );
   };
 
+  const hasFilterables = tagsInUse.length > 0 || starredOnly || rows.some((r) => r.isStarred);
+
+  // Sort and filter are rendered either as their own header controls or as
+  // sections of the overflow menu, depending on how much room the column has.
+  // Defined once here so the two placements can't drift apart.
+  const checkbox = (on: boolean) => (
+    <span
+      className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
+        on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'
+      }`}
+    >
+      {on && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+    </span>
+  );
+
+  const filterOptions = (
+    <>
+      <button
+        onClick={() => setStarredOnly((v) => !v)}
+        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+      >
+        {checkbox(starredOnly)}
+        <Star className="h-3.5 w-3.5 text-amber-400" fill="currentColor" />
+        Starred
+      </button>
+
+      {tagsInUse.map((t) => {
+        const on = filterTagIds.includes(t.id);
+        return (
+          <button
+            key={t.id}
+            onClick={() =>
+              setFilterTagIds((prev) => (on ? prev.filter((x) => x !== t.id) : [...prev, t.id]))
+            }
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+          >
+            {checkbox(on)}
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: t.color }}
+            />
+            <span className="truncate">{t.name}</span>
+          </button>
+        );
+      })}
+
+      {activeFilters > 0 && (
+        <button
+          onClick={() => {
+            setFilterTagIds([]);
+            setStarredOnly(false);
+          }}
+          className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
+        >
+          Clear filters
+        </button>
+      )}
+    </>
+  );
+
+  const sortOptions = (
+    <>
+      {ACTIVE_SORT_MODES.map((mode) => (
+        <button
+          key={mode}
+          onClick={() => {
+            setMenuOpen(false);
+            handlers.run(() => setBoardSortAction(board.id, mode));
+          }}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+        >
+          <span className="h-3.5 w-3.5 shrink-0 flex items-center justify-center">
+            {board.sortMode === mode && <Check className="h-3 w-3" strokeWidth={3} />}
+          </span>
+          {SORT_LABELS[mode]}
+        </button>
+      ))}
+    </>
+  );
+
+  const sectionLabel = (text: string) => (
+    <p className="px-2 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {text}
+    </p>
+  );
+
   return (
     <div
       data-board-column
@@ -1031,7 +1120,7 @@ function BoardColumn({
           )}
         </h2>
 
-        {(tagsInUse.length > 0 || starredOnly || rows.some((r) => r.isStarred)) && (
+        {!collapsed && hasFilterables && (
           <div className="relative shrink-0">
             <button
               onClick={() => setFilterOpen((o) => !o)}
@@ -1050,101 +1139,62 @@ function BoardColumn({
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
                 <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1 max-h-72 overflow-y-auto">
-                  <button
-                    onClick={() => setStarredOnly((v) => !v)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-                  >
-                    <span
-                      className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
-                        starredOnly
-                          ? 'bg-primary border-primary text-primary-foreground'
-                          : 'border-muted-foreground'
-                      }`}
-                    >
-                      {starredOnly && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
-                    </span>
-                    <Star className="h-3.5 w-3.5 text-amber-400" fill="currentColor" />
-                    Starred
-                  </button>
-
-                  {tagsInUse.length > 0 && <div className="my-1 border-t border-border" />}
-
-                  {tagsInUse.map((t) => {
-                    const on = filterTagIds.includes(t.id);
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() =>
-                          setFilterTagIds((prev) =>
-                            on ? prev.filter((x) => x !== t.id) : [...prev, t.id]
-                          )
-                        }
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-                      >
-                        <span
-                          className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
-                            on
-                              ? 'bg-primary border-primary text-primary-foreground'
-                              : 'border-muted-foreground'
-                          }`}
-                        >
-                          {on && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
-                        </span>
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: t.color }}
-                        />
-                        <span className="truncate">{t.name}</span>
-                      </button>
-                    );
-                  })}
-
-                  {activeFilters > 0 && (
-                    <>
-                      <div className="my-1 border-t border-border" />
-                      <button
-                        onClick={() => {
-                          setFilterTagIds([]);
-                          setStarredOnly(false);
-                        }}
-                        className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
-                      >
-                        Clear filters
-                      </button>
-                    </>
-                  )}
+                  {filterOptions}
                 </div>
               </>
             )}
           </div>
         )}
 
-        <select
-          value={board.sortMode}
-          onChange={(e) => handlers.run(() => setBoardSortAction(board.id, e.target.value))}
-          aria-label={`Sort ${board.name}`}
-          className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
-        >
-          {ACTIVE_SORT_MODES.map((mode) => (
-            <option key={mode} value={mode}>
-              {SORT_LABELS[mode]}
-            </option>
-          ))}
-        </select>
+        {!collapsed && (
+          <select
+            value={board.sortMode}
+            onChange={(e) => handlers.run(() => setBoardSortAction(board.id, e.target.value))}
+            aria-label={`Sort ${board.name}`}
+            className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
+          >
+            {ACTIVE_SORT_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {SORT_LABELS[mode]}
+              </option>
+            ))}
+          </select>
+        )}
 
         <div className="relative">
           <button
             onClick={() => setMenuOpen((o) => !o)}
             aria-label={`${board.name} options`}
             aria-expanded={menuOpen}
-            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            className="relative p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
           >
             <MoreHorizontal className="h-4 w-4" />
+            {/* With the filter folded away, this dot is the only thing saying
+                the list is showing a subset. */}
+            {collapsed && activeFilters > 0 && (
+              <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-foreground" />
+            )}
           </button>
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1">
+              <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1 max-h-[70vh] overflow-y-auto">
+                {/* Side by side, the columns are too narrow for their own sort
+                    and filter controls, so both fold in here. */}
+                {collapsed && (
+                  <>
+                    {sectionLabel('Sort')}
+                    {sortOptions}
+                    {hasFilterables && (
+                      <>
+                        <div className="my-1 border-t border-border" />
+                        {sectionLabel('Filter')}
+                        {filterOptions}
+                      </>
+                    )}
+                    <div className="my-1 border-t border-border" />
+                  </>
+                )}
                 <button
                   onClick={() => {
                     setMenuOpen(false);
