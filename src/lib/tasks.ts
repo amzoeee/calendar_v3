@@ -60,6 +60,9 @@ export interface TaskRow {
   remindTimeOfDay: string | null;
   isStarred: number;
   completedAt: string | null;
+  rrule: string | null;
+  counterValue: number | null;
+  counterEnd: number | null;
   createdAt: string | null;
 }
 

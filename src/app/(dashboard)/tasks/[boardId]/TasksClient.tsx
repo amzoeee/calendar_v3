@@ -20,6 +20,8 @@ import {
   MoreHorizontal,
   Plus,
   CalendarClock,
+  Repeat,
+  SkipForward,
   Star,
   Tag as TagIcon,
   Trash2,
@@ -55,6 +57,8 @@ import {
   moveTaskAction,
   setTaskTagsAction,
   setTaskScheduleAction,
+  setTaskRecurrenceAction,
+  skipOccurrenceAction,
 } from '@/app/task-actions';
 import {
   dateToServerDbString,
@@ -69,6 +73,9 @@ import {
   DEFAULT_REMIND_TIME,
   dueState,
   formatDue,
+  displayTitle,
+  repeatLabel,
+  REPEAT_OPTIONS,
 } from '@/lib/taskSchedule';
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
@@ -291,19 +298,24 @@ export default function TasksClient({
     patchLocal(optimistic, { completedAt: completed ? dateToServerDbString(new Date()) : null });
 
     startTransition(async () => {
-      const changed = await toggleTaskCompletionAction(node.id, completed, cascade);
+      const { changed, rolled } = await toggleTaskCompletionAction(node.id, completed, cascade);
       if (changed.length > 0) {
+        const name = displayTitle(node.title, node.counterValue);
         raiseUndo({
-          message: completed
-            ? changed.length > 1
-              ? `Completed “${node.title}” and ${changed.length - 1} subtask${changed.length > 2 ? 's' : ''}`
-              : `Completed “${node.title}”`
-            : `Moved “${node.title}” back to your list`,
+          message: !completed
+            ? `Moved “${name}” back to your list`
+            : rolled
+              ? // A recurring task didn't stay done, so saying "completed" and
+                // leaving it in the list would look like nothing happened.
+                `Completed “${name}” — moved to the next one`
+              : changed.length > 1
+                ? `Completed “${name}” and ${changed.length - 1} subtask${changed.length > 2 ? 's' : ''}`
+                : `Completed “${name}”`,
           undo: () => {
             patchLocal(changed, {
               completedAt: completed ? null : dateToServerDbString(new Date()),
             });
-            run(() => setTaskCompletionAction(changed, !completed));
+            run(() => setTaskCompletionAction(changed, !completed, rolled));
           },
         });
       }
@@ -534,6 +546,18 @@ export default function TasksClient({
             key={`sched-${selected.id}`}
             task={selected}
             onSave={(input) => run(() => setTaskScheduleAction(selected.id, input))}
+          />
+
+          <RepeatPicker
+            key={`rep-${selected.id}`}
+            task={selected}
+            onSave={(rrule, start, end) =>
+              run(() => setTaskRecurrenceAction(selected.id, rrule, start, end))
+            }
+            onSkip={() => {
+              setSelectedId(null);
+              run(() => skipOccurrenceAction(selected.id));
+            }}
           />
 
           <div className="space-y-1">
@@ -917,7 +941,11 @@ function BoardColumn({
 
           <button
             onClick={() => handlers.requestCompletion(node, !done)}
-            aria-label={done ? `Mark “${node.title}” not done` : `Mark “${node.title}” done`}
+            aria-label={
+              done
+                ? `Mark “${displayTitle(node.title, node.counterValue)}” not done`
+                : `Mark “${displayTitle(node.title, node.counterValue)}” done`
+            }
             className={`mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
               done
                 ? 'bg-primary border-primary text-primary-foreground'
@@ -942,13 +970,13 @@ function BoardColumn({
                   done ? 'line-through text-muted-foreground' : 'text-foreground'
                 }`}
               >
-                {node.title}
+                {displayTitle(node.title, node.counterValue)}
               </button>
             )}
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
-            {(node.dueDatetime || rowTags.length > 0) && (
+            {(node.dueDatetime || node.rrule || rowTags.length > 0) && (
               /* gap-x/gap-y separately: a single `gap` on a wrapping flex
                  applies to both axes, so the deadline wrapping above the tags
                  opened a full row-gap between them. The top margin lives here
@@ -956,6 +984,15 @@ function BoardColumn({
                  an empty strip. */
               <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
                 <DueChip due={node.dueDatetime} hasTime={node.dueHasTime === 1} done={done} />
+                {node.rrule && (
+                  <span
+                    title={repeatLabel(node.rrule) ?? undefined}
+                    className="flex items-center gap-1 text-[10px] leading-none text-muted-foreground shrink-0"
+                  >
+                    <Repeat className="h-2.5 w-2.5" />
+                    {repeatLabel(node.rrule)}
+                  </span>
+                )}
                 <TagChips tags={rowTags} />
               </div>
             )}
@@ -1714,6 +1751,117 @@ function SchedulePicker({
           </div>
           {preview && <p className="text-[10px] text-muted-foreground">Reminds {preview}</p>}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Repeat rule and optional numbering for one task.
+ *
+ * Recurrence here is rolling — the row advances rather than a run of rows
+ * being generated up front — so this edits the single task rather than a
+ * series, and there's no "this one or all of them?" to ask.
+ *
+ * A repeat needs a deadline to advance from, so the control stays disabled
+ * until there is one.
+ */
+function RepeatPicker({
+  task,
+  onSave,
+  onSkip,
+}: {
+  task: TaskRow;
+  onSave: (rrule: string | null, start: number | null, end: number | null) => void;
+  onSkip: () => void;
+}) {
+  const [rrule, setRrule] = useState<string | null>(task.rrule);
+  const [start, setStart] = useState<string>(
+    task.counterValue == null ? '' : String(task.counterValue)
+  );
+  const [end, setEnd] = useState<string>(task.counterEnd == null ? '' : String(task.counterEnd));
+
+  const hasDeadline = Boolean(task.dueDatetime);
+  const numbered = task.title.includes('{n}');
+
+  const field =
+    'rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+
+  const commit = (next: { rrule?: string | null; start?: string; end?: string }) => {
+    const r = next.rrule !== undefined ? next.rrule : rrule;
+    const st = next.start ?? start;
+    const en = next.end ?? end;
+    onSave(r, st === '' ? null : Number(st), en === '' ? null : Number(en));
+  };
+
+  return (
+    <div className="space-y-1">
+      <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Repeat
+      </span>
+      <select
+        value={rrule ?? ''}
+        disabled={!hasDeadline}
+        onChange={(e) => {
+          const v = e.target.value || null;
+          setRrule(v);
+          commit({ rrule: v });
+        }}
+        className={`${field} w-full cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
+      >
+        {REPEAT_OPTIONS.map((o) => (
+          <option key={o.label} value={o.rrule ?? ''}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+
+      {!hasDeadline && (
+        <p className="text-[10px] text-muted-foreground">Set a deadline first.</p>
+      )}
+
+      {rrule && (
+        <>
+          {numbered ? (
+            <div className="flex items-center gap-1.5 pt-1">
+              <span className="text-[10px] text-muted-foreground shrink-0">
+                <code>{'{n}'}</code> from
+              </span>
+              <input
+                type="number"
+                value={start}
+                onChange={(e) => {
+                  setStart(e.target.value);
+                  commit({ start: e.target.value });
+                }}
+                className={`${field} w-14`}
+              />
+              <span className="text-[10px] text-muted-foreground shrink-0">to</span>
+              <input
+                type="number"
+                value={end}
+                placeholder="∞"
+                onChange={(e) => {
+                  setEnd(e.target.value);
+                  commit({ end: e.target.value });
+                }}
+                className={`${field} w-14`}
+              />
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground">
+              Put <code>{'{n}'}</code> in the title to number each one.
+            </p>
+          )}
+
+          <button
+            onClick={onSkip}
+            className="flex items-center gap-2 pt-1 text-sm md:text-xs text-foreground hover:opacity-80 transition-opacity cursor-pointer"
+          >
+            <SkipForward className="h-3.5 w-3.5" />
+            Skip this one
+          </button>
+        </>
       )}
     </div>
   );

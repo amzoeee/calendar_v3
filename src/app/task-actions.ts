@@ -7,7 +7,9 @@ import { requireAuth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { dateToServerDbString, browserDatetimeToServerDbString } from '@/lib/timezone';
 import { getViewerTimeZone } from '@/lib/server-timezone';
-import { computeRemindAt, END_OF_DAY } from '@/lib/taskSchedule';
+import { computeRemindAt, END_OF_DAY, displayTitle } from '@/lib/taskSchedule';
+import { expandRrule } from '@/lib/recurring';
+import { dateStrInTimeZone } from '@/lib/timezone';
 import { MAX_TASK_DEPTH, type SortMode } from '@/lib/tasks';
 
 const VALID_SORT_MODES: SortMode[] = ['manual', 'alpha', 'created', 'remind', 'deadline'];
@@ -163,6 +165,125 @@ async function subtreeIds(id: number, userId: number): Promise<number[]> {
   return rows.map((r) => r.id);
 }
 
+
+/**
+ * The deadline a rolling task should move to once the current one is done.
+ *
+ * Two conditions, and the second is what stops a neglected task from
+ * marching through history: the occurrence has to be later than the deadline
+ * being retired *and* later than today. Ticking off something that was due
+ * three Wednesdays ago moves it to the next Wednesday, not to two Wednesdays
+ * ago.
+ *
+ * Reuses the calendar's RRULE expander rather than reimplementing the
+ * stepping, so weekday handling and the Jan 31 -> Feb 28 month clamp come for
+ * free.
+ */
+function nextTaskOccurrence(
+  currentDue: string,
+  rrule: string,
+  todayStr: string
+): string | null {
+  for (const [start] of expandRrule(currentDue, currentDue, rrule, 400)) {
+    if (start > currentDue && start.split(' ')[0] > todayStr) return start;
+  }
+  return null;
+}
+
+/** What a completion did to a rolling task, so Undo can put it back. */
+export interface RolledForward {
+  taskId: number;
+  previousDue: string | null;
+  previousCounter: number | null;
+  /** Subtasks the roll reset, so Undo can re-complete exactly those. */
+  resetIds: number[];
+}
+
+/**
+ * Advance a rolling task past the deadline just completed (or skipped).
+ *
+ * Returns what it changed so the caller can offer a precise undo, or null if
+ * the task doesn't roll — either it isn't recurring, or its counter has run
+ * out and the series is over.
+ */
+async function rollForward(
+  taskId: number,
+  userId: number,
+  subtree: number[]
+): Promise<RolledForward | null> {
+  const [task] = await db
+    .select({
+      dueDatetime: tasks.dueDatetime,
+      rrule: tasks.rrule,
+      counterValue: tasks.counterValue,
+      counterEnd: tasks.counterEnd,
+      remindOffsetMinutes: tasks.remindOffsetMinutes,
+      remindOffsetDays: tasks.remindOffsetDays,
+      remindTimeOfDay: tasks.remindTimeOfDay,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)))
+    .limit(1);
+
+  if (!task?.rrule || !task.dueDatetime) return null;
+
+  // The series can be numbered and finite; when the count runs out the task
+  // stops recurring and simply stays done.
+  const nextCounter = task.counterValue == null ? null : task.counterValue + 1;
+  if (nextCounter != null && task.counterEnd != null && nextCounter > task.counterEnd) {
+    await db
+      .update(tasks)
+      .set({ rrule: null })
+      .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+    return null;
+  }
+
+  const todayStr = dateStrInTimeZone(await getViewerTimeZone());
+  const nextDue = nextTaskOccurrence(task.dueDatetime, task.rrule, todayStr);
+  if (!nextDue) return null;
+
+  // The reminder is an offset, so it re-derives from the new deadline. That
+  // is the whole reason it isn't stored as a fixed moment.
+  const remindAt = computeRemindAt(
+    nextDue,
+    task.remindOffsetMinutes,
+    task.remindOffsetDays,
+    task.remindTimeOfDay
+  );
+
+  // Subtasks are the steps of this occurrence, so they come back open for the
+  // next one. Their completion history stays in task_completions.
+  const resetIds = subtree.filter((id) => id !== taskId);
+
+  await db
+    .update(tasks)
+    .set({ completedAt: null, dueDatetime: nextDue, remindAt, counterValue: nextCounter })
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+
+  if (resetIds.length > 0) {
+    await db
+      .update(tasks)
+      .set({ completedAt: null })
+      .where(and(inArray(tasks.id, resetIds), eq(tasks.userId, userId)));
+  }
+
+  return {
+    taskId,
+    previousDue: task.dueDatetime,
+    previousCounter: task.counterValue,
+    resetIds,
+  };
+}
+
+/** Move a rolling task on without recording it as done. */
+export async function skipOccurrenceAction(taskId: number): Promise<void> {
+  const session = await requireAuth();
+  const subtree = await subtreeIds(taskId, session.userId);
+  if (subtree.length === 0) throw new Error('Task not found');
+  await rollForward(taskId, session.userId, subtree);
+  refresh();
+}
+
 export async function createTaskAction(
   boardId: number,
   title: string,
@@ -272,28 +393,43 @@ export async function toggleTaskCompletionAction(
   id: number,
   completed: boolean,
   cascade: boolean
-): Promise<number[]> {
+): Promise<{ changed: number[]; rolled: RolledForward | null }> {
   const session = await requireAuth();
 
   const candidateIds = cascade ? await subtreeIds(id, session.userId) : [id];
   if (candidateIds.length === 0) throw new Error('Task not found');
 
   const rows = await db
-    .select({ id: tasks.id, title: tasks.title, completedAt: tasks.completedAt })
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      counterValue: tasks.counterValue,
+      completedAt: tasks.completedAt,
+    })
     .from(tasks)
     .where(and(inArray(tasks.id, candidateIds), eq(tasks.userId, session.userId)));
 
   const changing = rows.filter((r) => Boolean(r.completedAt) !== completed);
-  if (changing.length === 0) return [];
+  if (changing.length === 0) return { changed: [], rolled: null };
 
   await applyCompletion(
     session.userId,
-    changing.map((r) => ({ id: r.id, title: r.title })),
+    // The snapshot records what was finished, so a numbered task has to have
+    // its counter resolved — "Problem Set {n}" is the template, not the thing
+    // that got done.
+    changing.map((r) => ({ id: r.id, title: displayTitle(r.title, r.counterValue) })),
     completed
   );
 
+  // A recurring task doesn't stay done — the completion is recorded, then the
+  // task moves to its next deadline. This is why task_completions exists: the
+  // row's own completedAt is about to be cleared again.
+  const rolled = completed
+    ? await rollForward(id, session.userId, candidateIds)
+    : null;
+
   refresh();
-  return changing.map((r) => r.id);
+  return { changed: changing.map((r) => r.id), rolled };
 }
 
 /**
@@ -302,18 +438,54 @@ export async function toggleTaskCompletionAction(
  */
 export async function setTaskCompletionAction(
   ids: number[],
-  completed: boolean
+  completed: boolean,
+  rolled: RolledForward | null = null
 ): Promise<void> {
   const session = await requireAuth();
+
+  // Undoing a completion that rolled the task forward has to put the deadline
+  // and the counter back too, or "undo" would quietly leave it a week ahead.
+  if (rolled) {
+    const [task] = await db
+      .select({
+        remindOffsetMinutes: tasks.remindOffsetMinutes,
+        remindOffsetDays: tasks.remindOffsetDays,
+        remindTimeOfDay: tasks.remindTimeOfDay,
+      })
+      .from(tasks)
+      .where(and(eq(tasks.id, rolled.taskId), eq(tasks.userId, session.userId)))
+      .limit(1);
+
+    await db
+      .update(tasks)
+      .set({
+        dueDatetime: rolled.previousDue,
+        counterValue: rolled.previousCounter,
+        remindAt: task
+          ? computeRemindAt(
+              rolled.previousDue,
+              task.remindOffsetMinutes,
+              task.remindOffsetDays,
+              task.remindTimeOfDay
+            )
+          : null,
+      })
+      .where(and(eq(tasks.id, rolled.taskId), eq(tasks.userId, session.userId)));
+  }
+
   if (ids.length === 0) return;
 
   const rows = await db
-    .select({ id: tasks.id, title: tasks.title })
+    .select({ id: tasks.id, title: tasks.title, counterValue: tasks.counterValue })
     .from(tasks)
     .where(and(inArray(tasks.id, ids), eq(tasks.userId, session.userId)));
   if (rows.length === 0) return;
 
-  await applyCompletion(session.userId, rows, completed);
+  await applyCompletion(
+    session.userId,
+    rows.map((r) => ({ id: r.id, title: displayTitle(r.title, r.counterValue) })),
+    completed
+  );
   refresh();
 }
 
@@ -614,6 +786,46 @@ export async function setTaskScheduleAction(
       remindOffsetMinutes: input.remindOffsetMinutes,
       remindOffsetDays: input.remindOffsetDays,
       remindTimeOfDay,
+    })
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)));
+
+  refresh();
+}
+
+/**
+ * Set (or clear) a task's repeat rule and its optional numbering.
+ *
+ * Recurrence is rolling: one row that advances, not a run of rows generated up
+ * front. That means editing it is unambiguous — there is no "this occurrence
+ * or the whole series?" question, because there is only ever one row.
+ *
+ * A repeat needs a deadline to advance from, so setting one without a deadline
+ * is refused rather than silently stored and ignored.
+ */
+export async function setTaskRecurrenceAction(
+  taskId: number,
+  rrule: string | null,
+  counterStart: number | null,
+  counterEnd: number | null
+): Promise<void> {
+  const session = await requireAuth();
+
+  const [task] = await db
+    .select({ dueDatetime: tasks.dueDatetime, counterValue: tasks.counterValue })
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)))
+    .limit(1);
+  if (!task) throw new Error('Task not found');
+  if (rrule && !task.dueDatetime) throw new Error('Give the task a deadline before it can repeat');
+
+  await db
+    .update(tasks)
+    .set({
+      rrule,
+      // Clearing the repeat clears the numbering with it; a counter that no
+      // longer counts anything would just be a stray number in the title.
+      counterValue: rrule ? (counterStart ?? task.counterValue ?? null) : null,
+      counterEnd: rrule ? counterEnd : null,
     })
     .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)));
 
