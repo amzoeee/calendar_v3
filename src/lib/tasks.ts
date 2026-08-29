@@ -19,6 +19,13 @@ export const MAX_TASK_DEPTH = 1;
  */
 export const MAX_VISIBLE_BOARDS = 3;
 
+/**
+ * Which lists were last shown side by side, mirrored into a cookie so the
+ * /tasks redirect can restore them on the server. A cookie rather than
+ * localStorage because the decision is made before the client runs.
+ */
+export const VISIBLE_BOARDS_COOKIE = 'taskBoards';
+
 export type SortMode = 'manual' | 'alpha' | 'created' | 'remind' | 'deadline';
 
 // Sort modes offered in the UI today. `remind` and `deadline` are valid values

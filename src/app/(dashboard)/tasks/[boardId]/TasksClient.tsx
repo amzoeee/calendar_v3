@@ -32,6 +32,7 @@ import {
   SORT_LABELS,
   MAX_TASK_DEPTH,
   MAX_VISIBLE_BOARDS,
+  VISIBLE_BOARDS_COOKIE,
   type SortMode,
   type TaskRow,
   type TaskNode,
@@ -134,6 +135,15 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
 
   const visibleIds = visibleBoards.map((b) => b.id);
   const primary = visibleBoards[0];
+
+  // Mirror the visible set into a cookie so /tasks can restore it on the
+  // server next time. Written from the rendered set rather than from the click
+  // handlers, so arriving via a pasted URL or the back button is remembered
+  // too. Runs after paint, since nothing on this page reads it back.
+  const visibleKey = visibleIds.join(',');
+  useEffect(() => {
+    document.cookie = `${VISIBLE_BOARDS_COOKIE}=${visibleKey}; path=/; max-age=31536000; SameSite=Lax`;
+  }, [visibleKey]);
 
   /**
    * Focus the composer of whichever column the pointer is over, falling back
