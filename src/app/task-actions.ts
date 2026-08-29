@@ -348,6 +348,82 @@ export async function createTaskAction(
   return created.id;
 }
 
+/**
+ * Create many tasks at once from a pasted list.
+ *
+ * Items arrive already parsed and ordered, each with a depth and an optional
+ * deadline, because the caller has shown the user a preview of exactly this
+ * and the two must not disagree. A depth-1 item attaches to the most recent
+ * depth-0 one; an indented first line has no parent to attach to and is
+ * promoted rather than rejected.
+ */
+export async function createTasksBulkAction(
+  boardId: number,
+  items: { title: string; depth: number; dueDate: string | null }[]
+): Promise<number> {
+  const session = await requireAuth();
+
+  const [board] = await db
+    .select({ id: taskBoards.id })
+    .from(taskBoards)
+    .where(and(eq(taskBoards.id, boardId), eq(taskBoards.userId, session.userId)))
+    .limit(1);
+  if (!board) throw new Error('List not found');
+
+  const clean = items
+    .map((i) => ({ ...i, title: i.title.trim() }))
+    .filter((i) => i.title.length > 0);
+  if (clean.length === 0) return 0;
+
+  const tz = await getViewerTimeZone();
+
+  const [{ minOrder }] = await db
+    .select({ minOrder: sql<number>`coalesce(min(${tasks.orderIndex}), 0)` })
+    .from(tasks)
+    .where(
+      and(eq(tasks.userId, session.userId), eq(tasks.boardId, boardId), isNull(tasks.parentId))
+    );
+
+  let topOrder = minOrder - clean.length;
+  let lastTopId: number | null = null;
+  let childOrder = 0;
+  let created = 0;
+
+  for (const item of clean) {
+    const parentId: number | null = item.depth > 0 ? lastTopId : null;
+    const isChild: boolean = parentId !== null;
+
+    const dueDatetime = item.dueDate
+      ? browserDatetimeToServerDbString(`${item.dueDate}T${END_OF_DAY}`, tz)
+      : null;
+
+    // Annotated because lastTopId is assigned from this result and also feeds
+    // the row being inserted, which TypeScript reads as circular otherwise.
+    const inserted: { id: number }[] = await db
+      .insert(tasks)
+      .values({
+        userId: session.userId,
+        boardId,
+        parentId,
+        depth: isChild ? 1 : 0,
+        orderIndex: isChild ? childOrder++ : topOrder++,
+        title: item.title,
+        dueDatetime,
+        dueHasTime: 0,
+      })
+      .returning({ id: tasks.id });
+
+    if (!isChild) {
+      lastTopId = inserted[0].id;
+      childOrder = 0;
+    }
+    created += 1;
+  }
+
+  refresh();
+  return created;
+}
+
 export async function updateTaskAction(
   id: number,
   fields: { title?: string; description?: string | null }

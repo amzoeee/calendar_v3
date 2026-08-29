@@ -59,6 +59,7 @@ import {
   setTaskScheduleAction,
   setTaskRecurrenceAction,
   skipOccurrenceAction,
+  createTasksBulkAction,
 } from '@/app/task-actions';
 import {
   dateToServerDbString,
@@ -745,6 +746,7 @@ function BoardColumn({
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
 
@@ -1270,6 +1272,15 @@ function BoardColumn({
                 <button
                   onClick={() => {
                     setMenuOpen(false);
+                    setPasting(true);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+                >
+                  Paste a list…
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
                     setRenaming(true);
                   }}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
@@ -1320,6 +1331,16 @@ function BoardColumn({
           )}
         </div>
       </div>
+
+      {pasting && (
+        <PasteListDialog
+          onCancel={() => setPasting(false)}
+          onCreate={(items) => {
+            setPasting(false);
+            handlers.run(() => createTasksBulkAction(board.id, items));
+          }}
+        />
+      )}
 
       {renaming && (
         <BoardNameDialog
@@ -1970,6 +1991,160 @@ function TagPicker({
  * which can't be styled, ignores the app's theme, and on some browsers is
  * suppressed outright.
  */
+/**
+ * Bulk entry from a pasted list.
+ *
+ * One task per line; a line indented with a tab or two spaces becomes a
+ * subtask of the line above it. Deadlines come from a control rather than from
+ * syntax in the text — pasting twelve assignment titles and saying "weekly
+ * from Sep 3" is the case this exists for, and it needs no parser to get
+ * wrong. Per-line dates wait for the inline-syntax work.
+ *
+ * The preview is the point: it shows exactly what will be created, including
+ * the dates it worked out, before anything is written.
+ */
+function PasteListDialog({
+  onCancel,
+  onCreate,
+}: {
+  onCancel: () => void;
+  onCreate: (items: { title: string; depth: number; dueDate: string | null }[]) => void;
+}) {
+  const [text, setText] = useState('');
+  const [mode, setMode] = useState<'none' | 'same' | 'series'>('none');
+  const [startDate, setStartDate] = useState(formatDateInputValue(new Date()));
+  const [everyDays, setEveryDays] = useState('7');
+
+  const parsed = useMemo(() => {
+    const lines = text.split('\n').filter((l) => l.trim().length > 0);
+    const out: { title: string; depth: number; dueDate: string | null }[] = [];
+    const step = Number(everyDays) || 1;
+
+    for (const line of lines) {
+      const depth = /^(\t| {2,})/.test(line) ? 1 : 0;
+
+      // Only top-level items get dates; a subtask is a step of its parent, not
+      // a separate thing with its own deadline. `out.length` minus the
+      // subtasks already emitted gives this item's position in the series.
+      let dueDate: string | null = null;
+      if (depth === 0 && startDate) {
+        if (mode === 'same') dueDate = startDate;
+        else if (mode === 'series') {
+          const position = out.filter((o) => o.depth === 0).length;
+          dueDate = shiftDateStr(startDate, position * step);
+        }
+      }
+
+      out.push({ title: line.trim(), depth, dueDate });
+    }
+    return out;
+  }, [text, mode, startDate, everyDays]);
+
+  const field =
+    'rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-card border border-border rounded-xl p-5 space-y-4 shadow-2xl">
+        <div>
+          <h2 className="text-sm font-bold text-foreground">Paste a list</h2>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            One task per line. Indent a line to make it a subtask.
+          </p>
+        </div>
+
+        <textarea
+          autoFocus
+          rows={7}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={'Read ch. 4\n  take notes\n  practice problems\nEssay outline'}
+          className={`${field} w-full resize-y font-mono`}
+        />
+
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Deadlines
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value as typeof mode)}
+              className={`${field} cursor-pointer`}
+            >
+              <option value="none">No deadlines</option>
+              <option value="same">Same date for all</option>
+              <option value="series">Spread out, starting…</option>
+            </select>
+            {mode !== 'none' && (
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={`${field} cursor-pointer`}
+              />
+            )}
+            {mode === 'series' && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                every
+                <input
+                  type="number"
+                  min={1}
+                  value={everyDays}
+                  onChange={(e) => setEveryDays(e.target.value)}
+                  className={`${field} w-14`}
+                />
+                days
+              </span>
+            )}
+          </div>
+        </div>
+
+        {parsed.length > 0 && (
+          <div className="space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Preview — {parsed.length} task{parsed.length === 1 ? '' : 's'}
+            </span>
+            <div className="max-h-40 overflow-y-auto rounded border border-border divide-y divide-border">
+              {parsed.map((item, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-2 px-2 py-1 text-xs"
+                  style={{ paddingLeft: 8 + item.depth * 18 }}
+                >
+                  <span className="truncate text-foreground">{item.title}</span>
+                  {item.dueDate && (
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {item.dueDate}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => parsed.length > 0 && onCreate(parsed)}
+            disabled={parsed.length === 0}
+            className="px-3 py-2 rounded text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Create {parsed.length || ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BoardNameDialog({
   heading,
   initialValue = '',
