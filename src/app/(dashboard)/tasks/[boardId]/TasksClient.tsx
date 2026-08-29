@@ -54,6 +54,7 @@ import {
 } from '@/app/task-actions';
 import { dateToServerDbString } from '@/lib/timezone';
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
+import { clampOverlayX } from '@/lib/overlayPosition';
 
 interface BoardSummary {
   id: number;
@@ -85,7 +86,7 @@ interface ColumnHandlers {
   requestCompletion: (node: TaskNode, completed: boolean) => void;
   toggleStar: (row: TaskRow) => void;
   saveTitle: (id: number, title: string) => void;
-  openEditor: (id: number, anchor: DOMRect) => void;
+  openEditor: (id: number, at: { x: number; y: number }) => void;
   moveTask: (id: number, target: DropTarget) => void;
   dragHandleProps: (id: number, subtreeIds: number[], height: number) => {
     onPointerDown: (e: React.PointerEvent) => void;
@@ -116,9 +117,9 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
 
   const [subtaskParent, setSubtaskParent] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  // Where the edit dialog was opened from, so it can sit beside that row
-  // instead of jumping to the middle of the screen.
-  const [editorAnchor, setEditorAnchor] = useState<DOMRect | null>(null);
+  // The point the edit dialog was opened from — its top-left corner lands
+  // here, the way the calendar's event overlay does.
+  const [editorAt, setEditorAt] = useState<{ x: number; y: number } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [confirmParent, setConfirmParent] = useState<{ node: TaskNode; open: number } | null>(null);
@@ -320,8 +321,8 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
     requestCompletion,
     toggleStar,
     saveTitle,
-    openEditor: (id, anchor) => {
-      setEditorAnchor(anchor);
+    openEditor: (id, at) => {
+      setEditorAt(at);
       setSelectedId(id);
     },
     moveTask,
@@ -437,10 +438,7 @@ export default function TasksClient({ boards, visibleBoards, rows }: TasksClient
       </button>
 
       {selected && (
-        <EditTaskDialog
-          anchor={editorAnchor}
-          onClose={() => setSelectedId(null)}
-        >
+        <EditTaskDialog at={editorAt} onClose={() => setSelectedId(null)}>
           <div className="flex items-start justify-between gap-3">
             <h2 className="text-sm font-bold text-foreground">Edit task</h2>
             <button
@@ -830,7 +828,15 @@ function BoardColumn({
               <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
             </button>
             <button
-              onClick={(e) => handlers.openEditor(node.id, e.currentTarget.getBoundingClientRect())}
+              onClick={(e) => {
+                // A keyboard-activated click reports 0,0 — fall back to the
+                // button itself so the dialog doesn't fly to the corner.
+                const r = e.currentTarget.getBoundingClientRect();
+                handlers.openEditor(
+                  node.id,
+                  e.detail === 0 ? { x: r.left, y: r.top } : { x: e.clientX, y: e.clientY }
+                );
+              }}
               aria-label={`Edit “${node.title}”`}
               className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
             >
@@ -1105,23 +1111,24 @@ function EditableTitle({
 }
 
 /**
- * The edit dialog, positioned beside whatever opened it rather than centred —
- * a card that jumps to the middle of the screen loses the connection to the
- * row you clicked, especially with three columns on screen.
+ * The edit dialog, with its top-left corner at the point you clicked — the
+ * same gesture the calendar's event overlay uses, so the two feel like the
+ * same control. Anchoring to the pointer rather than to the row matters more
+ * with three columns on screen: a card that jumps to the middle of the window
+ * loses which list it belongs to.
  *
- * It anchors off the trigger's bounding box rather than the pointer position,
- * so opening it from the keyboard lands somewhere sensible too. The card is
- * measured after mount and clamped into the viewport; that happens in a layout
- * effect, before paint, so it never renders in the wrong place first. This
- * component is only mounted once a task is selected, which also keeps
- * useLayoutEffect off the server-rendered path.
+ * It shares clampOverlayX with the calendar so the horizontal edge behaviour
+ * is literally the same code. The card is measured after mount and clamped
+ * vertically too; that happens in a layout effect, before paint, so it never
+ * renders in the wrong place first. This component is only mounted once a task
+ * is selected, which also keeps useLayoutEffect off the server-rendered path.
  */
 function EditTaskDialog({
-  anchor,
+  at,
   onClose,
   children,
 }: {
-  anchor: DOMRect | null;
+  at: { x: number; y: number } | null;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -1132,12 +1139,10 @@ function EditTaskDialog({
     const el = ref.current;
     if (!el) return;
 
-    const GAP = 8;
-    const MARGIN = 12;
+    const MARGIN = 10;
     const { width, height } = el.getBoundingClientRect();
 
-    if (!anchor) {
-      // No trigger to anchor to (shouldn't happen in practice) — centre it.
+    if (!at) {
       setPos({
         left: Math.max(MARGIN, (window.innerWidth - width) / 2),
         top: Math.max(MARGIN, (window.innerHeight - height) / 2),
@@ -1145,19 +1150,13 @@ function EditTaskDialog({
       return;
     }
 
-    // Prefer sitting to the right of the trigger; fall back to its left when
-    // that would overflow, which is the common case since the button lives at
-    // the right edge of a column.
-    let left = anchor.right + GAP;
-    if (left + width > window.innerWidth - MARGIN) left = anchor.left - width - GAP;
-    left = Math.max(MARGIN, Math.min(left, window.innerWidth - width - MARGIN));
-
-    // Top-aligned with the row, pulled up only as far as needed to fit.
-    let top = anchor.top - GAP;
-    top = Math.max(MARGIN, Math.min(top, window.innerHeight - height - MARGIN));
+    const left = clampOverlayX(at.x, window.innerWidth, width);
+    // Same idea vertically: keep the corner on the click unless that would
+    // push the card off the bottom, then lift it just enough to fit.
+    const top = Math.max(MARGIN, Math.min(at.y, window.innerHeight - height - MARGIN));
 
     setPos({ left, top });
-  }, [anchor]);
+  }, [at]);
 
   return (
     <>
