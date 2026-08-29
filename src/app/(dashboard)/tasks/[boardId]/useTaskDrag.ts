@@ -9,7 +9,14 @@ import { MAX_TASK_DEPTH } from '@/lib/tasks';
 // misread as a one-pixel drag.
 const DRAG_THRESHOLD = 4;
 // Horizontal travel that means "make this a subtask" / "pull it back out".
-const INDENT_THRESHOLD = 28;
+//
+// Two values, because the two pointers have very different precision. A mouse
+// goes where you put it. A thumb arcs: dragging a row down a list swings it
+// sideways on the way, and at a mouse-sized threshold that reads as a
+// deliberate indent every few drags. Touch therefore has to travel roughly
+// twice as far before the gesture counts as one.
+const INDENT_THRESHOLD_FINE = 36;
+const INDENT_THRESHOLD_COARSE = 72;
 // Matches the per-level padding the rows render with.
 const INDENT_PX = 24;
 
@@ -50,6 +57,8 @@ interface DragSession {
   startY: number;
   /** Left edge of the column the drag began in — see resolve() on why. */
   startColumnLeft: number;
+  /** Chosen from the pointer that started this drag, not from screen size. */
+  indentThreshold: number;
   rows: RowRect[];
   columns: ColumnRect[];
 }
@@ -154,9 +163,9 @@ export function useTaskDrag({
       : null;
 
     const canNest = s.height === 0 && MAX_TASK_DEPTH >= 1;
-    if (dx > INDENT_THRESHOLD && preceding && canNest) {
+    if (dx > s.indentThreshold && preceding && canNest) {
       parentId = preceding.depth === 0 ? preceding.id : preceding.parentId;
-    } else if (dx < -INDENT_THRESHOLD) {
+    } else if (dx < -s.indentThreshold) {
       parentId = null;
     }
 
@@ -226,6 +235,8 @@ export function useTaskDrag({
         if (e.button !== 0 && e.pointerType === 'mouse') return;
         const startX = e.clientX;
         const startY = e.clientY;
+        const indentThreshold =
+          e.pointerType === 'mouse' ? INDENT_THRESHOLD_FINE : INDENT_THRESHOLD_COARSE;
 
         const begin = (ev: PointerEvent) => {
           if (
@@ -244,6 +255,7 @@ export function useTaskDrag({
             startX,
             startY,
             startColumnLeft: startColumn?.left ?? 0,
+            indentThreshold,
             rows,
             columns,
           };
