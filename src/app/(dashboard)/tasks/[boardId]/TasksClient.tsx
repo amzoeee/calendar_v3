@@ -19,6 +19,7 @@ import {
   ListChecks,
   MoreHorizontal,
   Plus,
+  CalendarClock,
   Star,
   Tag as TagIcon,
   Trash2,
@@ -53,8 +54,22 @@ import {
   deleteCompletedTasksAction,
   moveTaskAction,
   setTaskTagsAction,
+  setTaskScheduleAction,
 } from '@/app/task-actions';
-import { dateToServerDbString } from '@/lib/timezone';
+import {
+  dateToServerDbString,
+  pacificDbStringToDate,
+  formatDateInputValue,
+  formatTimeInputValue,
+  shiftDateStr,
+} from '@/lib/timezone';
+import {
+  TIMED_PRESETS,
+  DATED_PRESETS,
+  DEFAULT_REMIND_TIME,
+  dueState,
+  formatDue,
+} from '@/lib/taskSchedule';
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
 
@@ -515,6 +530,12 @@ export default function TasksClient({
             />
           </label>
 
+          <SchedulePicker
+            key={`sched-${selected.id}`}
+            task={selected}
+            onSave={(input) => run(() => setTaskScheduleAction(selected.id, input))}
+          />
+
           <div className="space-y-1">
             <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tags</span>
             <TagPicker
@@ -926,7 +947,10 @@ function BoardColumn({
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
-            <TagChips tags={handlers.tagsFor(node.id)} />
+            <div className="flex items-center gap-2 flex-wrap">
+              <DueChip due={node.dueDatetime} hasTime={node.dueHasTime === 1} done={done} />
+              <TagChips tags={handlers.tagsFor(node.id)} />
+            </div>
           </div>
 
           <div className="flex items-center gap-0.5 shrink-0">
@@ -1484,6 +1508,206 @@ function EditTaskDialog({
         {children}
       </div>
     </>
+  );
+}
+
+/**
+ * A task's deadline, said the way a person would: the time alone when it's
+ * today, a weekday inside the coming week, a date beyond that. Colour carries
+ * urgency so a list can be scanned without reading every date, and a completed
+ * task drops back to grey — a finished task being "overdue" is noise.
+ */
+function DueChip({
+  due,
+  hasTime,
+  done,
+}: {
+  due: string | null;
+  hasTime: boolean;
+  done: boolean;
+}) {
+  if (!due) return null;
+
+  const now = new Date();
+  const dueDate = pacificDbStringToDate(due);
+  const state = done ? 'later' : dueState(formatDateInputValue(dueDate), formatDateInputValue(now));
+
+  const tone = done
+    ? 'text-muted-foreground'
+    : state === 'overdue'
+      ? 'text-red-400'
+      : state === 'today'
+        ? 'text-amber-400'
+        : 'text-muted-foreground';
+
+  return (
+    <span className={`flex items-center gap-1 text-[10px] leading-none shrink-0 ${tone}`}>
+      <CalendarClock className="h-2.5 w-2.5" />
+      {formatDue(dueDate, hasTime, now)}
+    </span>
+  );
+}
+
+/**
+ * Deadline and reminder for one task.
+ *
+ * The reminder is stored as an offset, not a fixed moment, so that it follows
+ * the deadline when the deadline moves — which is the whole reason recurring
+ * tasks will be able to carry one. The offset comes in two shapes because
+ * deadlines do: minutes before a deadline that names a time, whole days plus a
+ * time of day for one that names only a date.
+ *
+ * The preview underneath is computed here in the viewer's own terms rather
+ * than read back from the server, so it updates as the fields change. It
+ * mirrors the same two rules the server uses.
+ */
+function SchedulePicker({
+  task,
+  onSave,
+}: {
+  task: TaskRow;
+  onSave: (input: {
+    dueDate: string | null;
+    dueTime: string | null;
+    remindOffsetMinutes: number | null;
+    remindOffsetDays: number | null;
+    remindTimeOfDay: string | null;
+  }) => void;
+}) {
+  const initialDue = task.dueDatetime ? pacificDbStringToDate(task.dueDatetime) : null;
+  const [dueDate, setDueDate] = useState(initialDue ? formatDateInputValue(initialDue) : '');
+  const [dueTime, setDueTime] = useState(
+    initialDue && task.dueHasTime ? formatTimeInputValue(initialDue) : ''
+  );
+  const [minutes, setMinutes] = useState<number | null>(task.remindOffsetMinutes ?? null);
+  const [days, setDays] = useState<number | null>(task.remindOffsetDays ?? null);
+  const [remindTime, setRemindTime] = useState(task.remindTimeOfDay ?? DEFAULT_REMIND_TIME);
+
+  const commit = (next: Partial<{
+    dueDate: string;
+    dueTime: string;
+    minutes: number | null;
+    days: number | null;
+    remindTime: string;
+  }>) => {
+    const d = next.dueDate ?? dueDate;
+    const t = next.dueTime ?? dueTime;
+    const m = next.minutes !== undefined ? next.minutes : minutes;
+    const dy = next.days !== undefined ? next.days : days;
+    const rt = next.remindTime ?? remindTime;
+
+    onSave({
+      dueDate: d || null,
+      dueTime: t || null,
+      // Only the shape matching the deadline is sent; the other stays null so
+      // computeRemindAt can't be handed both and have to guess.
+      remindOffsetMinutes: d && t ? m : null,
+      remindOffsetDays: d && !t ? dy : null,
+      remindTimeOfDay: d && !t && dy != null ? rt : null,
+    });
+  };
+
+  // What will actually happen, in the viewer's own timezone.
+  let preview: string | null = null;
+  if (dueDate && dueTime && minutes != null) {
+    const at = new Date(`${dueDate}T${dueTime}`);
+    at.setMinutes(at.getMinutes() - minutes);
+    preview = at.toLocaleString([], {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } else if (dueDate && !dueTime && days != null) {
+    const at = new Date(`${shiftDateStr(dueDate, -days)}T${remindTime}`);
+    preview = at.toLocaleString([], {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  const field =
+    'rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Deadline
+        </span>
+        <div className="flex gap-1.5">
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => {
+              setDueDate(e.target.value);
+              commit({ dueDate: e.target.value });
+            }}
+            className={`${field} flex-1 min-w-0 cursor-pointer`}
+          />
+          <input
+            type="time"
+            value={dueTime}
+            disabled={!dueDate}
+            onChange={(e) => {
+              setDueTime(e.target.value);
+              commit({ dueTime: e.target.value });
+            }}
+            className={`${field} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+          />
+        </div>
+        {dueDate && !dueTime && (
+          <p className="text-[10px] text-muted-foreground">Due any time that day.</p>
+        )}
+      </div>
+
+      {dueDate && (
+        <div className="space-y-1">
+          <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Reminder
+          </span>
+          <div className="flex gap-1.5">
+            <select
+              value={dueTime ? (minutes ?? '') : (days ?? '')}
+              onChange={(e) => {
+                const v = e.target.value === '' ? null : Number(e.target.value);
+                if (dueTime) {
+                  setMinutes(v);
+                  commit({ minutes: v });
+                } else {
+                  setDays(v);
+                  commit({ days: v });
+                }
+              }}
+              className={`${field} flex-1 min-w-0 cursor-pointer`}
+            >
+              <option value="">No reminder</option>
+              {(dueTime ? TIMED_PRESETS : DATED_PRESETS).map((p) => (
+                <option key={p.label} value={dueTime ? p.minutes : p.days}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            {!dueTime && days != null && (
+              <input
+                type="time"
+                value={remindTime}
+                onChange={(e) => {
+                  setRemindTime(e.target.value);
+                  commit({ remindTime: e.target.value });
+                }}
+                className={`${field} w-[6.25rem] cursor-pointer`}
+              />
+            )}
+          </div>
+          {preview && <p className="text-[10px] text-muted-foreground">Reminds {preview}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 
