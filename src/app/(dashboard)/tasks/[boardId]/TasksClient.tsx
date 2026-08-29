@@ -720,14 +720,54 @@ function BoardColumn({
 
   const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0);
 
+  /**
+   * Filtering keeps a matching task's family with it, in both directions:
+   *
+   * - **Ancestors**, so a matching subtask still appears under its parent. On
+   *   its own a matched subtask loses the only thing that said what it was
+   *   part of.
+   * - **Descendants**, so a matched task is never shown looking childless.
+   *
+   * A task is therefore shown when it matches, when anything in its subtree
+   * matches, or when any of its ancestors match.
+   */
   const visibleRows = useMemo(() => {
     if (activeFilters === 0) return rows;
-    return rows.filter((r) => {
+
+    const matches = (r: TaskRow) => {
       if (starredOnly && !r.isStarred) return false;
       if (filterTagIds.length === 0) return true;
       // OR across selected tags: a task matches if it carries any of them.
       return handlers.tagsFor(r.id).some((t) => filterTagIds.includes(t.id));
-    });
+    };
+
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const keep = new Set<number>();
+
+    for (const row of rows) {
+      if (!matches(row)) continue;
+      keep.add(row.id);
+      for (let p = row.parentId; p != null; p = byId.get(p)?.parentId ?? null) {
+        if (keep.has(p) || !byId.has(p)) break;
+        keep.add(p);
+      }
+    }
+
+    // Descendants of anything matched. Walked breadth-first rather than
+    // recursively so it stays correct at any depth.
+    let frontier = rows.filter((r) => matches(r)).map((r) => r.id);
+    while (frontier.length > 0) {
+      const next: number[] = [];
+      for (const row of rows) {
+        if (row.parentId != null && frontier.includes(row.parentId) && !keep.has(row.id)) {
+          keep.add(row.id);
+          next.push(row.id);
+        }
+      }
+      frontier = next;
+    }
+
+    return rows.filter((r) => keep.has(r.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, filterTagIds, starredOnly, activeFilters]);
 
@@ -812,9 +852,13 @@ function BoardColumn({
     });
   };
 
-  const renderRow = (node: TaskNode, done: boolean) => {
+  // `level` is the row's position in the tree being rendered, which is not
+  // always node.depth: buildTaskTree promotes a row whose parent isn't in the
+  // list to the top level, and such a row has to render flush rather than
+  // indented under nothing.
+  const renderRow = (node: TaskNode, done: boolean, level = 0) => {
     const isEditing = editingId === node.id;
-    const indent = node.depth * 24;
+    const indent = level * 24;
     const descendants = flattenTaskTree([node]);
     const subtreeIds = descendants.map((n) => n.id);
     // Deepest level below this task: a parent can't be nested, a leaf can.
@@ -946,7 +990,9 @@ function BoardColumn({
           </div>
         )}
 
-        {node.children.map((child) => renderRow(child, Boolean(child.completedAt)))}
+        {node.children.map((child) =>
+          renderRow(child, Boolean(child.completedAt), level + 1)
+        )}
       </div>
     );
   };
