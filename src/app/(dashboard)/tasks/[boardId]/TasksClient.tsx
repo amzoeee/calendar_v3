@@ -489,33 +489,33 @@ export default function TasksClient({
             </button>
           </div>
 
-          <label className="block space-y-1.5">
+          <label className="block space-y-1">
             <span className="text-xs font-semibold text-muted-foreground">Title</span>
             <input
               key={`title-${selected.id}`}
               defaultValue={selected.title}
               onBlur={(e) => saveTitle(selected.id, e.target.value)}
-              className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full rounded bg-secondary border border-border px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </label>
 
-          <label className="block space-y-1.5">
+          <label className="block space-y-1">
             <span className="text-xs font-semibold text-muted-foreground">Notes</span>
             <textarea
               key={`desc-${selected.id}`}
               defaultValue={selected.description ?? ''}
-              rows={4}
+              rows={3}
               onBlur={(e) => {
                 const next = e.target.value.trim() || null;
                 if (next === (selected.description ?? null)) return;
                 patchLocal([selected.id], { description: next });
                 run(() => updateTaskAction(selected.id, { description: next }));
               }}
-              className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
+              className="w-full rounded bg-secondary border border-border px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-y"
             />
           </label>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <span className="text-xs font-semibold text-muted-foreground">Tags</span>
             <TagPicker
               all={availableTags}
@@ -524,7 +524,7 @@ export default function TasksClient({
             />
           </div>
 
-          <label className="block space-y-1.5">
+          <label className="block space-y-1">
             <span className="text-xs font-semibold text-muted-foreground">List</span>
             <select
               value={selected.boardId}
@@ -533,7 +533,7 @@ export default function TasksClient({
                 setSelectedId(null);
                 run(() => moveTaskToBoardAction(selected.id, target));
               }}
-              className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+              className="w-full rounded bg-secondary border border-border px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
             >
               {boards.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -1448,7 +1448,7 @@ function EditTaskDialog({
           // Hidden for the single frame between mount and measurement.
           visibility: pos ? 'visible' : 'hidden',
         }}
-        className="fixed z-50 w-[min(24rem,calc(100vw-1.5rem))] max-h-[80vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-5 space-y-5"
+        className="fixed z-50 w-[min(21rem,calc(100vw-1.5rem))] max-h-[70vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-4 space-y-3.5"
       >
         {children}
       </div>
@@ -1519,7 +1519,7 @@ function TagPicker({
           className="w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
       )}
-      <div className="max-h-40 overflow-y-auto rounded border border-border">
+      <div className="max-h-32 overflow-y-auto rounded border border-border">
         {matches.length === 0 && (
           <p className="px-2 py-2 text-xs text-muted-foreground">No tag matches “{query}”.</p>
         )}
