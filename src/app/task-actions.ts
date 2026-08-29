@@ -481,6 +481,7 @@ export async function toggleTaskCompletionAction(
       title: tasks.title,
       counterValue: tasks.counterValue,
       completedAt: tasks.completedAt,
+      dueDatetime: tasks.dueDatetime,
     })
     .from(tasks)
     .where(and(inArray(tasks.id, candidateIds), eq(tasks.userId, session.userId)));
@@ -493,7 +494,11 @@ export async function toggleTaskCompletionAction(
     // The snapshot records what was finished, so a numbered task has to have
     // its counter resolved — "Problem Set {n}" is the template, not the thing
     // that got done.
-    changing.map((r) => ({ id: r.id, title: displayTitle(r.title, r.counterValue) })),
+    changing.map((r) => ({
+      id: r.id,
+      title: displayTitle(r.title, r.counterValue),
+      dueDatetime: r.dueDatetime,
+    })),
     completed
   );
 
@@ -552,14 +557,23 @@ export async function setTaskCompletionAction(
   if (ids.length === 0) return;
 
   const rows = await db
-    .select({ id: tasks.id, title: tasks.title, counterValue: tasks.counterValue })
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      counterValue: tasks.counterValue,
+      dueDatetime: tasks.dueDatetime,
+    })
     .from(tasks)
     .where(and(inArray(tasks.id, ids), eq(tasks.userId, session.userId)));
   if (rows.length === 0) return;
 
   await applyCompletion(
     session.userId,
-    rows.map((r) => ({ id: r.id, title: displayTitle(r.title, r.counterValue) })),
+    rows.map((r) => ({
+      id: r.id,
+      title: displayTitle(r.title, r.counterValue),
+      dueDatetime: r.dueDatetime,
+    })),
     completed
   );
   refresh();
@@ -574,7 +588,7 @@ export async function setTaskCompletionAction(
  */
 async function applyCompletion(
   userId: number,
-  rows: { id: number; title: string }[],
+  rows: { id: number; title: string; dueDatetime: string | null }[],
   completed: boolean
 ): Promise<void> {
   const ids = rows.map((r) => r.id);
@@ -592,6 +606,7 @@ async function applyCompletion(
         taskId: r.id,
         completedAt: stamp as string,
         titleSnapshot: r.title,
+        dueSnapshot: r.dueDatetime,
       }))
     );
   } else {

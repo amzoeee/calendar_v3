@@ -114,4 +114,9 @@ export const taskCompletions = sqliteTable('task_completions', {
   taskId: integer('task_id').notNull().references(() => tasks.id),
   completedAt: text('completed_at').notNull(),
   titleSnapshot: text('title_snapshot').notNull(),
+  // The deadline as it stood when this was ticked. A rolling task's current
+  // dueDatetime is the *next* occurrence, so comparing a past completion
+  // against it would call every recurring task late. Null on rows written
+  // before this existed, and on tasks that never had a deadline.
+  dueSnapshot: text('due_snapshot'),
 });

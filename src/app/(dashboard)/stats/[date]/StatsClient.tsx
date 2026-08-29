@@ -25,6 +25,8 @@ interface StatsClientProps {
   weekdaysOnly: boolean;
   tagHoursByDay: Record<string, Record<string, number>>;
   tags: Tag[];
+  tasksDoneByDay: Record<string, Record<string, number>>;
+  taskPunctuality: { onTime: number; late: number; undated: number };
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -48,12 +50,26 @@ const isSensibleDate = (s: string) => {
   return !isNaN(d.getTime()) && d.getFullYear() >= 1000;
 };
 
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="bg-secondary/40 border border-border rounded-lg p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className="text-xl font-bold text-foreground tabular-nums mt-0.5">{value}</p>
+      {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
 export default function StatsClient({
   startDate,
   endDate,
   weekdaysOnly,
   tagHoursByDay,
   tags,
+  tasksDoneByDay,
+  taskPunctuality,
 }: StatsClientProps) {
   const start = new Date(startDate + 'T00:00:00');
   const end = new Date(endDate + 'T00:00:00');
@@ -203,6 +219,35 @@ export default function StatsClient({
     const totalHours = visibleDays.reduce((sum, d) => sum + (d.hours[tag] || 0), 0);
     tagAverages[tag] = activeDaysWithData > 0 ? totalHours / activeDaysWithData : 0;
   });
+
+  // ---- Task completions ------------------------------------------------
+  //
+  // Kept as its own section rather than merged into the chart above: hours and
+  // counts aren't the same unit, and sharing an axis would misrepresent both.
+  const taskDays = visibleDays.map((d) => {
+    const counts = tasksDoneByDay[d.dateStr] || {};
+    return { ...d, counts, done: Object.values(counts).reduce((a, b) => a + b, 0) };
+  });
+
+  const taskTagTotals: Record<string, number> = {};
+  for (const d of taskDays) {
+    for (const [tag, n] of Object.entries(d.counts)) {
+      taskTagTotals[tag] = (taskTagTotals[tag] ?? 0) + n;
+    }
+  }
+
+  const punctualityTotal =
+    taskPunctuality.onTime + taskPunctuality.late + taskPunctuality.undated;
+  const dated = taskPunctuality.onTime + taskPunctuality.late;
+  const onTimeRate = dated > 0 ? Math.round((taskPunctuality.onTime / dated) * 100) : null;
+
+  const taskActiveDays = taskDays.filter((d) => d.done > 0).length;
+  // Per-tag totals double-count a task carrying two tags, so the headline
+  // figure comes from the punctuality tally, which counts completions once.
+  const totalDone = punctualityTotal;
+  const perActiveDay = taskActiveDays > 0 ? totalDone / taskActiveDays : 0;
+  const maxTaskDay = taskDays.reduce((m, d) => Math.max(m, d.done), 0);
+  const multiTagged = Object.values(taskTagTotals).reduce((a, b) => a + b, 0) > totalDone;
 
   const getTagColor = (tagName: string) => {
     if (tagName === 'Untagged') return '#6b7280';
@@ -408,6 +453,92 @@ export default function StatsClient({
               </span>)
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* TASKS COMPLETED — its own section, because counts and hours are not
+          the same unit and sharing an axis would misrepresent both. */}
+      <div className="shrink-0 px-4 md:px-8 pb-4 md:pb-8">
+        <div className="bg-card rounded-xl border border-border p-4 md:p-6 space-y-4">
+          <div>
+            <h2 className="text-lg md:text-xl font-bold tracking-tight">Tasks Completed</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {totalDone === 0
+                ? 'Nothing ticked off in this range.'
+                : `${totalDone} task${totalDone === 1 ? '' : 's'} over ${taskActiveDays} active day${taskActiveDays === 1 ? '' : 's'} — ${perActiveDay.toFixed(1)} a day`}
+            </p>
+          </div>
+
+          {totalDone > 0 && (
+            <>
+              {/* Per-day bars, stacked by tag. */}
+              <div className="overflow-x-auto">
+                <div className="flex items-end gap-1 h-28 min-w-[420px]">
+                  {taskDays.map((d) => (
+                    <div key={d.dateStr} className="flex-1 h-full flex flex-col justify-end group/bar">
+                      <div className="w-full flex flex-col-reverse rounded-t overflow-hidden">
+                        {Object.entries(d.counts).map(([tag, n]) => (
+                          <div
+                            key={tag}
+                            title={`${d.dayDisplay} · ${tag}: ${n}`}
+                            style={{
+                              height: `${maxTaskDay > 0 ? (n / maxTaskDay) * 96 : 0}px`,
+                              backgroundColor: getTagColor(tag),
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[9px] text-muted-foreground text-center mt-1 truncate">
+                        {d.done > 0 ? d.done : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Stat label="Completed" value={String(totalDone)} />
+                <Stat label="Per active day" value={perActiveDay.toFixed(1)} />
+                <Stat
+                  label="On time"
+                  value={onTimeRate == null ? '—' : `${onTimeRate}%`}
+                  hint={
+                    onTimeRate == null
+                      ? 'No deadlines to judge against'
+                      : `${taskPunctuality.onTime} on time · ${taskPunctuality.late} late`
+                  }
+                />
+                <Stat
+                  label="No deadline"
+                  value={String(taskPunctuality.undated)}
+                  hint="Not counted in the on-time rate"
+                />
+              </div>
+
+              {Object.keys(taskTagTotals).length > 0 && (
+                <div className="space-y-1.5">
+                  {Object.entries(taskTagTotals)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([tag, n]) => (
+                      <div key={tag} className="flex items-center gap-2 text-sm">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: getTagColor(tag) }}
+                        />
+                        <span className="flex-1 truncate text-foreground">{tag}</span>
+                        <span className="text-muted-foreground tabular-nums">{n}</span>
+                      </div>
+                    ))}
+                  {multiTagged && (
+                    <p className="text-[11px] text-muted-foreground pt-1">
+                      A task with two tags counts under each, so these add up to more
+                      than {totalDone}.
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 

@@ -1,10 +1,15 @@
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';
-import { events as eventsTable, tags as tagsTable } from '@/db/schema';
-import { eq, and, or, gte, lt, lte } from 'drizzle-orm';
+import {
+  events as eventsTable,
+  tags as tagsTable,
+  taskCompletions,
+  taskTags,
+} from '@/db/schema';
+import { eq, and, or, gte, lt, lte, inArray } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import StatsClient from './StatsClient';
-import { dbStringToUtcMillis } from '@/lib/timezone';
+import { dbStringToUtcMillis, dayStrOfInstant } from '@/lib/timezone';
 import { getViewerTimeZone, todayForViewer } from '@/lib/server-timezone';
 
 interface PageProps {
@@ -157,8 +162,75 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
     }
   }
 
+  // ---- Task completions in the same range -------------------------------
+  //
+  // Read from task_completions rather than from tasks.completedAt: a rolling
+  // task clears that column every time it advances, so the tasks table knows
+  // only whether something is done right now, not what was finished when.
+  const completions = await db
+    .select({
+      taskId: taskCompletions.taskId,
+      completedAt: taskCompletions.completedAt,
+      dueSnapshot: taskCompletions.dueSnapshot,
+    })
+    .from(taskCompletions)
+    .where(
+      and(
+        eq(taskCompletions.userId, session.userId),
+        gte(taskCompletions.completedAt, startStr),
+        lt(taskCompletions.completedAt, endStr)
+      )
+    );
+
+  // Tags are read live rather than snapshotted, so renaming or retagging
+  // rewrites history. That's the right trade for a tag — you want the chart to
+  // use what the tag means now — but it does mean these counts can move.
+  const completedTaskIds = [...new Set(completions.map((c) => c.taskId))];
+  const completionTagLinks = completedTaskIds.length
+    ? await db
+        .select({ taskId: taskTags.taskId, tagId: taskTags.tagId })
+        .from(taskTags)
+        .where(inArray(taskTags.taskId, completedTaskIds))
+    : [];
+
+  const tagNameById = new Map(dbTags.map((t) => [t.id, t.name]));
+  const tagNamesByTask: Record<number, string[]> = {};
+  for (const link of completionTagLinks) {
+    const name = tagNameById.get(link.tagId);
+    if (name) (tagNamesByTask[link.taskId] ??= []).push(name);
+  }
+
+  const tasksDoneByDay: Record<string, Record<string, number>> = {};
+  for (const day of rangeDates) tasksDoneByDay[toDateStr(day)] = {};
+
+  let onTime = 0;
+  let late = 0;
+  let undated = 0;
+
+  for (const c of completions) {
+    // Bucket by the viewer's day, the same way event hours are clipped.
+    const dayStr = dayStrOfInstant(dbStringToUtcMillis(c.completedAt), viewerTimeZone);
+    const bucket = tasksDoneByDay[dayStr];
+    if (!bucket) continue;
+
+    // A task with two tags counts once under each, so the per-tag numbers sum
+    // to more than the total. Surfaced in the UI rather than hidden.
+    const names = tagNamesByTask[c.taskId];
+    if (names && names.length > 0) {
+      for (const name of names) bucket[name] = (bucket[name] ?? 0) + 1;
+    } else {
+      bucket['Untagged'] = (bucket['Untagged'] ?? 0) + 1;
+    }
+
+    if (!c.dueSnapshot) undated += 1;
+    else if (c.completedAt <= c.dueSnapshot) onTime += 1;
+    else late += 1;
+  }
+
   return (
     <StatsClient
+      tasksDoneByDay={tasksDoneByDay}
+      taskPunctuality={{ onTime, late, undated }}
       startDate={toDateStr(startDate)}
       endDate={toDateStr(endDate)}
       weekdaysOnly={weekdaysOnly}
