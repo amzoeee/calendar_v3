@@ -116,3 +116,30 @@ export function formatDue(due: Date, hasTime: boolean, now: Date): string {
 
   return hasTime ? `${label}, ${time}` : label;
 }
+
+/** Frequencies a task can repeat on, and the RRULE each one produces. */
+export const REPEAT_OPTIONS: { label: string; rrule: string | null }[] = [
+  { label: 'Does not repeat', rrule: null },
+  { label: 'Every day', rrule: 'FREQ=DAILY;INTERVAL=1' },
+  { label: 'Every week', rrule: 'FREQ=WEEKLY;INTERVAL=1' },
+  { label: 'Every 2 weeks', rrule: 'FREQ=WEEKLY;INTERVAL=2' },
+  { label: 'Every month', rrule: 'FREQ=MONTHLY;INTERVAL=1' },
+  { label: 'Every year', rrule: 'FREQ=YEARLY;INTERVAL=1' },
+];
+
+export function repeatLabel(rrule: string | null): string | null {
+  if (!rrule) return null;
+  return REPEAT_OPTIONS.find((o) => o.rrule === rrule)?.label ?? 'Repeats';
+}
+
+/**
+ * Substitute a rolling task's counter into its title.
+ *
+ * The stored title keeps the `{n}` placeholder — it's the template, and
+ * editing the task should show what will carry forward — so the substitution
+ * happens only at display time.
+ */
+export function displayTitle(title: string, counter: number | null): string {
+  if (counter == null) return title;
+  return title.replace(/\{n\}/g, String(counter));
+}

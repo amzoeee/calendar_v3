@@ -69,6 +69,9 @@ export default async function TasksBoardPage({ params }: PageProps) {
       remindTimeOfDay: tasksTable.remindTimeOfDay,
       isStarred: tasksTable.isStarred,
       completedAt: tasksTable.completedAt,
+      rrule: tasksTable.rrule,
+      counterValue: tasksTable.counterValue,
+      counterEnd: tasksTable.counterEnd,
       createdAt: tasksTable.createdAt,
     })
     .from(tasksTable)

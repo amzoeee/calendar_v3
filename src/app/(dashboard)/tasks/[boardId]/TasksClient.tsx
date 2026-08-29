@@ -20,6 +20,8 @@ import {
   MoreHorizontal,
   Plus,
   CalendarClock,
+  Repeat,
+  SkipForward,
   Star,
   Tag as TagIcon,
   Trash2,
@@ -55,6 +57,9 @@ import {
   moveTaskAction,
   setTaskTagsAction,
   setTaskScheduleAction,
+  setTaskRecurrenceAction,
+  skipOccurrenceAction,
+  createTasksBulkAction,
 } from '@/app/task-actions';
 import {
   dateToServerDbString,
@@ -69,6 +74,9 @@ import {
   DEFAULT_REMIND_TIME,
   dueState,
   formatDue,
+  displayTitle,
+  repeatLabel,
+  REPEAT_OPTIONS,
 } from '@/lib/taskSchedule';
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
@@ -291,19 +299,24 @@ export default function TasksClient({
     patchLocal(optimistic, { completedAt: completed ? dateToServerDbString(new Date()) : null });
 
     startTransition(async () => {
-      const changed = await toggleTaskCompletionAction(node.id, completed, cascade);
+      const { changed, rolled } = await toggleTaskCompletionAction(node.id, completed, cascade);
       if (changed.length > 0) {
+        const name = displayTitle(node.title, node.counterValue);
         raiseUndo({
-          message: completed
-            ? changed.length > 1
-              ? `Completed “${node.title}” and ${changed.length - 1} subtask${changed.length > 2 ? 's' : ''}`
-              : `Completed “${node.title}”`
-            : `Moved “${node.title}” back to your list`,
+          message: !completed
+            ? `Moved “${name}” back to your list`
+            : rolled
+              ? // A recurring task didn't stay done, so saying "completed" and
+                // leaving it in the list would look like nothing happened.
+                `Completed “${name}” — moved to the next one`
+              : changed.length > 1
+                ? `Completed “${name}” and ${changed.length - 1} subtask${changed.length > 2 ? 's' : ''}`
+                : `Completed “${name}”`,
           undo: () => {
             patchLocal(changed, {
               completedAt: completed ? null : dateToServerDbString(new Date()),
             });
-            run(() => setTaskCompletionAction(changed, !completed));
+            run(() => setTaskCompletionAction(changed, !completed, rolled));
           },
         });
       }
@@ -536,6 +549,18 @@ export default function TasksClient({
             onSave={(input) => run(() => setTaskScheduleAction(selected.id, input))}
           />
 
+          <RepeatPicker
+            key={`rep-${selected.id}`}
+            task={selected}
+            onSave={(rrule, start, end) =>
+              run(() => setTaskRecurrenceAction(selected.id, rrule, start, end))
+            }
+            onSkip={() => {
+              setSelectedId(null);
+              run(() => skipOccurrenceAction(selected.id));
+            }}
+          />
+
           <div className="space-y-1">
             <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tags</span>
             <TagPicker
@@ -721,6 +746,7 @@ function BoardColumn({
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
 
@@ -917,7 +943,11 @@ function BoardColumn({
 
           <button
             onClick={() => handlers.requestCompletion(node, !done)}
-            aria-label={done ? `Mark “${node.title}” not done` : `Mark “${node.title}” done`}
+            aria-label={
+              done
+                ? `Mark “${displayTitle(node.title, node.counterValue)}” not done`
+                : `Mark “${displayTitle(node.title, node.counterValue)}” done`
+            }
             className={`mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
               done
                 ? 'bg-primary border-primary text-primary-foreground'
@@ -942,13 +972,13 @@ function BoardColumn({
                   done ? 'line-through text-muted-foreground' : 'text-foreground'
                 }`}
               >
-                {node.title}
+                {displayTitle(node.title, node.counterValue)}
               </button>
             )}
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
-            {(node.dueDatetime || rowTags.length > 0) && (
+            {(node.dueDatetime || node.rrule || rowTags.length > 0) && (
               /* gap-x/gap-y separately: a single `gap` on a wrapping flex
                  applies to both axes, so the deadline wrapping above the tags
                  opened a full row-gap between them. The top margin lives here
@@ -956,6 +986,15 @@ function BoardColumn({
                  an empty strip. */
               <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
                 <DueChip due={node.dueDatetime} hasTime={node.dueHasTime === 1} done={done} />
+                {node.rrule && (
+                  <span
+                    title={repeatLabel(node.rrule) ?? undefined}
+                    className="flex items-center gap-1 text-[10px] leading-none text-muted-foreground shrink-0"
+                  >
+                    <Repeat className="h-2.5 w-2.5" />
+                    {repeatLabel(node.rrule)}
+                  </span>
+                )}
                 <TagChips tags={rowTags} />
               </div>
             )}
@@ -1233,6 +1272,15 @@ function BoardColumn({
                 <button
                   onClick={() => {
                     setMenuOpen(false);
+                    setPasting(true);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+                >
+                  Paste a list…
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
                     setRenaming(true);
                   }}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
@@ -1283,6 +1331,16 @@ function BoardColumn({
           )}
         </div>
       </div>
+
+      {pasting && (
+        <PasteListDialog
+          onCancel={() => setPasting(false)}
+          onCreate={(items) => {
+            setPasting(false);
+            handlers.run(() => createTasksBulkAction(board.id, items));
+          }}
+        />
+      )}
 
       {renaming && (
         <BoardNameDialog
@@ -1720,6 +1778,117 @@ function SchedulePicker({
 }
 
 /**
+ * Repeat rule and optional numbering for one task.
+ *
+ * Recurrence here is rolling — the row advances rather than a run of rows
+ * being generated up front — so this edits the single task rather than a
+ * series, and there's no "this one or all of them?" to ask.
+ *
+ * A repeat needs a deadline to advance from, so the control stays disabled
+ * until there is one.
+ */
+function RepeatPicker({
+  task,
+  onSave,
+  onSkip,
+}: {
+  task: TaskRow;
+  onSave: (rrule: string | null, start: number | null, end: number | null) => void;
+  onSkip: () => void;
+}) {
+  const [rrule, setRrule] = useState<string | null>(task.rrule);
+  const [start, setStart] = useState<string>(
+    task.counterValue == null ? '' : String(task.counterValue)
+  );
+  const [end, setEnd] = useState<string>(task.counterEnd == null ? '' : String(task.counterEnd));
+
+  const hasDeadline = Boolean(task.dueDatetime);
+  const numbered = task.title.includes('{n}');
+
+  const field =
+    'rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+
+  const commit = (next: { rrule?: string | null; start?: string; end?: string }) => {
+    const r = next.rrule !== undefined ? next.rrule : rrule;
+    const st = next.start ?? start;
+    const en = next.end ?? end;
+    onSave(r, st === '' ? null : Number(st), en === '' ? null : Number(en));
+  };
+
+  return (
+    <div className="space-y-1">
+      <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Repeat
+      </span>
+      <select
+        value={rrule ?? ''}
+        disabled={!hasDeadline}
+        onChange={(e) => {
+          const v = e.target.value || null;
+          setRrule(v);
+          commit({ rrule: v });
+        }}
+        className={`${field} w-full cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
+      >
+        {REPEAT_OPTIONS.map((o) => (
+          <option key={o.label} value={o.rrule ?? ''}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+
+      {!hasDeadline && (
+        <p className="text-[10px] text-muted-foreground">Set a deadline first.</p>
+      )}
+
+      {rrule && (
+        <>
+          {numbered ? (
+            <div className="flex items-center gap-1.5 pt-1">
+              <span className="text-[10px] text-muted-foreground shrink-0">
+                <code>{'{n}'}</code> from
+              </span>
+              <input
+                type="number"
+                value={start}
+                onChange={(e) => {
+                  setStart(e.target.value);
+                  commit({ start: e.target.value });
+                }}
+                className={`${field} w-14`}
+              />
+              <span className="text-[10px] text-muted-foreground shrink-0">to</span>
+              <input
+                type="number"
+                value={end}
+                placeholder="∞"
+                onChange={(e) => {
+                  setEnd(e.target.value);
+                  commit({ end: e.target.value });
+                }}
+                className={`${field} w-14`}
+              />
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground">
+              Put <code>{'{n}'}</code> in the title to number each one.
+            </p>
+          )}
+
+          <button
+            onClick={onSkip}
+            className="flex items-center gap-2 pt-1 text-sm md:text-xs text-foreground hover:opacity-80 transition-opacity cursor-pointer"
+          >
+            <SkipForward className="h-3.5 w-3.5" />
+            Skip this one
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * A row's tags. Two chips at most before collapsing to a count — a task with
  * five tags shouldn't push its own title out of the row.
  *
@@ -1822,6 +1991,160 @@ function TagPicker({
  * which can't be styled, ignores the app's theme, and on some browsers is
  * suppressed outright.
  */
+/**
+ * Bulk entry from a pasted list.
+ *
+ * One task per line; a line indented with a tab or two spaces becomes a
+ * subtask of the line above it. Deadlines come from a control rather than from
+ * syntax in the text — pasting twelve assignment titles and saying "weekly
+ * from Sep 3" is the case this exists for, and it needs no parser to get
+ * wrong. Per-line dates wait for the inline-syntax work.
+ *
+ * The preview is the point: it shows exactly what will be created, including
+ * the dates it worked out, before anything is written.
+ */
+function PasteListDialog({
+  onCancel,
+  onCreate,
+}: {
+  onCancel: () => void;
+  onCreate: (items: { title: string; depth: number; dueDate: string | null }[]) => void;
+}) {
+  const [text, setText] = useState('');
+  const [mode, setMode] = useState<'none' | 'same' | 'series'>('none');
+  const [startDate, setStartDate] = useState(formatDateInputValue(new Date()));
+  const [everyDays, setEveryDays] = useState('7');
+
+  const parsed = useMemo(() => {
+    const lines = text.split('\n').filter((l) => l.trim().length > 0);
+    const out: { title: string; depth: number; dueDate: string | null }[] = [];
+    const step = Number(everyDays) || 1;
+
+    for (const line of lines) {
+      const depth = /^(\t| {2,})/.test(line) ? 1 : 0;
+
+      // Only top-level items get dates; a subtask is a step of its parent, not
+      // a separate thing with its own deadline. `out.length` minus the
+      // subtasks already emitted gives this item's position in the series.
+      let dueDate: string | null = null;
+      if (depth === 0 && startDate) {
+        if (mode === 'same') dueDate = startDate;
+        else if (mode === 'series') {
+          const position = out.filter((o) => o.depth === 0).length;
+          dueDate = shiftDateStr(startDate, position * step);
+        }
+      }
+
+      out.push({ title: line.trim(), depth, dueDate });
+    }
+    return out;
+  }, [text, mode, startDate, everyDays]);
+
+  const field =
+    'rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+      <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-card border border-border rounded-xl p-5 space-y-4 shadow-2xl">
+        <div>
+          <h2 className="text-sm font-bold text-foreground">Paste a list</h2>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            One task per line. Indent a line to make it a subtask.
+          </p>
+        </div>
+
+        <textarea
+          autoFocus
+          rows={7}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={'Read ch. 4\n  take notes\n  practice problems\nEssay outline'}
+          className={`${field} w-full resize-y font-mono`}
+        />
+
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Deadlines
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value as typeof mode)}
+              className={`${field} cursor-pointer`}
+            >
+              <option value="none">No deadlines</option>
+              <option value="same">Same date for all</option>
+              <option value="series">Spread out, starting…</option>
+            </select>
+            {mode !== 'none' && (
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={`${field} cursor-pointer`}
+              />
+            )}
+            {mode === 'series' && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                every
+                <input
+                  type="number"
+                  min={1}
+                  value={everyDays}
+                  onChange={(e) => setEveryDays(e.target.value)}
+                  className={`${field} w-14`}
+                />
+                days
+              </span>
+            )}
+          </div>
+        </div>
+
+        {parsed.length > 0 && (
+          <div className="space-y-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Preview — {parsed.length} task{parsed.length === 1 ? '' : 's'}
+            </span>
+            <div className="max-h-40 overflow-y-auto rounded border border-border divide-y divide-border">
+              {parsed.map((item, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-2 px-2 py-1 text-xs"
+                  style={{ paddingLeft: 8 + item.depth * 18 }}
+                >
+                  <span className="truncate text-foreground">{item.title}</span>
+                  {item.dueDate && (
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {item.dueDate}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => parsed.length > 0 && onCreate(parsed)}
+            disabled={parsed.length === 0}
+            className="px-3 py-2 rounded text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Create {parsed.length || ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BoardNameDialog({
   heading,
   initialValue = '',
