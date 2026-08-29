@@ -619,9 +619,11 @@ export default function TasksClient({
       )}
 
       {newBoardOpen && (
-        <NewBoardDialog
+        <BoardNameDialog
+          heading="New list"
+          submitLabel="Create"
           onCancel={() => setNewBoardOpen(false)}
-          onCreate={(name) => {
+          onSubmit={(name) => {
             setNewBoardOpen(false);
             run(async () => {
               const id = await createBoardAction(name);
@@ -697,6 +699,7 @@ function BoardColumn({
   const [showCompleted, setShowCompleted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
 
@@ -1198,8 +1201,7 @@ function BoardColumn({
                 <button
                   onClick={() => {
                     setMenuOpen(false);
-                    const name = window.prompt('Rename list', board.name);
-                    if (name && name.trim()) handlers.run(() => renameBoardAction(board.id, name));
+                    setRenaming(true);
                   }}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
                 >
@@ -1249,6 +1251,19 @@ function BoardColumn({
           )}
         </div>
       </div>
+
+      {renaming && (
+        <BoardNameDialog
+          heading="Rename list"
+          initialValue={board.name}
+          submitLabel="Rename"
+          onCancel={() => setRenaming(false)}
+          onSubmit={(name) => {
+            setRenaming(false);
+            if (name !== board.name) handlers.run(() => renameBoardAction(board.id, name));
+          }}
+        />
+      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 py-3">
         <div className="flex items-center gap-2.5 px-2 py-2 mb-2 border-b border-border">
@@ -1536,27 +1551,43 @@ function TagPicker({
   );
 }
 
-function NewBoardDialog({
+/**
+ * Naming a list, whether it's new or being renamed. Replaces window.prompt,
+ * which can't be styled, ignores the app's theme, and on some browsers is
+ * suppressed outright.
+ */
+function BoardNameDialog({
+  heading,
+  initialValue = '',
+  submitLabel,
   onCancel,
-  onCreate,
+  onSubmit,
 }: {
+  heading: string;
+  initialValue?: string;
+  submitLabel: string;
   onCancel: () => void;
-  onCreate: (name: string) => void;
+  onSubmit: (name: string) => void;
 }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialValue);
+  const trimmed = name.trim();
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
       <div className="relative w-full max-w-sm bg-card border border-border rounded-xl p-5 space-y-4 shadow-2xl">
-        <h2 className="text-sm font-bold text-foreground">New list</h2>
+        <h2 className="text-sm font-bold text-foreground">{heading}</h2>
         <input
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && name.trim()) onCreate(name);
-            if (e.key === 'Escape') onCancel();
+            if (e.key === 'Enter' && trimmed) onSubmit(trimmed);
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              onCancel();
+            }
           }}
           placeholder="List name"
           className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
@@ -1569,11 +1600,11 @@ function NewBoardDialog({
             Cancel
           </button>
           <button
-            onClick={() => name.trim() && onCreate(name)}
-            disabled={!name.trim()}
+            onClick={() => trimmed && onSubmit(trimmed)}
+            disabled={!trimmed}
             className="px-3 py-2 rounded text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Create
+            {submitLabel}
           </button>
         </div>
       </div>
