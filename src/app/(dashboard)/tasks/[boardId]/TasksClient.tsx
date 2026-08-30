@@ -758,9 +758,8 @@ function BoardColumn({
   isPrimary: boolean;
 }) {
   const [composerValue, setComposerValue] = useState('');
-  // The composer's expandable half. Collapsing clears it, so a deadline can
-  // never be attached to a task by state you can't see — everything the next
-  // Enter will apply is on screen while the panel is open.
+  // The composer's expandable half. It applies to one task and then empties
+  // itself, so a deadline can never reach a task you didn't set it on.
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [draftDate, setDraftDate] = useState('');
   const [draftTime, setDraftTime] = useState('');
@@ -1098,20 +1097,23 @@ function BoardColumn({
     );
   };
 
-  // Kept across adds rather than reset each time: a run of tasks that share a
-  // deadline or a tag is the case this exists for, and the values stay on
-  // screen the whole time, so nothing is applied invisibly.
   const composerDetails: NewTaskDetails = {
     dueDate: draftDate || null,
     dueTime: draftTime || null,
     tagIds: draftTagIds,
   };
 
-  const closeDetails = () => {
-    setDetailsOpen(false);
+  // Spent on the task it was set for. The panel stays open, empty and ready,
+  // rather than quietly carrying a deadline onto whatever you type next.
+  const clearDetails = () => {
     setDraftDate('');
     setDraftTime('');
     setDraftTagIds([]);
+  };
+
+  const closeDetails = () => {
+    setDetailsOpen(false);
+    clearDetails();
   };
 
   const hasFilterables = tagsInUse.length > 0 || starredOnly || rows.some((r) => r.isStarred);
@@ -1410,6 +1412,7 @@ function BoardColumn({
                 if (e.key === 'Enter') {
                   handlers.addTask(board.id, composerValue, null, composerDetails);
                   setComposerValue('');
+                  clearDetails();
                 }
                 if (e.key === 'Escape') {
                   setComposerValue('');
@@ -1459,9 +1462,6 @@ function BoardColumn({
                 />
               </div>
               <TagPicker all={availableTags} selected={draftTagIds} onChange={setDraftTagIds} />
-              <p className="text-[10px] text-muted-foreground">
-                Applied to each task you add until you close this.
-              </p>
             </div>
           )}
         </div>
