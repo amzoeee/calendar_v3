@@ -1,0 +1,1 @@
+ALTER TABLE `task_completions` ADD `due_snapshot` text;
