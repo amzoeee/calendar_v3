@@ -50,9 +50,19 @@ const isSensibleDate = (s: string) => {
   return !isNaN(d.getTime()) && d.getFullYear() >= 1000;
 };
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Stat({
+  label,
+  value,
+  hint,
+  className = '',
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  className?: string;
+}) {
   return (
-    <div className="bg-secondary/40 border border-border rounded-lg p-3">
+    <div className={`bg-secondary/40 border border-border rounded-lg p-3 ${className}`}>
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
@@ -586,8 +596,14 @@ export default function StatsClient({
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Stat label="Completed" value={String(totalDone)} />
-                <Stat label="Per active day" value={perActiveDay.toFixed(1)} />
+                {/* Both of these restate the summary line above them, which is
+                    fine on a wide card and just repetition on a phone. */}
+                <Stat label="Completed" value={String(totalDone)} className="hidden md:block" />
+                <Stat
+                  label="Per active day"
+                  value={perActiveDay.toFixed(1)}
+                  className="hidden md:block"
+                />
                 <Stat
                   label="On time"
                   value={onTimeRate == null ? '—' : `${onTimeRate}%`}
@@ -634,7 +650,7 @@ export default function StatsClient({
         {/* Stacked Bar Chart */}
         <div className="flex-1 bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
           <div>
-            <h2 className="text-lg font-bold">Time Breakdown by Weekday</h2>
+            <h2 className="text-lg font-bold">Event Hours by Weekday</h2>
             <p className="text-xs text-muted-foreground mt-1">
               Average hours logged per weekday · {activeDaysWithData} day
               {activeDaysWithData === 1 ? '' : 's'} with events
@@ -724,9 +740,9 @@ export default function StatsClient({
             floor, so a short list still matches the chart the way it used to. */}
         <div className="w-full lg:self-start lg:min-h-full lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
           <div>
-            <h2 className="text-lg font-bold">Daily Averages</h2>
+            <h2 className="text-lg font-bold">Daily Event Averages</h2>
             <p className="text-xs text-muted-foreground mt-1">
-              Average hours logged per tag (based on {activeDaysWithData} day
+              Average event hours per tag (based on {activeDaysWithData} day
               {activeDaysWithData === 1 ? '' : 's'} with events)
             </p>
           </div>
