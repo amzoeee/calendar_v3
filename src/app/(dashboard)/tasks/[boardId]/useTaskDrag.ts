@@ -204,7 +204,7 @@ export function useTaskDrag({
     const targetDepth = parentId == null ? 0 : 1;
     const indicatorY = preceding
       ? preceding.bottom
-      : candidates[0]?.top ?? column.top;
+      : candidates[0]?.top ?? column.viewTop;
 
     const siblings = candidates.filter((r) => r.parentId === parentId);
     const insertAt = siblings.filter((r) => r.top < indicatorY).length;
@@ -214,7 +214,12 @@ export function useTaskDrag({
     targetRef.current = { boardId: column.boardId, parentId, siblingIds };
     setIndicator({
       left: column.left + 12 + targetDepth * INDENT_PX,
-      top: indicatorY,
+      // The indicator is a fixed overlay, so nothing clips it to the column:
+      // a boundary just past the fold would otherwise be drawn over the page
+      // header or the tab bar. Pinned to the near edge instead, which is also
+      // what it means — the drop point is that way, keep scrolling. The inset
+      // accounts for the 2px bar being drawn centred on this line.
+      top: Math.min(Math.max(indicatorY, column.viewTop + 1), column.viewBottom - 1),
       width: column.right - column.left - 24 - targetDepth * INDENT_PX,
     });
   }, []);
