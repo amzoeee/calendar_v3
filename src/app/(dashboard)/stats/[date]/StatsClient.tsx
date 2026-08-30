@@ -444,13 +444,7 @@ export default function StatsClient({
               className="bg-secondary border border-border px-2 py-1 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <span className="text-muted-foreground/70 normal-case tracking-normal">
-              ({rangeLen} day{rangeLen === 1 ? '' : 's'} ·{' '}
-              <span className="relative group/active cursor-help underline decoration-dotted decoration-muted-foreground/60 underline-offset-2">
-                {activeDaysWithData} active
-                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 w-60 -translate-x-1/2 rounded-md border border-border bg-card px-2.5 py-1.5 text-[11px] font-normal leading-snug text-muted-foreground opacity-0 shadow-lg transition-opacity duration-150 group-hover/active:opacity-100">
-                  An <span className="font-semibold text-foreground">active day</span> is a day in this range with at least one logged event. Daily averages are computed over these days only.
-                </span>
-              </span>)
+              ({rangeLen} day{rangeLen === 1 ? '' : 's'})
             </span>
           </div>
         </div>
@@ -519,7 +513,7 @@ export default function StatsClient({
                 </div>
               </div>
               <p className="text-xs text-muted-foreground/70 mt-2">
-                {rangeLen} day{rangeLen === 1 ? '' : 's'} · {activeDaysWithData} active
+                {rangeLen} day{rangeLen === 1 ? '' : 's'}
               </p>
             </div>
 
@@ -550,7 +544,7 @@ export default function StatsClient({
             <p className="text-xs text-muted-foreground mt-0.5">
               {totalDone === 0
                 ? 'Nothing ticked off in this range.'
-                : `${totalDone} task${totalDone === 1 ? '' : 's'} over ${taskActiveDays} active day${taskActiveDays === 1 ? '' : 's'} — ${perActiveDay.toFixed(1)} a day`}
+                : `${totalDone} task${totalDone === 1 ? '' : 's'} over ${taskActiveDays} day${taskActiveDays === 1 ? '' : 's'} with completions — ${perActiveDay.toFixed(1)} a day`}
             </p>
           </div>
 
@@ -648,7 +642,10 @@ export default function StatsClient({
         <div className="flex-1 bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
           <div>
             <h2 className="text-lg font-bold">Time Breakdown by Weekday</h2>
-            <p className="text-xs text-muted-foreground mt-1">Average hours logged per weekday across the range</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Average hours logged per weekday · {activeDaysWithData} day
+              {activeDaysWithData === 1 ? '' : 's'} with events
+            </p>
           </div>
 
           {/* Grid Chart — horizontally scrollable on mobile since 7 bars don't
@@ -736,7 +733,8 @@ export default function StatsClient({
           <div>
             <h2 className="text-lg font-bold">Daily Averages</h2>
             <p className="text-xs text-muted-foreground mt-1">
-              Average hours logged per tag (based on {activeDaysWithData} active day{activeDaysWithData === 1 ? '' : 's'})
+              Average hours logged per tag (based on {activeDaysWithData} day
+              {activeDaysWithData === 1 ? '' : 's'} with events)
             </p>
           </div>
 
