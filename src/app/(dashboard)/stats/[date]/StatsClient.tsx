@@ -247,7 +247,6 @@ export default function StatsClient({
   const totalDone = punctualityTotal;
   const perActiveDay = taskActiveDays > 0 ? totalDone / taskActiveDays : 0;
   const maxTaskDay = taskDays.reduce((m, d) => Math.max(m, d.done), 0);
-  const multiTagged = Object.values(taskTagTotals).reduce((a, b) => a + b, 0) > totalDone;
 
   const getTagColor = (tagName: string) => {
     if (tagName === 'Untagged') return '#6b7280';
@@ -622,12 +621,6 @@ export default function StatsClient({
                         <span className="text-muted-foreground tabular-nums">{n}</span>
                       </div>
                     ))}
-                  {multiTagged && (
-                    <p className="col-span-full text-[11px] text-muted-foreground pt-1">
-                      A task with two tags counts under each, so these add up to more
-                      than {totalDone}.
-                    </p>
-                  )}
                 </div>
               )}
             </>
