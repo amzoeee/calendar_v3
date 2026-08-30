@@ -81,6 +81,11 @@ import {
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
 
+// Every small control in the editor and the composer shares one look. Kept in
+// one place so the three pickers can't drift apart.
+const FIELD_CLASS =
+  'rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+
 interface BoardSummary {
   id: number;
   name: string;
@@ -1696,8 +1701,7 @@ function SchedulePicker({
     });
   }
 
-  const field =
-    'rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+  const field = FIELD_CLASS;
 
   return (
     <div className="space-y-2">
@@ -1805,8 +1809,7 @@ function RepeatPicker({
   const hasDeadline = Boolean(task.dueDatetime);
   const numbered = task.title.includes('{n}');
 
-  const field =
-    'rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+  const field = FIELD_CLASS;
 
   const commit = (next: { rrule?: string | null; start?: string; end?: string }) => {
     const r = next.rrule !== undefined ? next.rrule : rrule;

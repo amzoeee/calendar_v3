@@ -44,6 +44,19 @@ export const SORT_LABELS: Record<SortMode, string> = {
   deadline: 'Deadline',
 };
 
+/**
+ * Details the composer can carry alongside a title, so a task with a deadline
+ * and tags takes one step rather than three. Everything is optional — the
+ * composer is a title box first.
+ */
+export interface NewTaskDetails {
+  /** "YYYY-MM-DD" as the viewer typed it. */
+  dueDate?: string | null;
+  /** "HH:MM", or absent for a deadline that names only a day. */
+  dueTime?: string | null;
+  tagIds?: number[];
+}
+
 export interface TaskRow {
   id: number;
   boardId: number;
