@@ -456,95 +456,6 @@ export default function StatsClient({
         </div>
       </div>
 
-      {/* TASKS COMPLETED — its own section, because counts and hours are not
-          the same unit and sharing an axis would misrepresent both. */}
-      <div className="shrink-0 px-4 md:px-8 pb-4 md:pb-8">
-        <div className="bg-card rounded-xl border border-border p-4 md:p-6 space-y-4">
-          <div>
-            <h2 className="text-lg md:text-xl font-bold tracking-tight">Tasks Completed</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {totalDone === 0
-                ? 'Nothing ticked off in this range.'
-                : `${totalDone} task${totalDone === 1 ? '' : 's'} over ${taskActiveDays} active day${taskActiveDays === 1 ? '' : 's'} — ${perActiveDay.toFixed(1)} a day`}
-            </p>
-          </div>
-
-          {totalDone > 0 && (
-            <>
-              {/* Per-day bars, stacked by tag. */}
-              <div className="overflow-x-auto">
-                <div className="flex items-end gap-1 h-28 min-w-[420px]">
-                  {taskDays.map((d) => (
-                    <div key={d.dateStr} className="flex-1 h-full flex flex-col justify-end group/bar">
-                      <div className="w-full flex flex-col-reverse rounded-t overflow-hidden">
-                        {Object.entries(d.counts).map(([tag, n]) => (
-                          <div
-                            key={tag}
-                            title={`${d.dayDisplay} · ${tag}: ${n}`}
-                            style={{
-                              height: `${maxTaskDay > 0 ? (n / maxTaskDay) * 96 : 0}px`,
-                              backgroundColor: getTagColor(tag),
-                            }}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-[9px] text-muted-foreground text-center mt-1 truncate">
-                        {d.done > 0 ? d.done : ''}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Stat label="Completed" value={String(totalDone)} />
-                <Stat label="Per active day" value={perActiveDay.toFixed(1)} />
-                <Stat
-                  label="On time"
-                  value={onTimeRate == null ? '—' : `${onTimeRate}%`}
-                  hint={
-                    onTimeRate == null
-                      ? 'No deadlines to judge against'
-                      : `${taskPunctuality.onTime} on time · ${taskPunctuality.late} late`
-                  }
-                />
-                <Stat
-                  label="No deadline"
-                  value={String(taskPunctuality.undated)}
-                  hint="Not counted in the on-time rate"
-                />
-              </div>
-
-              {/* A grid rather than a stack: one tag per full-width row left a
-                  lake of space between a short tag name and its count. One
-                  column on a phone, more as the card gets wider. */}
-              {Object.keys(taskTagTotals).length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5">
-                  {Object.entries(taskTagTotals)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([tag, n]) => (
-                      <div key={tag} className="flex items-center gap-2 text-sm min-w-0">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: getTagColor(tag) }}
-                        />
-                        <span className="flex-1 truncate text-foreground">{tag}</span>
-                        <span className="text-muted-foreground tabular-nums">{n}</span>
-                      </div>
-                    ))}
-                  {multiTagged && (
-                    <p className="col-span-full text-[11px] text-muted-foreground pt-1">
-                      A task with two tags counts under each, so these add up to more
-                      than {totalDone}.
-                    </p>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
       {/* MOBILE FILTERS SHEET — presets, custom range, weekdays-only toggle */}
       {showMobileFilters && (
         <div className="md:hidden fixed inset-0 z-50 flex items-end">
@@ -630,7 +541,108 @@ export default function StatsClient({
           the layout's <main>, which then scrolls instead. On a phone that hands
           the scroll to the element the browser treats as the page root, whose
           OS-drawn overlay scrollbar ignores our styling. */}
-      <div className="flex-1 min-h-0 p-4 md:p-8 overflow-y-auto flex flex-col lg:flex-row gap-4 md:gap-8">
+      <div className="flex-1 min-h-0 p-4 md:p-8 overflow-y-auto flex flex-col gap-4 md:gap-8">
+      {/* TASKS COMPLETED — its own section, because counts and hours are not
+          the same unit and sharing an axis would misrepresent both. */}
+        <div className="bg-card rounded-xl border border-border p-4 md:p-6 space-y-4">
+          <div>
+            <h2 className="text-lg md:text-xl font-bold tracking-tight">Tasks Completed</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {totalDone === 0
+                ? 'Nothing ticked off in this range.'
+                : `${totalDone} task${totalDone === 1 ? '' : 's'} over ${taskActiveDays} active day${taskActiveDays === 1 ? '' : 's'} — ${perActiveDay.toFixed(1)} a day`}
+            </p>
+          </div>
+
+          {totalDone > 0 && (
+            <>
+              {/* Per-day bars, stacked by tag. */}
+              <div className="overflow-x-auto">
+                {/* Each bar needs room for a date beneath it, so the track
+                    grows with the range and scrolls rather than crushing the
+                    labels together. */}
+                <div
+                  className="flex items-end gap-1 h-32"
+                  style={{ minWidth: Math.max(420, taskDays.length * 34) }}
+                >
+                  {taskDays.map((d) => (
+                    <div key={d.dateStr} className="flex-1 h-full flex flex-col justify-end group/bar">
+                      <span className="text-[9px] text-muted-foreground text-center mb-0.5 tabular-nums">
+                        {d.done > 0 ? d.done : ''}
+                      </span>
+                      <div className="w-full flex flex-col-reverse rounded-t overflow-hidden">
+                        {Object.entries(d.counts).map(([tag, n]) => (
+                          <div
+                            key={tag}
+                            title={`${d.dayName} ${d.dayDisplay} · ${tag}: ${n}`}
+                            style={{
+                              height: `${maxTaskDay > 0 ? (n / maxTaskDay) * 88 : 0}px`,
+                              backgroundColor: getTagColor(tag),
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[9px] text-muted-foreground text-center mt-1 leading-tight">
+                        {d.dayName}
+                        <br />
+                        <span className="tabular-nums">{d.dayDisplay}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Stat label="Completed" value={String(totalDone)} />
+                <Stat label="Per active day" value={perActiveDay.toFixed(1)} />
+                <Stat
+                  label="On time"
+                  value={onTimeRate == null ? '—' : `${onTimeRate}%`}
+                  hint={
+                    onTimeRate == null
+                      ? 'No deadlines to judge against'
+                      : `${taskPunctuality.onTime} on time · ${taskPunctuality.late} late`
+                  }
+                />
+                <Stat
+                  label="No deadline"
+                  value={String(taskPunctuality.undated)}
+                  hint="Not counted in the on-time rate"
+                />
+              </div>
+
+              {/* A grid rather than a stack: one tag per full-width row left a
+                  lake of space between a short tag name and its count. One
+                  column on a phone, more as the card gets wider. */}
+              {Object.keys(taskTagTotals).length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5">
+                  {Object.entries(taskTagTotals)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([tag, n]) => (
+                      <div key={tag} className="flex items-center gap-2 text-sm min-w-0">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: getTagColor(tag) }}
+                        />
+                        <span className="flex-1 truncate text-foreground">{tag}</span>
+                        <span className="text-muted-foreground tabular-nums">{n}</span>
+                      </div>
+                    ))}
+                  {multiTagged && (
+                    <p className="col-span-full text-[11px] text-muted-foreground pt-1">
+                      A task with two tags counts under each, so these add up to more
+                      than {totalDone}.
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* The two hours cards keep their side-by-side row inside the
+            scrolling column. */}
+        <div className="flex flex-col lg:flex-row gap-4 md:gap-8">
 
         {/* Stacked Bar Chart */}
         <div className="flex-1 bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
@@ -755,6 +767,7 @@ export default function StatsClient({
               </div>
             )}
           </div>
+        </div>
         </div>
 
       </div>
