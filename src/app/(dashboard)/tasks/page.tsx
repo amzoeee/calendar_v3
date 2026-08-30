@@ -2,7 +2,7 @@ import { getSession } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { ensureDefaultBoard } from '@/app/task-actions';
-import { VISIBLE_BOARDS_COOKIE } from '@/lib/tasks';
+import { VISIBLE_BOARDS_COOKIE, isVirtualList } from '@/lib/tasks';
 
 // /tasks has no board of its own. It restores the lists you last had open —
 // mirrored into a cookie by the client so this server redirect can read it,
@@ -19,7 +19,7 @@ export default async function TasksIndexPage() {
   const boardId = await ensureDefaultBoard(session.userId);
 
   const remembered = (await cookies()).get(VISIBLE_BOARDS_COOKIE)?.value;
-  if (remembered && /^\d+(,\d+)*$/.test(remembered)) {
+  if (remembered && (/^\d+(,\d+)*$/.test(remembered) || isVirtualList(remembered))) {
     redirect(`/tasks/${remembered}`);
   }
 

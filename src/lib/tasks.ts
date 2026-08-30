@@ -57,6 +57,44 @@ export interface NewTaskDetails {
   tagIds?: number[];
 }
 
+/**
+ * Lists that aren't lists: a view over every board rather than a row in
+ * task_boards. "All tasks" answers "what do I owe in total", "Starred" shows
+ * what you singled out, wherever it lives.
+ */
+export const VIRTUAL_LISTS = ['all', 'starred'] as const;
+export type VirtualList = (typeof VIRTUAL_LISTS)[number];
+
+export const VIRTUAL_LIST_NAMES: Record<VirtualList, string> = {
+  all: 'All tasks',
+  starred: 'Starred',
+};
+
+export function isVirtualList(value: string): value is VirtualList {
+  return (VIRTUAL_LISTS as readonly string[]).includes(value);
+}
+
+/**
+ * Where a virtual list keeps its sort mode.
+ *
+ * `sortMode` is a column on task_boards and these have no row there, so it
+ * goes in a cookie instead — one per list, the same trick the visible-board
+ * set uses: written by the client, read on the server so the first paint is
+ * already sorted. A cookie is also the more honest home for it. A board's sort
+ * is a property of that board; how you like to read a cross-board view is a
+ * property of the viewer.
+ */
+export const VIRTUAL_SORT_COOKIE_PREFIX = 'taskSort_';
+
+/**
+ * Manual order is scoped to (board, parent) — two tasks on different boards
+ * have no order relative to each other — so a virtual list can't offer it,
+ * and can't be dragged into one either.
+ */
+export const VIRTUAL_SORT_MODES: SortMode[] = ACTIVE_SORT_MODES.filter((m) => m !== 'manual');
+
+export const DEFAULT_VIRTUAL_SORT: SortMode = 'deadline';
+
 export interface TaskRow {
   id: number;
   boardId: number;
