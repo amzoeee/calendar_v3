@@ -515,12 +515,15 @@ export default function StatsClient({
                 />
               </div>
 
+              {/* A grid rather than a stack: one tag per full-width row left a
+                  lake of space between a short tag name and its count. One
+                  column on a phone, more as the card gets wider. */}
               {Object.keys(taskTagTotals).length > 0 && (
-                <div className="space-y-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5">
                   {Object.entries(taskTagTotals)
                     .sort((a, b) => b[1] - a[1])
                     .map(([tag, n]) => (
-                      <div key={tag} className="flex items-center gap-2 text-sm">
+                      <div key={tag} className="flex items-center gap-2 text-sm min-w-0">
                         <span
                           className="h-2.5 w-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: getTagColor(tag) }}
@@ -530,7 +533,7 @@ export default function StatsClient({
                       </div>
                     ))}
                   {multiTagged && (
-                    <p className="text-[11px] text-muted-foreground pt-1">
+                    <p className="col-span-full text-[11px] text-muted-foreground pt-1">
                       A task with two tags counts under each, so these add up to more
                       than {totalDone}.
                     </p>
