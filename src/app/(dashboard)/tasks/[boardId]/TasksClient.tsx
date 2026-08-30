@@ -14,6 +14,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   CornerDownRight,
   GripVertical,
   ListChecks,
@@ -37,6 +38,7 @@ import {
   MAX_TASK_DEPTH,
   MAX_VISIBLE_BOARDS,
   VISIBLE_BOARDS_COOKIE,
+  type NewTaskDetails,
   type SortMode,
   type TaskRow,
   type TaskNode,
@@ -120,7 +122,12 @@ interface UndoState {
 // Handlers a column needs from its parent. Bundled rather than passed one by
 // one, since every column gets exactly the same set.
 interface ColumnHandlers {
-  addTask: (boardId: number, title: string, parentId: number | null) => void;
+  addTask: (
+    boardId: number,
+    title: string,
+    parentId: number | null,
+    details?: NewTaskDetails
+  ) => void;
   requestCompletion: (node: TaskNode, completed: boolean) => void;
   toggleStar: (row: TaskRow) => void;
   saveTitle: (id: number, title: string) => void;
@@ -289,10 +296,15 @@ export default function TasksClient({
   const patchLocal = (ids: number[], patch: Partial<TaskRow>) =>
     setLocalRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, ...patch } : r)));
 
-  const addTask = (boardId: number, title: string, parentId: number | null) => {
+  const addTask = (
+    boardId: number,
+    title: string,
+    parentId: number | null,
+    details?: NewTaskDetails
+  ) => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    run(() => createTaskAction(boardId, trimmed, parentId));
+    run(() => createTaskAction(boardId, trimmed, parentId, details));
   };
 
   const applyCompletion = (node: TaskNode, completed: boolean, cascade: boolean) => {
@@ -746,6 +758,13 @@ function BoardColumn({
   isPrimary: boolean;
 }) {
   const [composerValue, setComposerValue] = useState('');
+  // The composer's expandable half. Collapsing clears it, so a deadline can
+  // never be attached to a task by state you can't see — everything the next
+  // Enter will apply is on screen while the panel is open.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [draftDate, setDraftDate] = useState('');
+  const [draftTime, setDraftTime] = useState('');
+  const [draftTagIds, setDraftTagIds] = useState<number[]>([]);
   const [subtaskValue, setSubtaskValue] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1079,6 +1098,22 @@ function BoardColumn({
     );
   };
 
+  // Kept across adds rather than reset each time: a run of tasks that share a
+  // deadline or a tag is the case this exists for, and the values stay on
+  // screen the whole time, so nothing is applied invisibly.
+  const composerDetails: NewTaskDetails = {
+    dueDate: draftDate || null,
+    dueTime: draftTime || null,
+    tagIds: draftTagIds,
+  };
+
+  const closeDetails = () => {
+    setDetailsOpen(false);
+    setDraftDate('');
+    setDraftTime('');
+    setDraftTagIds([]);
+  };
+
   const hasFilterables = tagsInUse.length > 0 || starredOnly || rows.some((r) => r.isStarred);
 
   // Sort and filter are rendered either as their own header controls or as
@@ -1361,28 +1396,74 @@ function BoardColumn({
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 pt-1 pb-3">
-        <div className="flex items-center gap-2.5 px-2 py-1.5 mb-1.5 border-b border-border">
-          <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
-          <input
-            ref={(el) => {
-              inputRef.current = el;
-              registerComposer(board.id, el);
-            }}
-            value={composerValue}
-            onChange={(e) => setComposerValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handlers.addTask(board.id, composerValue, null);
-                setComposerValue('');
-              }
-              if (e.key === 'Escape') {
-                setComposerValue('');
-                inputRef.current?.blur();
-              }
-            }}
-            placeholder="Add a task"
-            className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
-          />
+        <div className="mb-1.5 border-b border-border">
+          <div className="flex items-center gap-2.5 px-2 py-1.5">
+            <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+            <input
+              ref={(el) => {
+                inputRef.current = el;
+                registerComposer(board.id, el);
+              }}
+              value={composerValue}
+              onChange={(e) => setComposerValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handlers.addTask(board.id, composerValue, null, composerDetails);
+                  setComposerValue('');
+                }
+                if (e.key === 'Escape') {
+                  setComposerValue('');
+                  closeDetails();
+                  inputRef.current?.blur();
+                }
+              }}
+              placeholder="Add a task"
+              className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
+            />
+            <button
+              onClick={() => (detailsOpen ? closeDetails() : setDetailsOpen(true))}
+              aria-expanded={detailsOpen}
+              aria-label={detailsOpen ? 'Hide deadline and tags' : 'Add a deadline or tags'}
+              title="Deadline and tags"
+              className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            >
+              {detailsOpen ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+
+          {/* Deadline and tags before the task exists, so the common case —
+              "read chapter 4, due Friday, #school" — is one step instead of
+              create, open, fill in. The reminder isn't here on purpose: an
+              offset is a decision about a deadline you already have. */}
+          {detailsOpen && (
+            <div className="px-2 pb-2 space-y-2">
+              <div className="flex gap-1.5">
+                <input
+                  type="date"
+                  value={draftDate}
+                  onChange={(e) => setDraftDate(e.target.value)}
+                  aria-label="Deadline for the new task"
+                  className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
+                />
+                <input
+                  type="time"
+                  value={draftTime}
+                  disabled={!draftDate}
+                  onChange={(e) => setDraftTime(e.target.value)}
+                  aria-label="Time of day for the new task"
+                  className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+                />
+              </div>
+              <TagPicker all={availableTags} selected={draftTagIds} onChange={setDraftTagIds} />
+              <p className="text-[10px] text-muted-foreground">
+                Applied to each task you add until you close this.
+              </p>
+            </div>
+          )}
         </div>
 
         {openTree.length === 0 && (
