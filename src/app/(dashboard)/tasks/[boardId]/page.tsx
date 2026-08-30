@@ -2,10 +2,20 @@ import { getSession } from '@/lib/auth';
 import { db } from '@/db';
 import { taskBoards, tasks as tasksTable, taskTags, tags as tagsTable } from '@/db/schema';
 import { eq, and, asc, inArray } from 'drizzle-orm';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import TasksClient from './TasksClient';
 import { ensureDefaultBoard } from '@/app/task-actions';
-import { MAX_VISIBLE_BOARDS, type SortMode } from '@/lib/tasks';
+import {
+  MAX_VISIBLE_BOARDS,
+  DEFAULT_VIRTUAL_SORT,
+  VIRTUAL_LIST_NAMES,
+  VIRTUAL_SORT_COOKIE_PREFIX,
+  VIRTUAL_SORT_MODES,
+  isVirtualList,
+  type SortMode,
+  type VirtualList,
+} from '@/lib/tasks';
 
 interface PageProps {
   params: Promise<{ boardId: string }> | { boardId: string };
@@ -25,13 +35,23 @@ export default async function TasksBoardPage({ params }: PageProps) {
     .where(eq(taskBoards.userId, session.userId))
     .orderBy(asc(taskBoards.orderIndex), asc(taskBoards.id));
 
-  // The segment carries one board id, or several comma-separated ones for a
-  // side-by-side view ("/tasks/1,3"). Unknown ids are dropped rather than
-  // 404ing, the same forgiving treatment the date views give a bad date.
-  const requested = decodeURIComponent(boardIdParam)
-    .split(',')
-    .map((part) => Number(part.trim()))
-    .filter((id) => Number.isInteger(id));
+  const segment = decodeURIComponent(boardIdParam);
+
+  // "/tasks/all" and "/tasks/starred" are views across every board rather than
+  // boards of their own. They're shown alone — combining "everything" with one
+  // list beside it would show the same tasks twice.
+  const virtual: VirtualList | null = isVirtualList(segment) ? segment : null;
+
+  // The segment otherwise carries one board id, or several comma-separated
+  // ones for a side-by-side view ("/tasks/1,3"). Unknown ids are dropped
+  // rather than 404ing, the same forgiving treatment the date views give a
+  // bad date.
+  const requested = virtual
+    ? []
+    : segment
+        .split(',')
+        .map((part) => Number(part.trim()))
+        .filter((id) => Number.isInteger(id));
 
   const seen = new Set<number>();
   const selected = requested
@@ -43,11 +63,30 @@ export default async function TasksBoardPage({ params }: PageProps) {
     .slice(0, MAX_VISIBLE_BOARDS)
     .map((id) => boards.find((b) => b.id === id)!);
 
-  if (selected.length === 0) redirect(`/tasks/${boards[0].id}`);
+  if (!virtual) {
+    if (selected.length === 0) redirect(`/tasks/${boards[0].id}`);
 
-  // Normalise the URL when it named more boards than we show, or repeated one.
-  const canonical = selected.map((b) => b.id).join(',');
-  if (canonical !== decodeURIComponent(boardIdParam)) redirect(`/tasks/${canonical}`);
+    // Normalise the URL when it named more boards than we show, or repeated one.
+    const canonical = selected.map((b) => b.id).join(',');
+    if (canonical !== segment) redirect(`/tasks/${canonical}`);
+  }
+
+  // A virtual list reads every board. "Starred" is deliberately not narrowed
+  // to starred rows here: the client's starred filter keeps a match's parents
+  // and children with it, so a starred subtask still says what it belongs to
+  // and a starred parent is never shown looking childless — which also stops
+  // ticking one from silently completing subtasks it didn't show.
+  const boardScope = virtual ? boards.map((b) => b.id) : selected.map((b) => b.id);
+
+  // A virtual list has no task_boards row to hold a sort mode; see
+  // VIRTUAL_SORT_COOKIE_PREFIX for why a cookie is where it lives.
+  let virtualSort: SortMode = DEFAULT_VIRTUAL_SORT;
+  if (virtual) {
+    const stored = (await cookies()).get(`${VIRTUAL_SORT_COOKIE_PREFIX}${virtual}`)?.value;
+    if (stored && VIRTUAL_SORT_MODES.includes(stored as SortMode)) {
+      virtualSort = stored as SortMode;
+    }
+  }
 
   // A flat list across every visible board, ordered by sibling position. The
   // client assembles the tree — see buildTaskTree in lib/tasks.ts for why the
@@ -78,10 +117,7 @@ export default async function TasksBoardPage({ params }: PageProps) {
     .where(
       and(
         eq(tasksTable.userId, session.userId),
-        inArray(
-          tasksTable.boardId,
-          selected.map((b) => b.id)
-        )
+        inArray(tasksTable.boardId, boardScope)
       )
     )
     .orderBy(asc(tasksTable.orderIndex), asc(tasksTable.id));
@@ -118,11 +154,28 @@ export default async function TasksBoardPage({ params }: PageProps) {
       availableTags={availableTags}
       tagsByTask={tagsByTask}
       boards={boards.map((b) => ({ id: b.id, name: b.name }))}
-      visibleBoards={selected.map((b) => ({
-        id: b.id,
-        name: b.name,
-        sortMode: b.sortMode as SortMode,
-      }))}
+      visibleBoards={
+        virtual
+          ? [
+              {
+                // A list that isn't a list still has to answer "where does a
+                // new task go". It goes to the first board, and the composer
+                // says so by name rather than leaving you to find out.
+                id: boards[0].id,
+                name: VIRTUAL_LIST_NAMES[virtual],
+                sortMode: virtualSort,
+                virtual,
+                targetName: boards[0].name,
+              },
+            ]
+          : selected.map((b) => ({
+              id: b.id,
+              name: b.name,
+              sortMode: b.sortMode as SortMode,
+              virtual: null,
+              targetName: null,
+            }))
+      }
       rows={rows}
     />
   );

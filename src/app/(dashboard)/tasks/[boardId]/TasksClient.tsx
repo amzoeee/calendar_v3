@@ -37,7 +37,13 @@ import {
   MAX_TASK_DEPTH,
   MAX_VISIBLE_BOARDS,
   VISIBLE_BOARDS_COOKIE,
+  VIRTUAL_LISTS,
+  VIRTUAL_LIST_NAMES,
+  VIRTUAL_SORT_COOKIE_PREFIX,
+  VIRTUAL_SORT_MODES,
+  isVirtualList,
   type SortMode,
+  type VirtualList,
   type TaskRow,
   type TaskNode,
 } from '@/lib/tasks';
@@ -88,6 +94,10 @@ interface BoardSummary {
 
 interface VisibleBoard extends BoardSummary {
   sortMode: SortMode;
+  /** Set when this column is a view across every board, not a board. */
+  virtual: VirtualList | null;
+  /** For a virtual list, the board its composer writes to, by name. */
+  targetName: string | null;
 }
 
 export interface TaskTag {
@@ -115,7 +125,7 @@ interface UndoState {
 // Handlers a column needs from its parent. Bundled rather than passed one by
 // one, since every column gets exactly the same set.
 interface ColumnHandlers {
-  addTask: (boardId: number, title: string, parentId: number | null) => void;
+  addTask: (boardId: number, title: string, parentId: number | null, starred?: boolean) => void;
   requestCompletion: (node: TaskNode, completed: boolean) => void;
   toggleStar: (row: TaskRow) => void;
   saveTitle: (id: number, title: string) => void;
@@ -126,6 +136,7 @@ interface ColumnHandlers {
   };
   draggingId: number | null;
   run: (fn: () => Promise<unknown>) => void;
+  setVirtualSort: (list: VirtualList, mode: SortMode) => void;
   tagsFor: (taskId: number) => TaskTag[];
   editingId: number | null;
   setEditingId: (id: number | null) => void;
@@ -193,14 +204,34 @@ export default function TasksClient({
     else composers.current.delete(boardId);
   }, []);
 
-  const visibleIds = visibleBoards.map((b) => b.id);
+  // A virtual list is shown on its own, so it stands in for the whole visible
+  // set — in the cookie too, which /tasks reads straight back as a path.
+  const virtual = visibleBoards[0].virtual;
+  const visibleIds = virtual ? [] : visibleBoards.map((b) => b.id);
   const primary = visibleBoards[0];
 
   // Mirror the visible set into a cookie so /tasks can restore it on the
   // server next time. Written from the rendered set rather than from the click
   // handlers, so arriving via a pasted URL or the back button is remembered
   // too. Runs after paint, since nothing on this page reads it back.
-  const visibleKey = visibleIds.join(',');
+  const visibleKey = virtual ?? visibleIds.join(',');
+
+  // A virtual list's sort mode has no task_boards row to live in, so it's held
+  // here and mirrored into a cookie for the next server render. Reset when the
+  // visible list changes, so switching from All tasks to Starred doesn't carry
+  // one list's choice onto the other.
+  const [virtualSort, setVirtualSortState] = useState<SortMode | null>(null);
+  const [syncedList, setSyncedList] = useState(visibleKey);
+  if (visibleKey !== syncedList) {
+    setSyncedList(visibleKey);
+    setVirtualSortState(null);
+  }
+
+  const setVirtualSort = (list: VirtualList, mode: SortMode) => {
+    setVirtualSortState(mode);
+    document.cookie = `${VIRTUAL_SORT_COOKIE_PREFIX}${list}=${mode}; path=/; max-age=31536000; SameSite=Lax`;
+  };
+
   useEffect(() => {
     document.cookie = `${VISIBLE_BOARDS_COOKIE}=${visibleKey}; path=/; max-age=31536000; SameSite=Lax`;
   }, [visibleKey]);
@@ -228,6 +259,7 @@ export default function TasksClient({
   // ----- navigation between board selections -----
 
   const showOnly = (id: number) => router.push(`/tasks/${id}`);
+  const showList = (kind: VirtualList) => router.push(`/tasks/${kind}`);
 
   const toggleColumn = (id: number) => {
     const next = visibleIds.includes(id)
@@ -284,10 +316,20 @@ export default function TasksClient({
   const patchLocal = (ids: number[], patch: Partial<TaskRow>) =>
     setLocalRows((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, ...patch } : r)));
 
-  const addTask = (boardId: number, title: string, parentId: number | null) => {
+  const addTask = (
+    boardId: number,
+    title: string,
+    parentId: number | null,
+    starred = false
+  ) => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    run(() => createTaskAction(boardId, trimmed, parentId));
+    // A task added from the Starred list has to arrive starred, or it drops
+    // out of the list you just added it to.
+    run(async () => {
+      const id = await createTaskAction(boardId, trimmed, parentId);
+      if (starred) await setTaskStarredAction(id, true);
+    });
   };
 
   const applyCompletion = (node: TaskNode, completed: boolean, cascade: boolean) => {
@@ -394,6 +436,7 @@ export default function TasksClient({
     dragHandleProps: drag.handleProps,
     draggingId: drag.activeId,
     run,
+    setVirtualSort,
     editingId,
     setEditingId,
     subtaskParent,
@@ -407,6 +450,35 @@ export default function TasksClient({
           it beside the others, up to MAX_VISIBLE_BOARDS. */}
       <aside className="hidden md:flex w-44 shrink-0 border-r border-border flex-col">
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
+          {/* Views over every board. They replace the visible set rather than
+              joining it: "everything" beside one list would show the same
+              tasks twice, and there'd be no honest answer for which copy a
+              drag was moving. */}
+          {VIRTUAL_LISTS.map((kind) => {
+            const shown = virtual === kind;
+            return (
+              <button
+                key={kind}
+                onClick={() => showList(kind)}
+                aria-current={shown ? 'page' : undefined}
+                className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  shown
+                    ? 'bg-secondary text-foreground'
+                    : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                }`}
+              >
+                {kind === 'starred' ? (
+                  <Star className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <ListChecks className="h-3.5 w-3.5 shrink-0" />
+                )}
+                <span className="truncate">{VIRTUAL_LIST_NAMES[kind]}</span>
+              </button>
+            );
+          })}
+
+          <div className="!my-2 border-t border-border" />
+
           {boards.map((b) => {
             const shown = visibleIds.includes(b.id);
             const atLimit = !shown && visibleIds.length >= MAX_VISIBLE_BOARDS;
@@ -465,15 +537,16 @@ export default function TasksClient({
       <div className="flex-1 min-w-0 flex divide-x divide-border">
         {visibleBoards.map((b) => (
           <BoardColumn
-            key={b.id}
-            board={b}
+            key={b.virtual ?? b.id}
+            board={b.virtual && virtualSort ? { ...b, sortMode: virtualSort } : b}
             boards={boards}
-            rows={localRows.filter((r) => r.boardId === b.id)}
+            rows={b.virtual ? localRows : localRows.filter((r) => r.boardId === b.id)}
             availableTags={availableTags}
             collapsed={visibleBoards.length > 1}
             handlers={handlers}
             registerComposer={registerComposer}
             onPickBoard={showOnly}
+            onPickList={showList}
             onNewBoard={() => setNewBoardOpen(true)}
             isPrimary={b.id === primary.id}
           />
@@ -726,6 +799,7 @@ function BoardColumn({
   collapsed,
   registerComposer,
   onPickBoard,
+  onPickList,
   onNewBoard,
   isPrimary,
 }: {
@@ -737,6 +811,7 @@ function BoardColumn({
   collapsed: boolean;
   registerComposer: (boardId: number, el: HTMLInputElement | null) => void;
   onPickBoard: (id: number) => void;
+  onPickList: (kind: VirtualList) => void;
   onNewBoard: () => void;
   isPrimary: boolean;
 }) {
@@ -752,6 +827,16 @@ function BoardColumn({
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
+
+  // The Starred list is the starred filter, applied to every board. Reusing
+  // the filter rather than narrowing the query is what keeps a match's family
+  // with it — see the filtering note below.
+  const starredList = board.virtual === 'starred';
+  const starredFilter = starredList || starredOnly;
+
+  // Which list a task actually belongs to only needs saying in a view that
+  // spans several.
+  const boardNames = useMemo(() => new Map(boards.map((b) => [b.id, b.name])), [boards]);
 
   const { subtaskParent, setSubtaskParent, editingId, setEditingId } = handlers;
 
@@ -771,7 +856,10 @@ function BoardColumn({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, availableTags]);
 
+  // The badge counts filters *you* applied; the Starred list's own filter is
+  // the list, not something to clear.
   const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0);
+  const filtering = filterTagIds.length > 0 || starredFilter;
 
   /**
    * Filtering keeps a matching task's family with it, in both directions:
@@ -785,10 +873,10 @@ function BoardColumn({
    * matches, or when any of its ancestors match.
    */
   const visibleRows = useMemo(() => {
-    if (activeFilters === 0) return rows;
+    if (!filtering) return rows;
 
     const matches = (r: TaskRow) => {
-      if (starredOnly && !r.isStarred) return false;
+      if (starredFilter && !r.isStarred) return false;
       if (filterTagIds.length === 0) return true;
       // OR across selected tags: a task matches if it carries any of them.
       return handlers.tagsFor(r.id).some((t) => filterTagIds.includes(t.id));
@@ -822,7 +910,7 @@ function BoardColumn({
 
     return rows.filter((r) => keep.has(r.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, filterTagIds, starredOnly, activeFilters]);
+  }, [rows, filterTagIds, starredFilter, filtering]);
 
   const { openTree, completedTree } = useMemo(() => {
     const open = visibleRows.filter((r) => !r.completedAt);
@@ -924,7 +1012,7 @@ function BoardColumn({
         <div
           data-task-row
           data-task-id={node.id}
-          data-board-id={board.id}
+          data-board-id={node.boardId}
           data-parent-id={node.parentId ?? ''}
           data-depth={node.depth}
           className={`group/row flex items-start gap-1.5 rounded-lg pr-1 py-2 transition-colors ${
@@ -932,14 +1020,21 @@ function BoardColumn({
           } ${dragging ? 'opacity-40' : ''}`}
           style={{ paddingLeft: 2 + indent }}
         >
-          <button
-            {...handlers.dragHandleProps(node.id, subtreeIds, height)}
-            aria-label={`Reorder “${node.title}”`}
-            title="Drag to reorder, or right to make it a subtask"
-            className="mt-0.5 shrink-0 text-muted-foreground/30 hover:text-foreground transition-colors cursor-grab active:cursor-grabbing touch-none p-0.5"
-          >
-            <GripVertical className="h-3.5 w-3.5" />
-          </button>
+          {/* No handle on a virtual list: manual order is per board and per
+              parent, so there's no order across boards for a drag to express.
+              The space is kept so rows line up the same everywhere. */}
+          {board.virtual ? (
+            <span aria-hidden="true" className="mt-0.5 shrink-0 w-[18px]" />
+          ) : (
+            <button
+              {...handlers.dragHandleProps(node.id, subtreeIds, height)}
+              aria-label={`Reorder “${node.title}”`}
+              title="Drag to reorder, or right to make it a subtask"
+              className="mt-0.5 shrink-0 text-muted-foreground/30 hover:text-foreground transition-colors cursor-grab active:cursor-grabbing touch-none p-0.5"
+            >
+              <GripVertical className="h-3.5 w-3.5" />
+            </button>
+          )}
 
           <button
             onClick={() => handlers.requestCompletion(node, !done)}
@@ -963,7 +1058,7 @@ function BoardColumn({
                 initial={node.title}
                 onCommit={(value) => handlers.saveTitle(node.id, value)}
                 onCancel={() => setEditingId(null)}
-                onMove={(action) => keyboardMove(node, action)}
+                onMove={board.virtual ? undefined : (action) => keyboardMove(node, action)}
               />
             ) : (
               <button
@@ -978,13 +1073,18 @@ function BoardColumn({
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
-            {(node.dueDatetime || node.rrule || rowTags.length > 0) && (
+            {(board.virtual || node.dueDatetime || node.rrule || rowTags.length > 0) && (
               /* gap-x/gap-y separately: a single `gap` on a wrapping flex
                  applies to both axes, so the deadline wrapping above the tags
                  opened a full row-gap between them. The top margin lives here
                  rather than on the chips, so a task with neither doesn't carry
                  an empty strip. */
               <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                {board.virtual && (
+                  <span className="text-[10px] leading-none text-muted-foreground/70 shrink-0 truncate max-w-[8rem]">
+                    {boardNames.get(node.boardId)}
+                  </span>
+                )}
                 <DueChip due={node.dueDatetime} hasTime={node.dueHasTime === 1} done={done} />
                 {node.rrule && (
                   <span
@@ -1050,13 +1150,13 @@ function BoardColumn({
               value={subtaskValue}
               onChange={(e) => setSubtaskValue(e.target.value)}
               onBlur={() => {
-                handlers.addTask(board.id, subtaskValue, node.id);
+                handlers.addTask(node.boardId, subtaskValue, node.id);
                 setSubtaskParent(null);
                 setSubtaskValue('');
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  handlers.addTask(board.id, subtaskValue, node.id);
+                  handlers.addTask(node.boardId, subtaskValue, node.id);
                   setSubtaskValue('');
                 }
                 if (e.key === 'Escape') setSubtaskParent(null);
@@ -1074,11 +1174,22 @@ function BoardColumn({
     );
   };
 
-  const hasFilterables = tagsInUse.length > 0 || starredOnly || rows.some((r) => r.isStarred);
+  const hasFilterables =
+    tagsInUse.length > 0 ||
+    (!starredList && (starredOnly || rows.some((r) => r.isStarred)));
 
   // Sort and filter are rendered either as their own header controls or as
   // sections of the overflow menu, depending on how much room the column has.
   // Defined once here so the two placements can't drift apart.
+  // A virtual list can't offer My order: orderIndex is scoped to a board and a
+  // parent, so two tasks on different boards have no order between them. Its
+  // choice goes to a cookie rather than a task_boards row.
+  const sortModes = board.virtual ? VIRTUAL_SORT_MODES : ACTIVE_SORT_MODES;
+  const changeSort = (mode: SortMode) => {
+    if (board.virtual) handlers.setVirtualSort(board.virtual, mode);
+    else handlers.run(() => setBoardSortAction(board.id, mode));
+  };
+
   const checkbox = (on: boolean) => (
     <span
       className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
@@ -1091,6 +1202,7 @@ function BoardColumn({
 
   const filterOptions = (
     <>
+      {!starredList && (
       <button
         onClick={() => setStarredOnly((v) => !v)}
         className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
@@ -1099,6 +1211,7 @@ function BoardColumn({
         <Star className="h-3.5 w-3.5 text-amber-400" fill="currentColor" />
         Starred
       </button>
+      )}
 
       {tagsInUse.map((t) => {
         const on = filterTagIds.includes(t.id);
@@ -1136,12 +1249,12 @@ function BoardColumn({
 
   const sortOptions = (
     <>
-      {ACTIVE_SORT_MODES.map((mode) => (
+      {sortModes.map((mode) => (
         <button
           key={mode}
           onClick={() => {
             setMenuOpen(false);
-            handlers.run(() => setBoardSortAction(board.id, mode));
+            changeSort(mode);
           }}
           className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
         >
@@ -1170,14 +1283,21 @@ function BoardColumn({
         {/* Mobile shows one list at a time, chosen here. */}
         <div className="md:hidden flex-1 min-w-0">
           <select
-            value={board.id}
+            value={board.virtual ?? board.id}
             onChange={(e) => {
-              if (e.target.value === 'new') onNewBoard();
-              else onPickBoard(Number(e.target.value));
+              const value = e.target.value;
+              if (value === 'new') onNewBoard();
+              else if (isVirtualList(value)) onPickList(value);
+              else onPickBoard(Number(value));
             }}
             aria-label="Choose a list"
             className="w-full bg-transparent text-lg font-bold text-foreground focus:outline-none cursor-pointer"
           >
+            {VIRTUAL_LISTS.map((kind) => (
+              <option key={kind} value={kind}>
+                {VIRTUAL_LIST_NAMES[kind]}
+              </option>
+            ))}
             {boards.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -1223,11 +1343,11 @@ function BoardColumn({
         {!collapsed && (
           <select
             value={board.sortMode}
-            onChange={(e) => handlers.run(() => setBoardSortAction(board.id, e.target.value))}
+            onChange={(e) => changeSort(e.target.value as SortMode)}
             aria-label={`Sort ${board.name}`}
             className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
           >
-            {ACTIVE_SORT_MODES.map((mode) => (
+            {sortModes.map((mode) => (
               <option key={mode} value={mode}>
                 {SORT_LABELS[mode]}
               </option>
@@ -1235,6 +1355,11 @@ function BoardColumn({
           </select>
         )}
 
+        {/* Everything in this menu acts on a board — renaming it, pasting into
+            it, deleting it — so a virtual list has no use for it. Its sort and
+            filter live in the header, since it's never shown alongside
+            another column. */}
+        {!board.virtual && (
         <div className="relative">
           <button
             onClick={() => setMenuOpen((o) => !o)}
@@ -1330,6 +1455,7 @@ function BoardColumn({
             </>
           )}
         </div>
+        )}
       </div>
 
       {pasting && (
@@ -1367,7 +1493,7 @@ function BoardColumn({
             onChange={(e) => setComposerValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                handlers.addTask(board.id, composerValue, null);
+                handlers.addTask(board.id, composerValue, null, board.virtual === 'starred');
                 setComposerValue('');
               }
               if (e.key === 'Escape') {
@@ -1375,7 +1501,10 @@ function BoardColumn({
                 inputRef.current?.blur();
               }
             }}
-            placeholder="Add a task"
+            /* A list that isn't a list still has to put a new task
+               somewhere. It goes to the first list, named here rather than
+               left to be discovered. */
+            placeholder={board.virtual ? `Add to ${board.targetName}` : 'Add a task'}
             className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
           />
         </div>
@@ -1386,7 +1515,9 @@ function BoardColumn({
             <p className="text-xs text-muted-foreground">
               {activeFilters > 0
                 ? 'No tasks match the filter.'
-                : 'Nothing here yet. Add a task above'}
+                : starredList
+                  ? 'Nothing starred yet. Star a task and it shows up here'
+                  : 'Nothing here yet. Add a task above'}
               {activeFilters === 0 && isPrimary && (
                 <>
                   , or press{' '}
@@ -1439,7 +1570,8 @@ function EditableTitle({
   initial: string;
   onCommit: (value: string) => void;
   onCancel: () => void;
-  onMove: (action: 'up' | 'down' | 'indent' | 'outdent') => void;
+  /** Absent on a list with no manual order to rearrange. */
+  onMove?: (action: 'up' | 'down' | 'indent' | 'outdent') => void;
 }) {
   const [value, setValue] = useState(initial);
 
@@ -1447,6 +1579,7 @@ function EditableTitle({
   // equivalents of the drag gestures live. Each one saves the name first, so
   // the move can't strand a half-typed edit.
   const move = (action: 'up' | 'down' | 'indent' | 'outdent') => {
+    if (!onMove) return;
     onCommit(value);
     onMove(action);
   };
@@ -1463,11 +1596,13 @@ function EditableTitle({
           e.stopPropagation();
           onCancel();
         }
-        if (e.key === 'Tab') {
+        // Left alone when there's nothing to move: swallowing Tab would take
+        // away the only way to leave the field.
+        if (e.key === 'Tab' && onMove) {
           e.preventDefault();
           move(e.shiftKey ? 'outdent' : 'indent');
         }
-        if ((e.metaKey || e.ctrlKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (onMove && (e.metaKey || e.ctrlKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
           e.preventDefault();
           move(e.key === 'ArrowUp' ? 'up' : 'down');
         }
