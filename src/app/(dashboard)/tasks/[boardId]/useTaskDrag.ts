@@ -19,6 +19,13 @@ const INDENT_THRESHOLD_FINE = 36;
 const INDENT_THRESHOLD_COARSE = 72;
 // Matches the per-level padding the rows render with.
 const INDENT_PX = 24;
+// Dragging to the top or bottom of a column scrolls it, so a task can be moved
+// further than one screenful without being dropped on the way. SCROLL_EDGE is
+// how close to the edge the pointer has to get before that starts; the speed
+// ramps from a crawl at the inner edge of that band to MAX_SCROLL_STEP at the
+// boundary and beyond it.
+const SCROLL_EDGE = 40;
+const MAX_SCROLL_STEP = 14;
 
 export interface DropTarget {
   boardId: number;
@@ -40,6 +47,13 @@ interface ColumnRect {
   left: number;
   right: number;
   top: number;
+  /** The column's own scroll container — what an edge drag nudges. */
+  scroller: HTMLElement | null;
+  /** Viewport bounds of that container, so the edge band can be measured. */
+  viewTop: number;
+  viewBottom: number;
+  /** Where it was scrolled to when the snapshot was taken; see resolve(). */
+  startScroll: number;
 }
 
 export interface DragIndicator {
@@ -84,6 +98,10 @@ export function useTaskDrag({
   onCancel?: () => void;
 }) {
   const session = useRef<DragSession | null>(null);
+  // Where the pointer was last seen, so the auto-scroll frame can re-run the
+  // hit test without waiting for the next pointermove — a held-still pointer
+  // over the edge still has to keep scrolling.
+  const pointer = useRef({ x: 0, y: 0 });
   const [activeId, setActiveId] = useState<number | null>(null);
   const [indicator, setIndicator] = useState<DragIndicator | null>(null);
   const targetRef = useRef<DropTarget | null>(null);
@@ -116,11 +134,17 @@ export function useTaskDrag({
     const columns: ColumnRect[] = [];
     document.querySelectorAll<HTMLElement>('[data-board-column]').forEach((el) => {
       const rect = el.getBoundingClientRect();
+      const scroller = el.querySelector<HTMLElement>('[data-task-scroller]');
+      const view = scroller?.getBoundingClientRect();
       columns.push({
         boardId: Number(el.dataset.boardId),
         left: rect.left,
         right: rect.right,
         top: rect.top,
+        scroller,
+        viewTop: view?.top ?? rect.top,
+        viewBottom: view?.bottom ?? rect.bottom,
+        startScroll: scroller?.scrollTop ?? 0,
       });
     });
 
@@ -143,11 +167,19 @@ export function useTaskDrag({
     // single time.
     const dx = x - column.left - (s.startX - s.startColumnLeft);
 
+    // Rows were measured once, at drag start. Auto-scrolling this column since
+    // then has moved them all by exactly how far it scrolled, so shifting the
+    // snapshot by that amount keeps the hit test honest without re-measuring
+    // every row on every frame.
+    const scrolled = column.scroller ? column.scroller.scrollTop - column.startScroll : 0;
+
     // A task can't be dropped into its own subtree, so those rows are not
     // candidates for anything.
-    const candidates = s.rows.filter(
-      (r) => r.boardId === column.boardId && !s.subtree.has(r.id)
-    );
+    const candidates = s.rows
+      .filter((r) => r.boardId === column.boardId && !s.subtree.has(r.id))
+      .map((r) =>
+        scrolled === 0 ? r : { ...r, top: r.top - scrolled, bottom: r.bottom - scrolled }
+      );
 
     // Insertion point: the first row whose middle sits below the pointer.
     let index = candidates.findIndex((r) => y < (r.top + r.bottom) / 2);
@@ -192,8 +224,37 @@ export function useTaskDrag({
 
     const onMove = (e: PointerEvent) => {
       e.preventDefault();
+      pointer.current = { x: e.clientX, y: e.clientY };
       resolve(e.clientX, e.clientY);
     };
+
+    // Speed is proportional to how far into the edge band the pointer is, and
+    // clamped at the boundary so dragging past the column doesn't accelerate
+    // away. Rounded to whole pixels: a fractional scrollTop is rounded by the
+    // browser anyway, which would stall the slowest steps entirely.
+    const stepFor = (distance: number) =>
+      Math.max(1, Math.round(MAX_SCROLL_STEP * Math.min(1, (SCROLL_EDGE - distance) / SCROLL_EDGE)));
+
+    let frame = requestAnimationFrame(function tick() {
+      frame = requestAnimationFrame(tick);
+      const s = session.current;
+      if (!s) return;
+
+      const { x, y } = pointer.current;
+      const column = s.columns.find((c) => x >= c.left && x <= c.right);
+      if (!column?.scroller) return;
+
+      const above = y - column.viewTop;
+      const below = column.viewBottom - y;
+      const step = above < SCROLL_EDGE ? -stepFor(above) : below < SCROLL_EDGE ? stepFor(below) : 0;
+      if (step === 0) return;
+
+      const before = column.scroller.scrollTop;
+      column.scroller.scrollTop = before + step;
+      // Nothing moved — already at the end of the list — so the indicator is
+      // still where the last pointermove put it.
+      if (column.scroller.scrollTop !== before) resolve(x, y);
+    });
     const onUp = () => {
       const s = session.current;
       const target = targetRef.current;
@@ -216,6 +277,7 @@ export function useTaskDrag({
     window.addEventListener('pointercancel', reset);
     window.addEventListener('keydown', onKey);
     return () => {
+      cancelAnimationFrame(frame);
       document.body.style.userSelect = previousUserSelect;
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
@@ -260,6 +322,7 @@ export function useTaskDrag({
             columns,
           };
           setActiveId(id);
+          pointer.current = { x: ev.clientX, y: ev.clientY };
           resolve(ev.clientX, ev.clientY);
         };
 

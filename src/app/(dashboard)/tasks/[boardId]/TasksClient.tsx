@@ -1355,7 +1355,12 @@ function BoardColumn({
         />
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 pt-1 pb-3">
+      {/* The column's scroll container. Tagged so a drag reaching the top or
+          bottom edge can scroll it — see useTaskDrag. */}
+      <div
+        data-task-scroller
+        className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 pt-1 pb-3"
+      >
         <div className="flex items-center gap-2.5 px-2 py-1.5 mb-1.5 border-b border-border">
           <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
           <input
