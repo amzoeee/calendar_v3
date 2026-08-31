@@ -45,6 +45,19 @@ export const SORT_LABELS: Record<SortMode, string> = {
 };
 
 /**
+ * Details the composer can carry alongside a title, so a task with a deadline
+ * and tags takes one step rather than three. Everything is optional — the
+ * composer is a title box first.
+ */
+export interface NewTaskDetails {
+  /** "YYYY-MM-DD" as the viewer typed it. */
+  dueDate?: string | null;
+  /** "HH:MM", or absent for a deadline that names only a day. */
+  dueTime?: string | null;
+  tagIds?: number[];
+}
+
+/**
  * Lists that aren't lists: a view over every board rather than a row in
  * task_boards. "All tasks" answers "what do I owe in total", "Starred" shows
  * what you singled out, wherever it lives.

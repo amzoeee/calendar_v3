@@ -14,6 +14,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   CornerDownRight,
   GripVertical,
   ListChecks,
@@ -42,6 +43,7 @@ import {
   VIRTUAL_SORT_COOKIE_PREFIX,
   VIRTUAL_SORT_MODES,
   isVirtualList,
+  type NewTaskDetails,
   type SortMode,
   type VirtualList,
   type TaskRow,
@@ -87,6 +89,11 @@ import {
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
 
+// Every small control in the editor and the composer shares one look. Kept in
+// one place so the three pickers can't drift apart.
+const FIELD_CLASS =
+  'rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+
 interface BoardSummary {
   id: number;
   name: string;
@@ -125,7 +132,13 @@ interface UndoState {
 // Handlers a column needs from its parent. Bundled rather than passed one by
 // one, since every column gets exactly the same set.
 interface ColumnHandlers {
-  addTask: (boardId: number, title: string, parentId: number | null, starred?: boolean) => void;
+  addTask: (
+    boardId: number,
+    title: string,
+    parentId: number | null,
+    details?: NewTaskDetails,
+    starred?: boolean
+  ) => void;
   requestCompletion: (node: TaskNode, completed: boolean) => void;
   toggleStar: (row: TaskRow) => void;
   saveTitle: (id: number, title: string) => void;
@@ -320,6 +333,7 @@ export default function TasksClient({
     boardId: number,
     title: string,
     parentId: number | null,
+    details?: NewTaskDetails,
     starred = false
   ) => {
     const trimmed = title.trim();
@@ -327,7 +341,7 @@ export default function TasksClient({
     // A task added from the Starred list has to arrive starred, or it drops
     // out of the list you just added it to.
     run(async () => {
-      const id = await createTaskAction(boardId, trimmed, parentId);
+      const id = await createTaskAction(boardId, trimmed, parentId, details);
       if (starred) await setTaskStarredAction(id, true);
     });
   };
@@ -816,6 +830,12 @@ function BoardColumn({
   isPrimary: boolean;
 }) {
   const [composerValue, setComposerValue] = useState('');
+  // The composer's expandable half. It applies to one task and then empties
+  // itself, so a deadline can never reach a task you didn't set it on.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [draftDate, setDraftDate] = useState('');
+  const [draftTime, setDraftTime] = useState('');
+  const [draftTagIds, setDraftTagIds] = useState<number[]>([]);
   const [subtaskValue, setSubtaskValue] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1174,6 +1194,25 @@ function BoardColumn({
     );
   };
 
+  const composerDetails: NewTaskDetails = {
+    dueDate: draftDate || null,
+    dueTime: draftTime || null,
+    tagIds: draftTagIds,
+  };
+
+  // Spent on the task it was set for. The panel stays open, empty and ready,
+  // rather than quietly carrying a deadline onto whatever you type next.
+  const clearDetails = () => {
+    setDraftDate('');
+    setDraftTime('');
+    setDraftTagIds([]);
+  };
+
+  const closeDetails = () => {
+    setDetailsOpen(false);
+    clearDetails();
+  };
+
   const hasFilterables =
     tagsInUse.length > 0 ||
     (!starredList && (starredOnly || rows.some((r) => r.isStarred)));
@@ -1487,31 +1526,81 @@ function BoardColumn({
         data-task-scroller
         className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 pt-1 pb-3"
       >
-        <div className="flex items-center gap-2.5 px-2 py-1.5 mb-1.5 border-b border-border">
-          <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
-          <input
-            ref={(el) => {
-              inputRef.current = el;
-              registerComposer(board.id, el);
-            }}
-            value={composerValue}
-            onChange={(e) => setComposerValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handlers.addTask(board.id, composerValue, null, board.virtual === 'starred');
-                setComposerValue('');
-              }
-              if (e.key === 'Escape') {
-                setComposerValue('');
-                inputRef.current?.blur();
-              }
-            }}
-            /* A list that isn't a list still has to put a new task
-               somewhere. It goes to the first list, named here rather than
-               left to be discovered. */
-            placeholder={board.virtual ? `Add to ${board.targetName}` : 'Add a task'}
-            className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
-          />
+        <div className="mb-1.5 border-b border-border">
+          <div className="flex items-center gap-2.5 px-2 py-1.5">
+            <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+            <input
+              ref={(el) => {
+                inputRef.current = el;
+                registerComposer(board.id, el);
+              }}
+              value={composerValue}
+              onChange={(e) => setComposerValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handlers.addTask(
+                    board.id,
+                    composerValue,
+                    null,
+                    composerDetails,
+                    board.virtual === 'starred'
+                  );
+                  setComposerValue('');
+                  clearDetails();
+                }
+                if (e.key === 'Escape') {
+                  setComposerValue('');
+                  closeDetails();
+                  inputRef.current?.blur();
+                }
+              }}
+              /* A list that isn't a list still has to put a new task
+                 somewhere. It goes to the first list, named here rather than
+                 left to be discovered. */
+              placeholder={board.virtual ? `Add to ${board.targetName}` : 'Add a task'}
+              className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
+            />
+            <button
+              onClick={() => (detailsOpen ? closeDetails() : setDetailsOpen(true))}
+              aria-expanded={detailsOpen}
+              aria-label={detailsOpen ? 'Hide deadline and tags' : 'Add a deadline or tags'}
+              title="Deadline and tags"
+              className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            >
+              {detailsOpen ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+
+          {/* Deadline and tags before the task exists, so the common case —
+              "read chapter 4, due Friday, #school" — is one step instead of
+              create, open, fill in. The reminder isn't here on purpose: an
+              offset is a decision about a deadline you already have. */}
+          {detailsOpen && (
+            <div className="px-2 pb-2 space-y-2">
+              <div className="flex gap-1.5">
+                <input
+                  type="date"
+                  value={draftDate}
+                  onChange={(e) => setDraftDate(e.target.value)}
+                  aria-label="Deadline for the new task"
+                  className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
+                />
+                <input
+                  type="time"
+                  value={draftTime}
+                  disabled={!draftDate}
+                  onChange={(e) => setDraftTime(e.target.value)}
+                  aria-label="Time of day for the new task"
+                  className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+                />
+              </div>
+              <TagPicker all={availableTags} selected={draftTagIds} onChange={setDraftTagIds} />
+            </div>
+          )}
         </div>
 
         {openTree.length === 0 && (
@@ -1836,8 +1925,7 @@ function SchedulePicker({
     });
   }
 
-  const field =
-    'rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+  const field = FIELD_CLASS;
 
   return (
     <div className="space-y-2">
@@ -1945,8 +2033,7 @@ function RepeatPicker({
   const hasDeadline = Boolean(task.dueDatetime);
   const numbered = task.title.includes('{n}');
 
-  const field =
-    'rounded bg-secondary border border-border px-2 py-1.5 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring';
+  const field = FIELD_CLASS;
 
   const commit = (next: { rrule?: string | null; start?: string; end?: string }) => {
     const r = next.rrule !== undefined ? next.rrule : rrule;

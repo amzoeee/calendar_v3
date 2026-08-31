@@ -10,7 +10,7 @@ import { getViewerTimeZone } from '@/lib/server-timezone';
 import { computeRemindAt, END_OF_DAY, displayTitle } from '@/lib/taskSchedule';
 import { expandRrule } from '@/lib/recurring';
 import { dateStrInTimeZone } from '@/lib/timezone';
-import { MAX_TASK_DEPTH, type SortMode } from '@/lib/tasks';
+import { MAX_TASK_DEPTH, type NewTaskDetails, type SortMode } from '@/lib/tasks';
 
 const VALID_SORT_MODES: SortMode[] = ['manual', 'alpha', 'created', 'remind', 'deadline'];
 
@@ -287,7 +287,8 @@ export async function skipOccurrenceAction(taskId: number): Promise<void> {
 export async function createTaskAction(
   boardId: number,
   title: string,
-  parentId: number | null = null
+  parentId: number | null = null,
+  details: NewTaskDetails = {}
 ): Promise<number> {
   const session = await requireAuth();
   const trimmed = title.trim();
@@ -332,6 +333,17 @@ export async function createTaskAction(
 
   const orderIndex = parentId == null ? minOrder - 1 : maxOrder + 1;
 
+  // A day-only deadline is stored at the end of its day, the same convention
+  // setTaskScheduleAction uses, so the two can't disagree about what "due
+  // Friday" sorts as. No reminder is offered here — an offset is a decision
+  // about a deadline you already have, and the editor is where it belongs.
+  const dueDatetime = details.dueDate
+    ? browserDatetimeToServerDbString(
+        `${details.dueDate}T${details.dueTime || END_OF_DAY}`,
+        await getViewerTimeZone()
+      )
+    : null;
+
   const [created] = await db
     .insert(tasks)
     .values({
@@ -341,8 +353,14 @@ export async function createTaskAction(
       depth,
       orderIndex,
       title: trimmed,
+      dueDatetime,
+      dueHasTime: dueDatetime && details.dueTime ? 1 : 0,
     })
     .returning({ id: tasks.id });
+
+  if (details.tagIds?.length) {
+    await replaceTaskTags(created.id, session.userId, details.tagIds);
+  }
 
   refresh();
   return created.id;
@@ -757,6 +775,26 @@ export async function moveTaskAction(
  * cascading of names the way events.tag needs. Tag ids that aren't the
  * caller's are dropped rather than trusted.
  */
+async function replaceTaskTags(
+  taskId: number,
+  userId: number,
+  tagIds: number[]
+): Promise<void> {
+  await db.delete(taskTags).where(eq(taskTags.taskId, taskId));
+  if (tagIds.length === 0) return;
+
+  const owned = await db
+    .select({ id: tags.id })
+    .from(tags)
+    .where(and(inArray(tags.id, tagIds), eq(tags.userId, userId)));
+  const allowed = new Set(owned.map((t) => t.id));
+
+  const rows = [...new Set(tagIds)]
+    .filter((id) => allowed.has(id))
+    .map((tagId) => ({ taskId, tagId }));
+  if (rows.length > 0) await db.insert(taskTags).values(rows);
+}
+
 export async function setTaskTagsAction(taskId: number, tagIds: number[]): Promise<void> {
   const session = await requireAuth();
 
@@ -767,24 +805,7 @@ export async function setTaskTagsAction(taskId: number, tagIds: number[]): Promi
     .limit(1);
   if (!task) throw new Error('Task not found');
 
-  await db.delete(taskTags).where(eq(taskTags.taskId, taskId));
-
-  if (tagIds.length === 0) {
-    refresh();
-    return;
-  }
-
-  const owned = await db
-    .select({ id: tags.id })
-    .from(tags)
-    .where(and(inArray(tags.id, tagIds), eq(tags.userId, session.userId)));
-  const allowed = new Set(owned.map((t) => t.id));
-
-  const rows = [...new Set(tagIds)]
-    .filter((id) => allowed.has(id))
-    .map((tagId) => ({ taskId, tagId }));
-  if (rows.length > 0) await db.insert(taskTags).values(rows);
-
+  await replaceTaskTags(taskId, session.userId, tagIds);
   refresh();
 }
 
