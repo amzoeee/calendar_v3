@@ -21,6 +21,7 @@ import {
   MoreHorizontal,
   Plus,
   CalendarClock,
+  CalendarPlus,
   Repeat,
   SkipForward,
   Star,
@@ -67,6 +68,8 @@ import {
   setTaskScheduleAction,
   setTaskRecurrenceAction,
   skipOccurrenceAction,
+  postponeOccurrenceAction,
+  restoreTaskDeadlineAction,
   createTasksBulkAction,
 } from '@/app/task-actions';
 import {
@@ -84,6 +87,7 @@ import {
   formatDue,
   displayTitle,
   repeatLabel,
+  postponeLabel,
   REPEAT_OPTIONS,
 } from '@/lib/taskSchedule';
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
@@ -430,6 +434,37 @@ export default function TasksClient({
 
   const drag = useTaskDrag({ onCommit: moveTask });
 
+  /**
+   * Push a repeating task's deadline on by one of its own cycles.
+   *
+   * The editor closes on the way, the same as Skip does: the deadline fields
+   * hold a draft read when the dialog opened, so leaving it open would show
+   * the old date and write it back on the next edit. The toast says where the
+   * task landed, which is what the dialog would otherwise have shown.
+   */
+  const postponeTask = (row: TaskRow) => {
+    setSelectedId(null);
+    startTransition(async () => {
+      const moved = await postponeOccurrenceAction(row.id);
+      if (moved) {
+        patchLocal([row.id], { dueDatetime: moved.due });
+        const landed = formatDue(
+          pacificDbStringToDate(moved.due),
+          row.dueHasTime === 1,
+          new Date()
+        );
+        raiseUndo({
+          message: `Pushed “${displayTitle(row.title, row.counterValue)}” to ${landed}`,
+          undo: () => {
+            patchLocal([row.id], { dueDatetime: moved.previousDue });
+            run(() => restoreTaskDeadlineAction(row.id, moved.previousDue));
+          },
+        });
+      }
+      router.refresh();
+    });
+  };
+
   const removeTask = (id: number) => {
     setSelectedId(null);
     setLocalRows((prev) => prev.filter((r) => r.id !== id && r.parentId !== id));
@@ -646,6 +681,7 @@ export default function TasksClient({
               setSelectedId(null);
               run(() => skipOccurrenceAction(selected.id));
             }}
+            onPostpone={() => postponeTask(selected)}
           />
 
           <div className="space-y-1">
@@ -2019,10 +2055,12 @@ function RepeatPicker({
   task,
   onSave,
   onSkip,
+  onPostpone,
 }: {
   task: TaskRow;
   onSave: (rrule: string | null, start: number | null, end: number | null) => void;
   onSkip: () => void;
+  onPostpone: () => void;
 }) {
   const [rrule, setRrule] = useState<string | null>(task.rrule);
   const [start, setStart] = useState<string>(
@@ -2102,8 +2140,24 @@ function RepeatPicker({
             </p>
           )}
 
+          {/* Postpone and skip sit together because the difference between
+              them is the thing worth seeing: postponing keeps this
+              occurrence and moves it, skipping gives up on it and counts it
+              as gone. The postpone label names the step it will take. */}
+          {postponeLabel(rrule) && (
+            <button
+              onClick={onPostpone}
+              title="Push the deadline on by one cycle, keeping this one"
+              className="flex items-center gap-2 pt-1 text-sm md:text-xs text-foreground hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              <CalendarPlus className="h-3.5 w-3.5" />
+              {postponeLabel(rrule)}
+            </button>
+          )}
+
           <button
             onClick={onSkip}
+            title="Give up on this one and move to the next"
             className="flex items-center gap-2 pt-1 text-sm md:text-xs text-foreground hover:opacity-80 transition-opacity cursor-pointer"
           >
             <SkipForward className="h-3.5 w-3.5" />

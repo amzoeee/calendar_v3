@@ -132,6 +132,41 @@ export function repeatLabel(rrule: string | null): string | null {
   return REPEAT_OPTIONS.find((o) => o.rrule === rrule)?.label ?? 'Repeats';
 }
 
+const FREQ_UNITS: Record<string, string> = {
+  DAILY: 'day',
+  WEEKLY: 'week',
+  MONTHLY: 'month',
+  YEARLY: 'year',
+};
+
+/**
+ * What postponing a repeating task by one cycle will do, in the rule's own
+ * terms: "+1 week" for a weekly task, "+2 weeks" for a fortnightly one.
+ *
+ * Read out of the rule rather than looked up in REPEAT_OPTIONS, so a rule this
+ * app's picker can't produce — an imported one, or a future custom interval —
+ * still gets a label that says what will happen. Null when the frequency isn't
+ * one that maps to a plain unit, which is the caller's cue to offer nothing
+ * rather than to guess.
+ */
+export function postponeLabel(rrule: string | null): string | null {
+  if (!rrule) return null;
+
+  const parts: Record<string, string> = {};
+  for (const part of rrule.split(';')) {
+    const [key, value] = part.split('=');
+    if (value != null) parts[key.trim().toUpperCase()] = value.trim();
+  }
+
+  const unit = FREQ_UNITS[parts.FREQ?.toUpperCase() ?? ''];
+  if (!unit) return null;
+
+  const interval = Number(parts.INTERVAL ?? 1);
+  if (!Number.isInteger(interval) || interval < 1) return null;
+
+  return `+${interval} ${unit}${interval === 1 ? '' : 's'}`;
+}
+
 /**
  * Substitute a rolling task's counter into its title.
  *
