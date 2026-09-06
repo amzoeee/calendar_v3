@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import EventSearch from '@/app/components/EventSearch';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
+import { usePreservedScrollLeft } from '@/lib/usePreservedScrollLeft';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 
 interface Tag {
@@ -336,6 +337,12 @@ export default function StatsClient({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [navigateTo, prevPeriod, nextPeriod]);
 
+  // Both charts are wider than a phone, and paging remounts the page, so
+  // without this every step drops the user back at the left edge of a chart
+  // they had scrolled into.
+  const taskBarsScrollRef = usePreservedScrollLeft<HTMLDivElement>('stats:task-bars');
+  const weekdayHoursScrollRef = usePreservedScrollLeft<HTMLDivElement>('stats:weekday-hours');
+
   // Mobile paging: swipe sideways to shift the range by its own length, same
   // as the arrow keys above. The hook ignores gestures that start inside the
   // horizontally scrollable bar chart, which owns that axis itself.
@@ -560,7 +567,7 @@ export default function StatsClient({
           {totalDone > 0 && (
             <>
               {/* Per-day bars, stacked by tag. */}
-              <div className="overflow-x-auto">
+              <div ref={taskBarsScrollRef} className="overflow-x-auto">
                 {/* Each bar needs room for a date beneath it, so the track
                     grows with the range and scrolls rather than crushing the
                     labels together. */}
@@ -659,7 +666,7 @@ export default function StatsClient({
 
           {/* Grid Chart — horizontally scrollable on mobile since 7 bars don't
               fit a phone width at a legible size (see the fixed inner width below) */}
-          <div className="flex-1 mt-8 overflow-x-auto md:overflow-visible">
+          <div ref={weekdayHoursScrollRef} className="flex-1 mt-8 overflow-x-auto md:overflow-visible">
             <div className="relative h-full w-[460px] md:w-full">
 
             {/* Y Axis Guide Lines */}
