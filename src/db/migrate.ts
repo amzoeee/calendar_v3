@@ -2,28 +2,35 @@ import path from 'node:path';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { db, sqlite } from './index';
 
+// Drizzle's own bookkeeping table, written by `migrate()` — but not by
+// `drizzle-kit push`, which applies a schema diff and leaves no history behind.
+const HISTORY_TABLE = '__drizzle_migrations';
+
+function tableExists(name: string): boolean {
+  return (
+    sqlite
+      .prepare("select 1 from sqlite_master where type = 'table' and name = ?")
+      .get(name) !== undefined
+  );
+}
+
 // Tables SQLite maintains for itself don't count towards "does this database
-// have a schema yet".
-function userTableCount(): number {
+// have a schema yet", and neither does the history table — a failed
+// `drizzle-kit migrate` leaves that one behind empty.
+function schemaTableCount(): number {
   const row = sqlite
     .prepare(
-      "select count(*) as n from sqlite_master where type = 'table' and name not like 'sqlite_%'",
+      `select count(*) as n from sqlite_master
+       where type = 'table' and name not like 'sqlite_%' and name != ?`,
     )
-    .get() as { n: number };
+    .get(HISTORY_TABLE) as { n: number };
   return row.n;
 }
 
-// Drizzle's own bookkeeping table, written by `migrate()` and by `drizzle-kit
-// migrate` — but not by `drizzle-kit push`, which applies a schema diff and
-// leaves no history behind.
-function hasMigrationHistory(): boolean {
-  return (
-    sqlite
-      .prepare(
-        "select 1 from sqlite_master where type = 'table' and name = '__drizzle_migrations'",
-      )
-      .get() !== undefined
-  );
+function appliedMigrationCount(): number {
+  if (!tableExists(HISTORY_TABLE)) return 0;
+  const row = sqlite.prepare(`select count(*) as n from ${HISTORY_TABLE}`).get() as { n: number };
+  return row.n;
 }
 
 /**
@@ -34,23 +41,20 @@ function hasMigrationHistory(): boolean {
  * came back with `no such table: users`, and the only thing that ever applied
  * the migrations was the production Docker entrypoint.
  *
- * Three cases, because a database can arrive here three ways:
- *
- * - It has migration history, so `migrate()` knows where it left off and
- *   applies whatever is new.
- * - It's empty — a fresh install — so the migrations build the schema from
- *   nothing and record themselves as applied.
- * - It has tables but no history: `drizzle-kit push` built it, which is what
- *   the README's calendar_v2 import tells you to run. Migrating that would
- *   start from 0000 and fail on tables that already exist, so leave it alone
- *   and say so. Nothing is broken for these — they just keep using push.
+ * Whether migrating is safe comes down to how many migrations this database
+ * has *applied*, not to whether the history table happens to exist — an
+ * interrupted `drizzle-kit migrate` leaves that table behind empty. With no
+ * migrations applied and a schema already in place, the database was built by
+ * `drizzle-kit push` (what the README's calendar_v2 import documents), and
+ * migrating it would start from 0000 and fail on tables that already exist.
+ * Those keep working exactly as they do today, so leave them alone and say so.
  */
 export function applyMigrations(): void {
-  if (!hasMigrationHistory() && userTableCount() > 0) {
+  if (appliedMigrationCount() === 0 && schemaTableCount() > 0) {
     console.warn(
-      '[db] Skipping migrations: this database has tables but no migration history, so ' +
-        'it was built with `drizzle-kit push`. Keep using `npx drizzle-kit push` to pick ' +
-        'up schema changes.',
+      `[db] Skipping migrations: this database already has tables but no applied ` +
+        `migrations, so it was built with \`drizzle-kit push\`. Keep using ` +
+        `\`npx drizzle-kit push\` to pick up schema changes.`,
     );
     return;
   }
