@@ -72,7 +72,7 @@ npm run dev
 
 Open your browser and go to **http://localhost:3000**.
 
-The first time it runs, the app automatically creates an empty database file (`calendar.db`) in the project folder.
+The first time it runs, the app creates the database file (`calendar.db`) in the project folder and builds its tables. Every later start applies any new migrations, so there is no separate database step to remember.
 
 ### 5. Create an account
 
@@ -103,6 +103,8 @@ If you have an existing `calendar.db` file from calendar_v2 (whether it was the 
    ```
 
    If it asks you to confirm changes, type `yes`. If the schemas already match (which they should), it will say there's nothing to do.
+
+   A database set up this way has no migration history, so the app leaves it to `drizzle-kit push` from then on and says so in the terminal on startup. Keep running `npx drizzle-kit push` after you pull schema changes.
 
 4. **Start the app** with `npm run dev` and log in with your existing username and password. Your old credentials will work -- the app understands the password format used by both versions.
 
