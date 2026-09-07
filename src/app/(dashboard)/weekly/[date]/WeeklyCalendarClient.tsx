@@ -61,11 +61,10 @@ const MOBILE_ZOOM_STEP = 1.5;
 // phone an hour is ~23px, so a quarter-hour event would otherwise come out
 // under 6px tall.
 const MOBILE_MIN_BLOCK_PX = 8;
-// Below this height a block has no interior left. The 3px corner radius eats
-// the whole thing and rounds it into a lens, and the 1px border takes a
-// quarter of the colour with it — so short blocks drop both and render as
-// plain bars.
-const MOBILE_SLIVER_PX = 13;
+// One radius for every block, short or long. Small enough that it doesn't eat
+// the interior of a block at the 8px floor, which is what turned quarter-hour
+// events into lenses when this scaled with height.
+const MOBILE_BLOCK_RADIUS = '2px';
 
 interface WeeklyCalendarClientProps {
   date: string;
@@ -1007,7 +1006,6 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                           MOBILE_MIN_BLOCK_PX,
                           ((ev.height || 0) / 60) * mobileZoomLevel
                         );
-                        const isSliver = heightPx < MOBILE_SLIVER_PX;
                         return (
                           <button
                             key={ev.id}
@@ -1015,18 +1013,13 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                             // The block carries no text, so the label is the
                             // only thing a screen reader has to go on.
                             aria-label={`${ev.title}, ${ev.time_range}`}
-                            className={`absolute cursor-pointer event-card-clickable ${
-                              isSliver ? '' : 'border border-black/10 shadow-sm'
-                            }`}
+                            className="absolute cursor-pointer event-card-clickable shadow-sm"
                             style={{
                               top: `${topPx}px`,
                               height: `${heightPx}px`,
                               left: `${leftPercent}%`,
                               width: `calc(${widthPercent}% - 2px)`,
-                              // Radius scales with the block instead of being
-                              // fixed, so a short one reads as a bar rather
-                              // than as a sliver with its ends bitten off.
-                              borderRadius: isSliver ? '1px' : '3px',
+                              borderRadius: MOBILE_BLOCK_RADIUS,
                               backgroundColor: ev.isPending ? `${ev.tag_color}66` : ev.tag_color,
                             }}
                           />
