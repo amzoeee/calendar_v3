@@ -10,6 +10,7 @@ import React, {
   useTransition,
 } from 'react';
 import { useRouter } from 'next/navigation';
+import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import {
   Check,
   ChevronDown,
@@ -458,12 +459,17 @@ export default function TasksClient({
     selectedId,
   };
 
+  // Switching board remounts the page, which would otherwise send the rail
+  // back to the top every time — including on the way to a board far enough
+  // down the list to need scrolling to in the first place.
+  const boardsRailScrollRef = usePreservedScroll<HTMLDivElement>('tasks:boards-rail');
+
   return (
     <div className="flex-1 min-h-0 flex overflow-hidden">
       {/* Boards rail. The name shows that board on its own; the checkbox adds
           it beside the others, up to MAX_VISIBLE_BOARDS. */}
       <aside className="hidden md:flex w-44 shrink-0 border-r border-border flex-col">
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
+        <div ref={boardsRailScrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-0.5">
           {/* Views over every board. They replace the visible set rather than
               joining it: "everything" beside one list would show the same
               tasks twice, and there'd be no honest answer for which copy a
@@ -847,6 +853,13 @@ function BoardColumn({
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
+
+  // Keyed by the list this column is showing, not by its position, so that
+  // switching board — which remounts the page — puts each column back where it
+  // was rather than dropping another list's offset onto it.
+  const columnScrollRef = usePreservedScroll<HTMLDivElement>(
+    `tasks:column:${board.virtual ?? board.id}`,
+  );
 
   // The Starred list is the starred filter, applied to every board. Reusing
   // the filter rather than narrowing the query is what keeps a match's family
@@ -1523,6 +1536,7 @@ function BoardColumn({
       {/* The column's scroll container. Tagged so a drag reaching the top or
           bottom edge can scroll it — see useTaskDrag. */}
       <div
+        ref={columnScrollRef}
         data-task-scroller
         className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 pt-1 pb-3"
       >
