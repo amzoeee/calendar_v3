@@ -1924,7 +1924,7 @@ function RepeatPicker({
               className="flex items-center gap-2 pt-1 text-sm md:text-xs text-foreground hover:opacity-80 transition-opacity cursor-pointer"
             >
               <CalendarPlus className="h-3.5 w-3.5" />
-              {postponeLabel(rrule)}
+              Postpone {postponeLabel(rrule)}
             </button>
           )}
 
@@ -1936,6 +1936,13 @@ function RepeatPicker({
             <SkipForward className="h-3.5 w-3.5" />
             Skip this one
           </button>
+
+          {/* The two read as near-synonyms otherwise, and the tooltips that
+              tell them apart don't exist on a phone. */}
+          <p className="text-[10px] text-muted-foreground">
+            Postpone keeps this one, just later. Skip gives up on it and moves
+            to the next.
+          </p>
         </>
       )}
     </div>
