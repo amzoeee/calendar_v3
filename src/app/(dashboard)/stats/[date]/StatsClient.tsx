@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
-import EventSearch from '@/app/components/EventSearch';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
@@ -412,7 +411,6 @@ export default function StatsClient({
             <span className="hidden md:inline-block px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
               Stats
             </span>
-            <EventSearch tags={tags} />
           </div>
         </div>
 
