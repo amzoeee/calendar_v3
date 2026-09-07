@@ -792,25 +792,55 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           {/* Mobile: agenda list vs. the blocks-only week grid. Two buttons
               rather than one that flips, so which mode you're in is readable
               without first working out what the icon is offering. */}
-          <div className="md:hidden flex items-center gap-0.5 bg-secondary border border-border rounded-lg p-0.5">
-            {(['list', 'grid'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setMobileView(mode)}
-                aria-pressed={mobileView === mode}
-                aria-label={mode === 'list' ? 'Agenda list' : 'Week grid'}
-                className={`p-1.5 rounded transition cursor-pointer ${
-                  mobileView === mode
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {mode === 'list' ? <List className="h-4 w-4" /> : <CalendarRange className="h-4 w-4" />}
-              </button>
-            ))}
-          </div>
           <EventSearch tags={tags} />
         </div>
+      </div>
+
+      {/* Mobile control strip. The view toggle can't go in the header above:
+          at 375px the date buttons and the search box leave it about 70px, all
+          of which the week range needs. Its own row also gives the grid's zoom
+          buttons a home that isn't floating over the day. */}
+      <div className="md:hidden shrink-0 flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+        <div className="flex items-center bg-secondary border border-border rounded-lg p-0.5">
+          {(['list', 'grid'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setMobileView(mode)}
+              aria-pressed={mobileView === mode}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                mobileView === mode
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              {mode === 'list' ? <List className="h-3.5 w-3.5" /> : <CalendarRange className="h-3.5 w-3.5" />}
+              {mode === 'list' ? 'List' : 'Week'}
+            </button>
+          ))}
+        </div>
+
+        {/* Zooming out stops at "the whole day fits", which is where this view
+            starts — so the minus greys out exactly when there's nothing left
+            off-screen to reveal. */}
+        {mobileView === 'grid' && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => changeMobileZoom(1 / MOBILE_ZOOM_STEP)}
+              disabled={mobileZoom === null}
+              aria-label="Zoom out"
+              className="p-1.5 rounded-lg bg-secondary text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => changeMobileZoom(MOBILE_ZOOM_STEP)}
+              aria-label="Zoom in"
+              className="p-1.5 rounded-lg bg-secondary text-foreground cursor-pointer"
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Mobile agenda list — the desktop hour grid doesn't fit 7 columns legibly on a
@@ -882,7 +912,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           and the shape and colour of the day is what this view is for. Tapping
           a block opens the same bottom sheet the agenda rows do. */}
       {mobileView === 'grid' && (
-        <div className="md:hidden flex-1 min-h-0 flex flex-col relative">
+        <div className="md:hidden flex-1 min-h-0 flex flex-col">
           {/* Dated day headers, frozen above the scroll like the desktop row */}
           <div className="shrink-0 flex border-b border-border bg-background">
             <div className="w-9 shrink-0 border-r border-border" />
@@ -923,7 +953,11 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                     <div
                       key={hour}
                       className="absolute right-1.5 text-[9px] font-bold text-muted-foreground"
-                      style={{ top: `${hour * mobileZoomLevel}px`, transform: 'translateY(-50%)' }}
+                      style={
+                        hour === 0
+                          ? { top: 0 }
+                          : { top: `${hour * mobileZoomLevel}px`, transform: 'translateY(-50%)' }
+                      }
                     >
                       {hour % 12 === 0 ? 12 : hour % 12}
                       {suffix}
@@ -985,31 +1019,6 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                 })}
               </div>
             </div>
-          </div>
-
-          {/* Zoom. Zooming out stops at "the whole day fits", which is where
-              this view starts — so the minus greys out exactly when there's
-              nothing left off-screen to reveal. Parked bottom-left, clear of
-              the add button on the other side. */}
-          <div
-            className="absolute left-3 z-30 flex flex-col rounded-full bg-card/90 border border-border shadow-lg"
-            style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
-          >
-            <button
-              onClick={() => changeMobileZoom(MOBILE_ZOOM_STEP)}
-              aria-label="Zoom in"
-              className="p-2.5 text-foreground cursor-pointer"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => changeMobileZoom(1 / MOBILE_ZOOM_STEP)}
-              disabled={mobileZoom === null}
-              aria-label="Zoom out"
-              className="p-2.5 text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </button>
           </div>
         </div>
       )}
