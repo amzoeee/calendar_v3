@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
+import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import {
   Check,
   ChevronDown,
@@ -465,6 +466,43 @@ export default function TasksClient({
       router.refresh();
     });
   };
+  // ----- mobile paging between lists -----
+
+  // Mobile shows one list at a time, so swiping sideways pages through them in
+  // the order the picker offers: the views over everything first, then the
+  // boards. No wrap-around — running off either end should feel like the end
+  // of the rail, not a jump back to the far side.
+  const swipeOrder = useMemo(
+    () => [...VIRTUAL_LISTS.map(String), ...boards.map((b) => String(b.id))],
+    [boards],
+  );
+
+  const pageBy = useCallback(
+    (step: number) => {
+      // Only the one-column mobile layout pages between lists — a wide screen
+      // shows several columns side by side, where a swipe would collapse them
+      // down to one. Read at gesture time (the query matches Tailwind's `md`)
+      // rather than tracked in state, so it can't go stale behind a resize.
+      if (!window.matchMedia('(max-width: 767px)').matches) return;
+      const from = swipeOrder.indexOf(String(virtual ?? primary.id));
+      const next = swipeOrder[from + step];
+      if (from === -1 || next === undefined) return;
+      router.push(`/tasks/${next}`);
+    },
+    [router, swipeOrder, virtual, primary.id],
+  );
+
+  const swipeRef = useSwipeNavigation<HTMLDivElement>({
+    onSwipeLeft: () => pageBy(1),
+    onSwipeRight: () => pageBy(-1),
+    // Suspended while anything is open over the board, and mid-drag, so a
+    // gesture meant for a dialog or a task row can't page the list away.
+    enabled:
+      selectedId === null &&
+      !newBoardOpen &&
+      confirmParent === null &&
+      drag.activeId === null,
+  });
 
   const removeTask = (id: number) => {
     setSelectedId(null);
@@ -500,7 +538,7 @@ export default function TasksClient({
   const boardsRailScrollRef = usePreservedScroll<HTMLDivElement>('tasks:boards-rail');
 
   return (
-    <div className="flex-1 min-h-0 flex overflow-hidden">
+    <div ref={swipeRef} className="flex-1 min-h-0 flex overflow-hidden">
       {/* Boards rail. The name shows that board on its own; the checkbox adds
           it beside the others, up to MAX_VISIBLE_BOARDS. */}
       <aside className="hidden md:flex w-44 shrink-0 border-r border-border flex-col">
