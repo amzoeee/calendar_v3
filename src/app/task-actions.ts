@@ -284,6 +284,102 @@ export async function skipOccurrenceAction(taskId: number): Promise<void> {
   refresh();
 }
 
+/**
+ * Move a deadline, carrying the reminder with it.
+ *
+ * The reminder is stored as an offset precisely so this is possible: the
+ * materialised `remindAt` is re-derived from the new deadline rather than left
+ * pointing at the old one.
+ */
+async function applyDeadline(
+  taskId: number,
+  userId: number,
+  dueDatetime: string
+): Promise<void> {
+  const [task] = await db
+    .select({
+      remindOffsetMinutes: tasks.remindOffsetMinutes,
+      remindOffsetDays: tasks.remindOffsetDays,
+      remindTimeOfDay: tasks.remindTimeOfDay,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)))
+    .limit(1);
+  if (!task) throw new Error('Task not found');
+
+  await db
+    .update(tasks)
+    .set({
+      dueDatetime,
+      remindAt: computeRemindAt(
+        dueDatetime,
+        task.remindOffsetMinutes,
+        task.remindOffsetDays,
+        task.remindTimeOfDay
+      ),
+    })
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
+}
+
+/**
+ * Push a repeating task's deadline on by one cycle, keeping the occurrence.
+ *
+ * Deliberately not the same thing as skipping. Skip means "not doing this
+ * one": it advances the deadline *and* the counter, and the occurrence is
+ * gone. Postpone means "doing it, later" — same occurrence, same number, later
+ * date. The rest of the series follows on its own, since a rolling task's next
+ * deadline is computed from its current one.
+ *
+ * Exactly one step, so the button's label ("+1 week") is the literal truth.
+ * A task three weeks overdue lands a week after the deadline it already
+ * missed, not next week; pressing it again steps again. Deciding otherwise
+ * here would mean the label and the result disagreed.
+ */
+export async function postponeOccurrenceAction(
+  taskId: number
+): Promise<{ previousDue: string; due: string } | null> {
+  const session = await requireAuth();
+
+  const [task] = await db
+    .select({ dueDatetime: tasks.dueDatetime, rrule: tasks.rrule })
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)))
+    .limit(1);
+  if (!task) throw new Error('Task not found');
+  if (!task.rrule || !task.dueDatetime) return null;
+
+  // One step needs the current deadline and the one after it. A couple spare,
+  // because a rule can name the same instant twice.
+  const currentDue = task.dueDatetime;
+  const next = expandRrule(currentDue, currentDue, task.rrule, 4)
+    .map(([start]) => start)
+    .find((start) => start > currentDue);
+  // A finite rule (COUNT, UNTIL) can have nothing left to move to.
+  if (!next) return null;
+
+  await applyDeadline(taskId, session.userId, next);
+  refresh();
+  return { previousDue: currentDue, due: next };
+}
+
+/** A stored wall-clock deadline, "YYYY-MM-DD HH:MM:SS". */
+const DB_DATETIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+/**
+ * Put a deadline back to a value the client was just handed, so undoing a
+ * postpone doesn't have to step backwards through an RRULE — which, for
+ * monthly rules with their end-of-month clamp, isn't reliably invertible.
+ */
+export async function restoreTaskDeadlineAction(
+  taskId: number,
+  dueDatetime: string
+): Promise<void> {
+  const session = await requireAuth();
+  if (!DB_DATETIME.test(dueDatetime)) throw new Error('Invalid deadline');
+  await applyDeadline(taskId, session.userId, dueDatetime);
+  refresh();
+}
+
 export async function createTaskAction(
   boardId: number,
   title: string,
