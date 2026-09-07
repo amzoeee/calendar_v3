@@ -1920,7 +1920,7 @@ function RepeatPicker({
           {postponeLabel(rrule) && (
             <button
               onClick={onPostpone}
-              title="Push the deadline on by one cycle, keeping this one"
+              title="Same task, later"
               className="w-full flex items-center gap-2 px-2 py-2 rounded text-sm md:text-xs text-foreground hover:bg-secondary transition-colors cursor-pointer"
             >
               <CalendarPlus className="h-3.5 w-3.5" />
@@ -1930,19 +1930,12 @@ function RepeatPicker({
 
           <button
             onClick={onSkip}
-            title="Give up on this one and move to the next"
+            title="Not doing this one"
             className="w-full flex items-center gap-2 px-2 py-2 rounded text-sm md:text-xs text-foreground hover:bg-secondary transition-colors cursor-pointer"
           >
             <SkipForward className="h-3.5 w-3.5" />
             Skip this one
           </button>
-
-          {/* The two read as near-synonyms otherwise, and the tooltips that
-              tell them apart don't exist on a phone. */}
-          <p className="text-[10px] text-muted-foreground px-2">
-            Postpone keeps this one, just later. Skip gives up on it and moves
-            to the next.
-          </p>
         </>
       )}
     </div>
