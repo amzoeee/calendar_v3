@@ -1002,9 +1002,13 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                         const widthPercent = 100 / (ev.overlap_total || 1);
                         const leftPercent = (ev.overlap_column || 0) * widthPercent;
                         const topPx = ((ev.top_position || 0) / 60) * mobileZoomLevel;
+                        // The 1px comes back as a gap below the block, which
+                        // is the one thing the border and the shadow were
+                        // still earning: without it two same-coloured events
+                        // back to back merge into a single long block.
                         const heightPx = Math.max(
                           MOBILE_MIN_BLOCK_PX,
-                          ((ev.height || 0) / 60) * mobileZoomLevel
+                          ((ev.height || 0) / 60) * mobileZoomLevel - 1
                         );
                         return (
                           <button
@@ -1013,7 +1017,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
                             // The block carries no text, so the label is the
                             // only thing a screen reader has to go on.
                             aria-label={`${ev.title}, ${ev.time_range}`}
-                            className="absolute cursor-pointer event-card-clickable shadow-sm"
+                            className="absolute cursor-pointer event-card-clickable"
                             style={{
                               top: `${topPx}px`,
                               height: `${heightPx}px`,
