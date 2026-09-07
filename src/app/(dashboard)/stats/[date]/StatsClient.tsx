@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import EventSearch from '@/app/components/EventSearch';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
+import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 
 interface Tag {
@@ -336,6 +337,14 @@ export default function StatsClient({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [navigateTo, prevPeriod, nextPeriod]);
 
+  // Paging remounts the page, so without these every step drops the user back
+  // at the left edge of a chart they had scrolled into and at the top of a
+  // column they had read down — both of which a phone needs, since the charts
+  // are wider than the screen and the column is several screens tall.
+  const mainColumnScrollRef = usePreservedScroll<HTMLDivElement>('stats:main-column');
+  const taskBarsScrollRef = usePreservedScroll<HTMLDivElement>('stats:task-bars');
+  const weekdayHoursScrollRef = usePreservedScroll<HTMLDivElement>('stats:weekday-hours');
+
   // Mobile paging: swipe sideways to shift the range by its own length, same
   // as the arrow keys above. The hook ignores gestures that start inside the
   // horizontally scrollable bar chart, which owns that axis itself.
@@ -544,7 +553,7 @@ export default function StatsClient({
           the layout's <main>, which then scrolls instead. On a phone that hands
           the scroll to the element the browser treats as the page root, whose
           OS-drawn overlay scrollbar ignores our styling. */}
-      <div className="flex-1 min-h-0 p-4 md:p-8 overflow-y-auto flex flex-col gap-4 md:gap-8">
+      <div ref={mainColumnScrollRef} className="flex-1 min-h-0 p-4 md:p-8 overflow-y-auto flex flex-col gap-4 md:gap-8">
       {/* TASKS COMPLETED — its own section, because counts and hours are not
           the same unit and sharing an axis would misrepresent both. */}
         <div className="bg-card rounded-xl border border-border p-4 md:p-6 space-y-4">
@@ -560,7 +569,7 @@ export default function StatsClient({
           {totalDone > 0 && (
             <>
               {/* Per-day bars, stacked by tag. */}
-              <div className="overflow-x-auto">
+              <div ref={taskBarsScrollRef} className="overflow-x-auto">
                 {/* Each bar needs room for a date beneath it, so the track
                     grows with the range and scrolls rather than crushing the
                     labels together. */}
@@ -659,7 +668,7 @@ export default function StatsClient({
 
           {/* Grid Chart — horizontally scrollable on mobile since 7 bars don't
               fit a phone width at a legible size (see the fixed inner width below) */}
-          <div className="flex-1 mt-8 overflow-x-auto md:overflow-visible">
+          <div ref={weekdayHoursScrollRef} className="flex-1 mt-8 overflow-x-auto md:overflow-visible">
             <div className="relative h-full w-[460px] md:w-full">
 
             {/* Y Axis Guide Lines */}
