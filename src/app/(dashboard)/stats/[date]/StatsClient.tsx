@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import EventSearch from '@/app/components/EventSearch';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
-import { usePreservedScrollLeft } from '@/lib/usePreservedScrollLeft';
+import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 
 interface Tag {
@@ -337,11 +337,13 @@ export default function StatsClient({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [navigateTo, prevPeriod, nextPeriod]);
 
-  // Both charts are wider than a phone, and paging remounts the page, so
-  // without this every step drops the user back at the left edge of a chart
-  // they had scrolled into.
-  const taskBarsScrollRef = usePreservedScrollLeft<HTMLDivElement>('stats:task-bars');
-  const weekdayHoursScrollRef = usePreservedScrollLeft<HTMLDivElement>('stats:weekday-hours');
+  // Paging remounts the page, so without these every step drops the user back
+  // at the left edge of a chart they had scrolled into and at the top of a
+  // column they had read down — both of which a phone needs, since the charts
+  // are wider than the screen and the column is several screens tall.
+  const mainColumnScrollRef = usePreservedScroll<HTMLDivElement>('stats:main-column');
+  const taskBarsScrollRef = usePreservedScroll<HTMLDivElement>('stats:task-bars');
+  const weekdayHoursScrollRef = usePreservedScroll<HTMLDivElement>('stats:weekday-hours');
 
   // Mobile paging: swipe sideways to shift the range by its own length, same
   // as the arrow keys above. The hook ignores gestures that start inside the
@@ -551,7 +553,7 @@ export default function StatsClient({
           the layout's <main>, which then scrolls instead. On a phone that hands
           the scroll to the element the browser treats as the page root, whose
           OS-drawn overlay scrollbar ignores our styling. */}
-      <div className="flex-1 min-h-0 p-4 md:p-8 overflow-y-auto flex flex-col gap-4 md:gap-8">
+      <div ref={mainColumnScrollRef} className="flex-1 min-h-0 p-4 md:p-8 overflow-y-auto flex flex-col gap-4 md:gap-8">
       {/* TASKS COMPLETED — its own section, because counts and hours are not
           the same unit and sharing an axis would misrepresent both. */}
         <div className="bg-card rounded-xl border border-border p-4 md:p-6 space-y-4">
