@@ -13,6 +13,8 @@ import {
   X,
   Plus,
   Circle,
+  List,
+  CalendarRange,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
@@ -42,6 +44,28 @@ interface Tag {
   isArchived: number;
 }
 
+// The two ways mobile can read a week, and where the choice is remembered.
+type MobileWeekView = 'list' | 'grid';
+const MOBILE_VIEW_KEY = 'weeklyMobileView';
+const MOBILE_ZOOM_KEY = 'weeklyMobileZoom';
+// Ceiling for the mobile grid's pixels-per-hour. Well past the point where a
+// day stops fitting on screen, which is as far in as this view is useful —
+// past that the agenda list is the better tool.
+const MOBILE_MAX_ZOOM = 240;
+// Each press changes the scale by this much. A ratio rather than a fixed step,
+// so zooming feels the same at 25px/hour as at 200.
+const MOBILE_ZOOM_STEP = 1.5;
+// Blocks thinner than this are a hairline you can neither see nor tap, so
+// short events are floored here. Costs a couple of pixels of accuracy at the
+// most zoomed-out scale and buys back a hit target: with the day fitted to a
+// phone an hour is ~23px, so a quarter-hour event would otherwise come out
+// under 6px tall.
+const MOBILE_MIN_BLOCK_PX = 8;
+// One radius for every block, short or long. Small enough that it doesn't eat
+// the interior of a block at the 8px floor, which is what turned quarter-hour
+// events into lenses when this scaled with height.
+const MOBILE_BLOCK_RADIUS = '2px';
+
 interface WeeklyCalendarClientProps {
   date: string;
   sundayDate: string;
@@ -54,6 +78,20 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   // --- Zoom & Scroll ---
   const [zoomLevel, setZoomLevel] = useState<number>(60);
   const timelineContainerRef = useRef<HTMLDivElement>(null);
+
+  // --- Mobile week grid ---
+  // Mobile can read the week two ways: the agenda list (the default) and a
+  // shrunk-down version of the desktop grid. The grid shows colours and blocks
+  // only — a seventh of a phone's width can't hold a legible title — so what
+  // it gives you is the shape of the week at a glance.
+  const [mobileView, setMobileView] = useState<MobileWeekView>('list');
+  // Pixels per hour in that grid. `null` means "fit the whole day on screen",
+  // which is both the starting point and the fully-zoomed-out stop: seeing a
+  // whole day without scrolling is the point of the view, so it's where the
+  // zoom bottoms out rather than at some fixed pixel scale.
+  const [mobileZoom, setMobileZoom] = useState<number | null>(null);
+  const mobileGridRef = useRef<HTMLDivElement>(null);
+  const [mobileGridHeight, setMobileGridHeight] = useState(0);
 
   // --- Overlay & Modal States ---
   const [activeOverlayId, setActiveOverlayId] = useState<number | null>(null);
@@ -148,6 +186,12 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     if (savedScroll && timelineContainerRef.current) {
       timelineContainerRef.current.scrollTop = parseInt(savedScroll, 10);
     }
+
+    const savedView = localStorage.getItem(MOBILE_VIEW_KEY);
+    if (savedView === 'grid' || savedView === 'list') setMobileView(savedView);
+
+    const savedMobileZoom = Number(localStorage.getItem(MOBILE_ZOOM_KEY));
+    if (Number.isFinite(savedMobileZoom) && savedMobileZoom > 0) setMobileZoom(savedMobileZoom);
   }, []);
 
   // Click outside overlay listener to close the popover
@@ -180,6 +224,41 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     setZoomLevel(60);
   };
 
+  // The zoom at which 24 hours exactly fill the grid's viewport. Measured
+  // rather than assumed, since it depends on the device height, the header and
+  // the tab bar; 0 until the first measurement lands.
+  const mobileFitZoom = mobileGridHeight > 0 ? mobileGridHeight / 24 : 0;
+  const mobileZoomLevel = mobileZoom ?? mobileFitZoom;
+
+  // useLayoutEffect so the first paint of the grid already has a real height —
+  // measuring in a passive effect would flash a zero-height day first.
+  useLayoutEffect(() => {
+    const el = mobileGridRef.current;
+    if (!el) return;
+    const measure = () => setMobileGridHeight(el.clientHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [mobileView]);
+
+  // At the fitted scale an hour is roughly 25px tall, and labelling every one
+  // turns the gutter into a grey smear and the columns into a stack of lines.
+  // Thin both out until they have room to breathe.
+  const hourLabelStep = mobileZoomLevel >= 44 ? 1 : mobileZoomLevel >= 22 ? 2 : 3;
+
+  const changeMobileZoom = (factor: number) => {
+    if (mobileFitZoom <= 0) return;
+    setMobileZoom((prev) => {
+      const next = (prev ?? mobileFitZoom) * factor;
+      // Snapping back to null at the bottom keeps "fully zoomed out" tied to
+      // the viewport, so rotating the device or losing the browser chrome
+      // re-fits the day instead of leaving a stale pixel scale behind.
+      if (next <= mobileFitZoom) return null;
+      return Math.min(MOBILE_MAX_ZOOM, next);
+    });
+  };
+
   // Persist the zoom level as an effect rather than from inside the setState
   // updater — updaters must be pure (React may invoke them more than once).
   // Writes are ~0.006ms, so doing this per change costs nothing measurable.
@@ -193,6 +272,21 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     }
     localStorage.setItem('calendarZoomLevel', String(zoomLevel));
   }, [zoomLevel]);
+
+  // Same first-run skip as above, so the defaults can't overwrite what the
+  // load effect is about to restore.
+  const mobilePrefsHydratedRef = useRef(false);
+  useEffect(() => {
+    if (!mobilePrefsHydratedRef.current) {
+      mobilePrefsHydratedRef.current = true;
+      return;
+    }
+    localStorage.setItem(MOBILE_VIEW_KEY, mobileView);
+    // Fit-to-day is stored as "no stored zoom" rather than as the pixel value
+    // it happens to work out to on this device.
+    if (mobileZoom == null) localStorage.removeItem(MOBILE_ZOOM_KEY);
+    else localStorage.setItem(MOBILE_ZOOM_KEY, String(mobileZoom));
+  }, [mobileView, mobileZoom]);
 
   // Keyboard zoom (Cmd/Ctrl + '=', '-', '0'), arrow key navigation, and edit overlay shortcuts
   useEffect(() => {
@@ -567,6 +661,26 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
     let tries = 0;
     const attempt = () => {
       if (scrolledToTodayParam.current === flag) return;
+
+      // The grid has today as a column rather than a section, so "go to today"
+      // is a vertical move to the current hour. At the fitted zoom the day
+      // already fits and this is a no-op, which is the right answer.
+      if (mobileView === 'grid') {
+        const grid = mobileGridRef.current;
+        if (grid && mobileZoomLevel > 0) {
+          scrolledToTodayParam.current = flag;
+          const now = new Date();
+          const nowPx = ((now.getHours() * 60 + now.getMinutes()) / 60) * mobileZoomLevel;
+          grid.scrollTo({
+            top: Math.max(0, nowPx - grid.clientHeight / 2),
+            behavior: 'smooth',
+          });
+          return;
+        }
+        if (tries++ < 20) setTimeout(attempt, 50);
+        return;
+      }
+
       const container = agendaContainerRef.current;
       const target = container?.querySelector<HTMLElement>('[data-today-section]');
       if (container && target) {
@@ -585,7 +699,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
       if (tries++ < 20) setTimeout(attempt, 50);
     };
     attempt();
-  }, [searchParams]);
+  }, [searchParams, mobileView, mobileZoomLevel]);
 
   // Mobile paging: swipe the agenda sideways to change weeks, mirroring the
   // arrow-key shortcuts above. Suspended while an editor is open so a gesture
@@ -605,14 +719,18 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   return (
     <div ref={swipeRef} className="flex-1 flex flex-col overflow-hidden relative">
 
-      {/* Mobile FAB: opens the same Add Event modal used on desktop */}
-      <button
-        onClick={() => setShowAddModal(true)}
-        className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
-        aria-label="Add event"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
+      {/* Mobile FAB: opens the same Add Event modal used on desktop. Not in
+          the week grid — a 56px circle parked over a column that's only ~48px
+          wide covers most of a day, and the grid is there to be read. */}
+      {mobileView === 'list' && (
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
+          aria-label="Add event"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      )}
 
       {/* Navigation Header */}
       <div className="h-14 md:h-16 border-b border-border flex items-center justify-between px-3 md:px-6 gap-2 shrink-0 glass-panel">
@@ -681,13 +799,66 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           <span className="hidden md:inline-block px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
             Weekly
           </span>
+          {/* Mobile: agenda list vs. the blocks-only week grid. Two buttons
+              rather than one that flips, so which mode you're in is readable
+              without first working out what the icon is offering. */}
           <EventSearch tags={tags} />
         </div>
       </div>
 
+      {/* Mobile control strip. The view toggle can't go in the header above:
+          at 375px the date buttons and the search box leave it about 70px, all
+          of which the week range needs. Its own row also gives the grid's zoom
+          buttons a home that isn't floating over the day. */}
+      <div className="md:hidden shrink-0 flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+        <div className="flex items-center bg-secondary border border-border rounded-lg p-0.5">
+          {(['list', 'grid'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setMobileView(mode)}
+              aria-pressed={mobileView === mode}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                mobileView === mode
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              {mode === 'list' ? <List className="h-3.5 w-3.5" /> : <CalendarRange className="h-3.5 w-3.5" />}
+              {mode === 'list' ? 'List' : 'Week'}
+            </button>
+          ))}
+        </div>
+
+        {/* Zooming out stops at "the whole day fits", which is where this view
+            starts — so the minus greys out exactly when there's nothing left
+            off-screen to reveal. */}
+        {mobileView === 'grid' && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => changeMobileZoom(1 / MOBILE_ZOOM_STEP)}
+              disabled={mobileZoom === null}
+              aria-label="Zoom out"
+              className="p-1.5 rounded-lg bg-secondary text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => changeMobileZoom(MOBILE_ZOOM_STEP)}
+              aria-label="Zoom in"
+              className="p-1.5 rounded-lg bg-secondary text-foreground cursor-pointer"
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Mobile agenda list — the desktop hour grid doesn't fit 7 columns legibly on a
           phone, so mobile gets a scrollable day-by-day list instead. */}
-      <div ref={agendaContainerRef} className="md:hidden flex-1 overflow-y-auto divide-y divide-border">
+      <div
+        ref={agendaContainerRef}
+        className={`${mobileView === 'grid' ? 'hidden' : ''} md:hidden flex-1 overflow-y-auto divide-y divide-border`}
+      >
         {weekDates.map((day, idx) => {
           const isToday = day.toDateString() === today.toDateString();
           const dayEvents = positionedEventsByDay[idx];
@@ -744,6 +915,128 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
           );
         })}
       </div>
+
+      {/* Mobile week grid — the desktop layout shrunk to a phone: a time
+          gutter down the side, seven dated columns, and coloured blocks. No
+          titles, deliberately; at a seventh of the screen a label is a smear,
+          and the shape and colour of the day is what this view is for. Tapping
+          a block opens the same bottom sheet the agenda rows do. */}
+      {mobileView === 'grid' && (
+        <div className="md:hidden flex-1 min-h-0 flex flex-col">
+          {/* Dated day headers, frozen above the scroll like the desktop row */}
+          <div className="shrink-0 flex border-b border-border bg-background">
+            <div className="w-9 shrink-0 border-r border-border" />
+            <div className="flex-1 grid grid-cols-7">
+              {weekDates.map((day, idx) => {
+                const isToday = day.toDateString() === today.toDateString();
+                return (
+                  <div
+                    key={idx}
+                    className={`border-r border-border/40 py-1 text-center select-none ${
+                      isToday ? 'bg-primary/5' : ''
+                    }`}
+                  >
+                    <p className="text-[9px] uppercase font-bold text-muted-foreground leading-none">
+                      {day.toLocaleDateString('en-US', { weekday: 'short' })}
+                    </p>
+                    <p
+                      className={`text-[11px] font-extrabold mt-0.5 inline-flex items-center justify-center h-5 w-5 rounded-full ${
+                        isToday ? 'bg-primary text-primary-foreground' : 'text-foreground'
+                      }`}
+                    >
+                      {day.getDate()}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div ref={mobileGridRef} className="flex-1 min-h-0 overflow-y-auto">
+            <div className="relative flex" style={{ height: `${mobileZoomLevel * 24}px` }}>
+              {/* Hour gutter */}
+              <div className="w-9 shrink-0 border-r border-border bg-card/30 select-none relative">
+                {Array.from({ length: 24 }).map((_, hour) => {
+                  if (hour % hourLabelStep !== 0) return null;
+                  const suffix = hour < 12 ? 'a' : 'p';
+                  return (
+                    <div
+                      key={hour}
+                      className="absolute right-1.5 text-[9px] font-bold text-muted-foreground"
+                      style={
+                        hour === 0
+                          ? { top: 0 }
+                          : { top: `${hour * mobileZoomLevel}px`, transform: 'translateY(-50%)' }
+                      }
+                    >
+                      {hour % 12 === 0 ? 12 : hour % 12}
+                      {suffix}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Seven day columns */}
+              <div className="flex-1 grid grid-cols-7">
+                {weekDates.map((day, colIdx) => {
+                  const isToday = day.toDateString() === today.toDateString();
+                  const dayEvents = positionedEventsByDay[colIdx];
+                  return (
+                    <div
+                      key={colIdx}
+                      className={`border-r border-border/40 relative ${isToday ? 'bg-primary/5' : ''}`}
+                    >
+                      <div className="absolute inset-0 pointer-events-none">
+                        {Array.from({ length: 24 }).map((_, hour) =>
+                          hour % hourLabelStep === 0 ? (
+                            <div
+                              key={hour}
+                              className="absolute left-0 right-0 border-t border-border/20"
+                              style={{ top: `${hour * mobileZoomLevel}px` }}
+                            />
+                          ) : null
+                        )}
+                      </div>
+
+                      {dayEvents.map((ev) => {
+                        const widthPercent = 100 / (ev.overlap_total || 1);
+                        const leftPercent = (ev.overlap_column || 0) * widthPercent;
+                        const topPx = ((ev.top_position || 0) / 60) * mobileZoomLevel;
+                        // The 1px comes back as a gap below the block, which
+                        // is the one thing the border and the shadow were
+                        // still earning: without it two same-coloured events
+                        // back to back merge into a single long block.
+                        const heightPx = Math.max(
+                          MOBILE_MIN_BLOCK_PX,
+                          ((ev.height || 0) / 60) * mobileZoomLevel - 1
+                        );
+                        return (
+                          <button
+                            key={ev.id}
+                            onClick={() => handleOpenEditMobile(ev)}
+                            // The block carries no text, so the label is the
+                            // only thing a screen reader has to go on.
+                            aria-label={`${ev.title}, ${ev.time_range}`}
+                            className="absolute cursor-pointer event-card-clickable"
+                            style={{
+                              top: `${topPx}px`,
+                              height: `${heightPx}px`,
+                              left: `${leftPercent}%`,
+                              width: `calc(${widthPercent}% - 2px)`,
+                              borderRadius: MOBILE_BLOCK_RADIUS,
+                              backgroundColor: ev.isPending ? `${ev.tag_color}66` : ev.tag_color,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Frozen day-header row (outside scroll) — desktop only, see mobile agenda above */}
       <div className="hidden md:flex shrink-0 border-b border-border bg-background">
