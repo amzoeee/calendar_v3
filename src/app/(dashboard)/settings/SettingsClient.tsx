@@ -11,6 +11,7 @@ import {
   FileUp,
   MessageSquareCode,
   GripVertical,
+  GitCommitHorizontal,
   X,
   Plus,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import {
 } from '@/app/actions';
 import TagSelect from '@/app/components/TagSelect';
 import { getBrowserTimeZone } from '@/lib/timezone';
+import type { BuildInfo } from '@/lib/version';
 
 interface Tag {
   id: number;
@@ -34,11 +36,30 @@ interface Tag {
   orderIndex: number;
 }
 
-interface SettingsClientProps {
-  initialTags: Tag[];
+/**
+ * Build timestamps are baked in as UTC ISO strings. Formatted in UTC rather
+ * than the viewer's zone so the server and client render the same string and
+ * hydration stays quiet.
+ */
+function formatBuildTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return `${date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  })} UTC`;
 }
 
-export default function SettingsClient({ initialTags }: SettingsClientProps) {
+interface SettingsClientProps {
+  initialTags: Tag[];
+  buildInfo: BuildInfo;
+}
+
+export default function SettingsClient({ initialTags, buildInfo }: SettingsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -586,6 +607,25 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
           Export ICS File
         </button>
       </section>
+
+      {/* Build info */}
+      <footer className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 pb-2 text-xs text-muted-foreground">
+        <GitCommitHorizontal className="h-4 w-4" />
+        <span>Running</span>
+        {buildInfo.commitUrl && buildInfo.shortCommit ? (
+          <a
+            href={buildInfo.commitUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-foreground underline underline-offset-2 hover:text-primary transition"
+          >
+            {buildInfo.shortCommit}
+          </a>
+        ) : (
+          <span className="font-mono text-foreground">unknown</span>
+        )}
+        {buildInfo.builtAt && <span>· built {formatBuildTime(buildInfo.builtAt)}</span>}
+      </footer>
 
       {/* EDIT TAG MODAL */}
       {showEditModal && editingTag && (

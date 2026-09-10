@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { tags as tagsTable } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
+import { getBuildInfo } from '@/lib/version';
 import SettingsClient from './SettingsClient';
 
 export default async function SettingsPage() {
@@ -18,5 +19,5 @@ export default async function SettingsPage() {
     .where(eq(tagsTable.userId, session.userId))
     .orderBy(tagsTable.orderIndex);
 
-  return <SettingsClient initialTags={dbTags} />;
+  return <SettingsClient initialTags={dbTags} buildInfo={getBuildInfo()} />;
 }
