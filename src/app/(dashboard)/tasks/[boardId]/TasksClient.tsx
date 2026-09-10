@@ -35,6 +35,8 @@ import {
   buildTaskTree,
   sortTaskTree,
   flattenTaskTree,
+  isFlatSort,
+  sortTasksFlat,
   countOpenDescendants,
   ACTIVE_SORT_MODES,
   SORT_LABELS,
@@ -1024,16 +1026,44 @@ function BoardColumn({
     const done = visibleRows.filter((r) => r.completedAt);
     return {
       openTree: sortTaskTree(buildTaskTree(open), board.sortMode),
-      // Most recently finished first, regardless of the board's sort — the
-      // completed pile reads as a log, not as a list you're working through.
-      completedTree: sortTaskTree(buildTaskTree(done), 'manual').sort((a, b) =>
-        (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
-      ),
+      // Ordering happens in `completedRows`, which reads this pile as the log
+      // it is rather than as a list you're working through.
+      completedTree: buildTaskTree(done),
     };
   }, [visibleRows, board.sortMode]);
 
   const openCount = useMemo(() => flattenTaskTree(openTree).length, [openTree]);
-  const completedRows = useMemo(() => flattenTaskTree(completedTree), [completedTree]);
+
+  /**
+   * What the open list actually draws.
+   *
+   * Under manual order that's the tree, nesting and all. Under any other sort
+   * it's one flat list: a subtask is sorted against every task, not just
+   * against its siblings, so it lands wherever its own deadline (or title, or
+   * reminder) says it should. The parent doesn't disappear — the row names it
+   * in grey above the title, which is the only thing the indent was saying.
+   */
+  const flatSort = isFlatSort(board.sortMode);
+  const openRender = useMemo(
+    () => (flatSort ? sortTasksFlat(openTree, board.sortMode) : openTree),
+    [openTree, board.sortMode, flatSort]
+  );
+
+  // The completed pile is a log — most recently finished first, whatever the
+  // board's sort is — so it's always flat for the same reason.
+  const completedRows = useMemo(
+    () =>
+      flattenTaskTree(completedTree).sort((a, b) =>
+        (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
+      ),
+    [completedTree]
+  );
+
+  /** Titles of every task on this column, for a subtask row's grey parent line. */
+  const titleById = useMemo(
+    () => new Map(rows.map((r) => [r.id, displayTitle(r.title, r.counterValue)])),
+    [rows]
+  );
 
   /** The list `id` sits in, at whatever depth it lives. */
   const siblingListOf = (id: number): TaskNode[] | null => {
@@ -1100,13 +1130,21 @@ function BoardColumn({
     });
   };
 
-  // `level` is the row's position in the tree being rendered, which is not
+  // `level` is the row's position in the list being rendered, which is not
   // always node.depth: buildTaskTree promotes a row whose parent isn't in the
-  // list to the top level, and such a row has to render flush rather than
-  // indented under nothing.
-  const renderRow = (node: TaskNode, done: boolean, level = 0) => {
+  // list to the top level, and a flat sort draws every row flush.
+  //
+  // The `data-depth`/`data-parent-id` a row carries follow `level` for the same
+  // reason: a drag resolves its drop against the rows the viewer can see, and
+  // under a flat sort every one of those looks top level.
+  //
+  // `flat` says this row stands on its own: no indent, no children drawn under
+  // it (they have their own place in the sorted list), and the parent named in
+  // grey above the title instead.
+  const renderRow = (node: TaskNode, done: boolean, level = 0, flat = false) => {
     const isEditing = editingId === node.id;
     const indent = level * 24;
+    const parentTitle = flat && node.parentId != null ? titleById.get(node.parentId) : undefined;
     const descendants = flattenTaskTree([node]);
     const subtreeIds = descendants.map((n) => n.id);
     // Deepest level below this task: a parent can't be nested, a leaf can.
@@ -1120,8 +1158,8 @@ function BoardColumn({
           data-task-row
           data-task-id={node.id}
           data-board-id={node.boardId}
-          data-parent-id={node.parentId ?? ''}
-          data-depth={node.depth}
+          data-parent-id={level > 0 ? node.parentId ?? '' : ''}
+          data-depth={level}
           className={`group/row flex items-start gap-1.5 rounded-lg pr-1 py-2 transition-colors ${
             handlers.selectedId === node.id ? 'bg-secondary' : 'hover:bg-secondary/50'
           } ${dragging ? 'opacity-40' : ''}`}
@@ -1160,6 +1198,11 @@ function BoardColumn({
           </button>
 
           <div className="flex-1 min-w-0">
+            {parentTitle && (
+              <span className="block text-[11px] leading-tight text-muted-foreground/60 truncate">
+                {parentTitle}
+              </span>
+            )}
             {isEditing ? (
               <EditableTitle
                 initial={node.title}
@@ -1274,9 +1317,10 @@ function BoardColumn({
           </div>
         )}
 
-        {node.children.map((child) =>
-          renderRow(child, Boolean(child.completedAt), level + 1)
-        )}
+        {!flat &&
+          node.children.map((child) =>
+            renderRow(child, Boolean(child.completedAt), level + 1)
+          )}
       </div>
     );
   };
@@ -1691,7 +1735,7 @@ function BoardColumn({
           )}
         </div>
 
-        {openTree.length === 0 && (
+        {openRender.length === 0 && (
           <div className="py-12 text-center px-3">
             <ListChecks className="h-7 w-7 mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-xs text-muted-foreground">
@@ -1711,7 +1755,9 @@ function BoardColumn({
           </div>
         )}
 
-        <div className="space-y-0.5">{openTree.map((node) => renderRow(node, false))}</div>
+        <div className="space-y-0.5">
+          {openRender.map((node) => renderRow(node, false, 0, flatSort))}
+        </div>
 
         {completedRows.length > 0 && (
           <div className="mt-5">
@@ -1729,7 +1775,7 @@ function BoardColumn({
             </button>
             {showCompleted && (
               <div className="space-y-0.5 mt-1">
-                {completedTree.map((node) => renderRow(node, true))}
+                {completedRows.map((node) => renderRow(node, true, 0, true))}
               </div>
             )}
           </div>

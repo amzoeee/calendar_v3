@@ -177,6 +177,31 @@ export function sortTaskTree(nodes: TaskNode[], mode: SortMode): TaskNode[] {
   return nodes;
 }
 
+/**
+ * Whether a mode orders every task against every other one, subtasks included.
+ *
+ * Manual order is the only per-parent order: it is the sibling order you
+ * dragged, and has nothing to say about where a subtask sits among tasks that
+ * aren't its siblings. Every other mode reads a property of the task itself,
+ * so a subtask due today belongs beside everything else due today rather than
+ * buried under a parent due next month.
+ */
+export function isFlatSort(mode: SortMode): boolean {
+  return mode !== 'manual';
+}
+
+/**
+ * One flat list of every task in the forest, in sort order — parents and
+ * subtasks competing on equal terms.
+ *
+ * The nodes keep their `children`, so callers that reason about a subtree
+ * (completion cascades, dragging a task with its family) still can; only the
+ * order they're drawn in changes.
+ */
+export function sortTasksFlat(nodes: TaskNode[], mode: SortMode): TaskNode[] {
+  return flattenTaskTree(nodes).sort((a, b) => compare(a, b, mode));
+}
+
 /** Depth-first flatten, for rendering a tree as rows. */
 export function flattenTaskTree(nodes: TaskNode[]): TaskNode[] {
   const out: TaskNode[] = [];
