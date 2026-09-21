@@ -14,10 +14,11 @@ import {
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
-import { parseLogText, recalculatePendingEventsDate } from '@/lib/discord-log';
+import { stageLogForUser, recalculatePendingEventsDate } from '@/lib/discord-log';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 import { todayForViewer } from '@/lib/server-timezone';
 import { isTagScope, type TagScope } from '@/lib/tags';
+import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
 
 // ==========================================
 // Authentication Actions
@@ -404,42 +405,9 @@ export async function updateRecurringSeriesAction(
 
 export async function stageLogAction(text: string, dateOverride?: string | null, browserTimeZone?: string) {
   const session = await requireAuth();
-
-  try {
-    const hasPendingResult = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(events)
-      .where(and(eq(events.userId, session.userId), eq(events.isPending, 1)));
-
-    if (hasPendingResult[0]?.count > 0) {
-      return { error: 'You already have pending events. Please approve or clear them first.' };
-    }
-
-    const { events: parsedEvents, dateUsed, warnings } = await parseLogText(
-      text,
-      session.userId,
-      dateOverride,
-      browserTimeZone
-    );
-
-    const valuesToInsert = parsedEvents.map((e) => ({
-      startDatetime: e.start,
-      endDatetime: e.end,
-      title: e.title,
-      tag: e.tag || null,
-      userId: session.userId,
-      isPending: 1,
-    }));
-
-    if (valuesToInsert.length > 0) {
-      await db.insert(events).values(valuesToInsert);
-    }
-
-    revalidatePath('/calendar', 'layout');
-    return { success: true, count: valuesToInsert.length, dateUsed, warnings };
-  } catch (e: any) {
-    return { error: e.message || 'Log staging failed' };
-  }
+  const result = await stageLogForUser(session.userId, text, dateOverride, browserTimeZone);
+  if (result.success) revalidatePath('/calendar', 'layout');
+  return result;
 }
 
 export async function approveAllPendingAction() {
@@ -468,4 +436,23 @@ export async function overridePendingDateAction(formData: FormData) {
 
   await recalculatePendingEventsDate(session.userId, newDate);
   revalidatePath('/calendar', 'layout');
+}
+
+// ==========================================
+// Discord Link Actions
+// ==========================================
+
+export async function linkDiscordAction(code: string) {
+  const session = await requireAuth();
+  const result = await redeemLinkCode(code, session.userId);
+  if ('error' in result) return { error: result.error };
+
+  revalidatePath('/settings');
+  return { success: true, discordUsername: result.discordUsername };
+}
+
+export async function unlinkDiscordAction(discordUserId: string) {
+  const session = await requireAuth();
+  await unlinkDiscordAccount(session.userId, discordUserId);
+  revalidatePath('/settings');
 }

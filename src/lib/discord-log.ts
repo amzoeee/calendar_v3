@@ -425,3 +425,60 @@ export async function parseLogText(
     warnings,
   };
 }
+
+export interface StageLogResult {
+  success?: true;
+  error?: string;
+  count?: number;
+  dateUsed?: string;
+  warnings?: string[];
+}
+
+/**
+ * Parses a shorthand log and stages the events it describes as pending.
+ *
+ * Shared by the paste-a-log form in settings and the Discord bot's /fetch, so
+ * both routes stage identically — including refusing to run while an earlier
+ * batch is still awaiting approval, which keeps "approve all" unambiguous.
+ */
+export async function stageLogForUser(
+  userId: number,
+  text: string,
+  dateOverride?: string | null,
+  browserTimeZone: string = SERVER_TIMEZONE,
+): Promise<StageLogResult> {
+  try {
+    const hasPendingResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(events)
+      .where(and(eq(events.userId, userId), eq(events.isPending, 1)));
+
+    if (hasPendingResult[0]?.count > 0) {
+      return { error: 'You already have pending events. Please approve or clear them first.' };
+    }
+
+    const { events: parsedEvents, dateUsed, warnings } = await parseLogText(
+      text,
+      userId,
+      dateOverride,
+      browserTimeZone,
+    );
+
+    const valuesToInsert = parsedEvents.map((e) => ({
+      startDatetime: e.start,
+      endDatetime: e.end,
+      title: e.title,
+      tag: e.tag || null,
+      userId,
+      isPending: 1,
+    }));
+
+    if (valuesToInsert.length > 0) {
+      await db.insert(events).values(valuesToInsert);
+    }
+
+    return { success: true, count: valuesToInsert.length, dateUsed, warnings };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Log staging failed' };
+  }
+}
