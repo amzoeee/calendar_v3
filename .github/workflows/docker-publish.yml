@@ -19,11 +19,13 @@ concurrency:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    # An arm64 runner, because the image is arm64: the Mac mini it's deployed
+    # to is Apple Silicon. Building it on the x86 runner meant emulating every
+    # command through QEMU — a C++ compile of better-sqlite3 and a full Next
+    # build, twice over — which is what turned a cold build into an hour.
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v3
 
@@ -43,7 +45,9 @@ jobs:
           build-args: |
             GIT_COMMIT=${{ github.sha }}
             BUILD_TIME=${{ steps.build-meta.outputs.time }}
-          platforms: linux/amd64,linux/arm64
+          # Nothing pulls the amd64 image. Add it back with a second job on
+          # ubuntu-latest and a manifest merge rather than by emulating it here.
+          platforms: linux/arm64
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:latest
