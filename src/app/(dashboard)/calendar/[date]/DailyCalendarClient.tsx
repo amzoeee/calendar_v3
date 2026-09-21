@@ -36,6 +36,7 @@ interface Tag {
   name: string;
   color: string;
   isArchived: number;
+  scope: string;
 }
 
 interface DailyCalendarClientProps {

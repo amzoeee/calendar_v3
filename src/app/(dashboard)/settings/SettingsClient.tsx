@@ -24,6 +24,12 @@ import {
   stageLogAction,
 } from '@/app/actions';
 import TagSelect from '@/app/components/TagSelect';
+import {
+  TAG_SCOPES,
+  TAG_SCOPE_BADGES,
+  TAG_SCOPE_LABELS,
+  type TagScope,
+} from '@/lib/tags';
 import { getBrowserTimeZone } from '@/lib/timezone';
 
 interface Tag {
@@ -32,6 +38,7 @@ interface Tag {
   color: string;
   isArchived: number;
   orderIndex: number;
+  scope: string;
 }
 
 interface SettingsClientProps {
@@ -81,6 +88,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
   // --- Add Tag State ---
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#6b7280');
+  const [newTagScope, setNewTagScope] = useState<TagScope>('both');
   const [addTagError, setAddTagError] = useState('');
 
   // --- Edit Tag Modal State ---
@@ -88,6 +96,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
   const [editTagName, setEditTagName] = useState('');
   const [editTagColor, setEditTagColor] = useState('');
+  const [editTagScope, setEditTagScope] = useState<TagScope>('both');
   const [editTagError, setEditTagError] = useState('');
 
   // --- Import/Export States ---
@@ -152,9 +161,10 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
     e.preventDefault();
     setAddTagError('');
     try {
-      await addTagAction(newTagName, newTagColor);
+      await addTagAction(newTagName, newTagColor, newTagScope);
       setNewTagName('');
       setNewTagColor('#6b7280');
+      setNewTagScope('both');
       // Refresh local page data
       router.refresh();
     } catch (e: any) {
@@ -167,6 +177,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
     setEditingTag(tag);
     setEditTagName(tag.name);
     setEditTagColor(tag.color);
+    setEditTagScope((tag.scope as TagScope) ?? 'both');
     setEditTagError('');
     setShowEditModal(true);
   };
@@ -176,7 +187,7 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
     if (!editingTag) return;
     setEditTagError('');
     try {
-      await updateTagAction(editingTag.id, editTagName, editTagColor);
+      await updateTagAction(editingTag.id, editTagName, editTagColor, editTagScope);
       setShowEditModal(false);
       setEditingTag(null);
       router.refresh();
@@ -297,6 +308,11 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
                   <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
                   <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }}></span>
                   <span className="text-sm font-semibold truncate text-foreground">{tag.name}</span>
+                  {tag.scope !== 'both' && (
+                    <span className="shrink-0 px-1.5 py-0.5 rounded bg-secondary border border-border text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {TAG_SCOPE_BADGES[tag.scope as keyof typeof TAG_SCOPE_BADGES]}
+                    </span>
+                  )}
                 </div>
                 
                 <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
@@ -400,6 +416,23 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
                 alignment — that's what kept drifting out of sync with the
                 Discord Log button above. */}
             <div className="flex items-end gap-3 shrink-0">
+              <div className="shrink-0 w-44">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="new-tag-scope">
+                  Use for
+                </label>
+                <select
+                  id="new-tag-scope"
+                  value={newTagScope}
+                  onChange={(e) => setNewTagScope(e.target.value as TagScope)}
+                  className="mt-1 block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  {TAG_SCOPES.map((scope) => (
+                    <option key={scope} value={scope}>
+                      {TAG_SCOPE_LABELS[scope]}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="shrink-0 w-24">
                 <label className="block text-xs font-semibold text-muted-foreground uppercase">Color</label>
                 <input
@@ -621,6 +654,28 @@ export default function SettingsClient({ initialTags }: SettingsClientProps) {
                   onChange={(e) => setEditTagColor(e.target.value)}
                   className="mt-1 block w-full h-8 rounded bg-secondary border border-border px-1 py-0.5 cursor-pointer"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="edit-tag-scope">
+                  Use for
+                </label>
+                <select
+                  id="edit-tag-scope"
+                  value={editTagScope}
+                  onChange={(e) => setEditTagScope(e.target.value as TagScope)}
+                  className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none cursor-pointer"
+                >
+                  {TAG_SCOPES.map((scope) => (
+                    <option key={scope} value={scope}>
+                      {TAG_SCOPE_LABELS[scope]}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Keeps the tag out of the other picker. Anything already tagged with it stays
+                  tagged.
+                </p>
               </div>
 
               {editTagError && <p className="text-xs text-red-400 mt-1">{editTagError}</p>}
