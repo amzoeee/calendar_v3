@@ -124,3 +124,30 @@ export const taskCompletions = sqliteTable('task_completions', {
   // before this existed, and on tasks that never had a deadline.
   dueSnapshot: text('due_snapshot'),
 });
+
+// ==========================================
+// Discord bot
+// ==========================================
+
+// A confirmed Discord account -> calendar account pairing. One row per Discord
+// user (the bot only ever knows a snowflake), so linking a Discord account to a
+// second calendar account replaces the first pairing rather than duplicating it.
+export const discordLinks = sqliteTable('discord_links', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  discordUserId: text('discord_user_id').notNull().unique(),
+  discordUsername: text('discord_username'),
+  userId: integer('user_id').notNull().references(() => users.id),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Short-lived codes handed out by `/link` in Discord and redeemed while signed
+// in to the calendar. Holding the code proves control of the Discord account;
+// redeeming it from a session proves control of the calendar account. Rows are
+// deleted on redemption and on expiry, so this table stays near-empty.
+export const discordLinkCodes = sqliteTable('discord_link_codes', {
+  code: text('code').primaryKey(),
+  discordUserId: text('discord_user_id').notNull(),
+  discordUsername: text('discord_username'),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
