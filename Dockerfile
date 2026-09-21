@@ -26,9 +26,15 @@ RUN npm ci --omit=dev
 # ---- runner: minimal runtime image ----
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
+# Stamped in by the publish workflow so the running app can report which
+# commit it was built from (shown at the bottom of the settings page).
+ARG GIT_COMMIT=""
+ARG BUILD_TIME=""
 ENV NODE_ENV=production \
     PORT=4000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    GIT_COMMIT=$GIT_COMMIT \
+    BUILD_TIME=$BUILD_TIME
 
 RUN groupadd --system --gid 1001 nodejs \
     && useradd --system --uid 1001 --gid nodejs nextjs

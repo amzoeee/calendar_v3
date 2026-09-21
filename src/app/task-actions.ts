@@ -129,10 +129,7 @@ export async function deleteBoardAction(
       .from(tasks)
       .where(and(eq(tasks.boardId, id), eq(tasks.userId, session.userId)));
     const ids = doomed.map((t) => t.id);
-    if (ids.length > 0) {
-      await db.delete(taskCompletions).where(inArray(taskCompletions.taskId, ids));
-      await db.delete(tasks).where(inArray(tasks.id, ids));
-    }
+    await deleteTaskRows(ids, session.userId);
   }
 
   await db
@@ -163,6 +160,25 @@ async function subtreeIds(id: number, userId: number): Promise<number[]> {
     SELECT id FROM sub
   `);
   return rows.map((r) => r.id);
+}
+
+/**
+ * Delete tasks and everything that points at them.
+ *
+ * Order matters: task_tags and task_completions both hold a foreign key to
+ * tasks with no cascade, so dropping the task rows while either still refers
+ * to them fails the constraint and takes the whole action down with it. That
+ * is what a tagged task's delete used to do — the row survived and the page
+ * came back as a server error.
+ */
+async function deleteTaskRows(ids: number[], userId: number): Promise<void> {
+  if (ids.length === 0) return;
+
+  await db.delete(taskTags).where(inArray(taskTags.taskId, ids));
+  await db.delete(taskCompletions).where(
+    and(inArray(taskCompletions.taskId, ids), eq(taskCompletions.userId, userId))
+  );
+  await db.delete(tasks).where(and(inArray(tasks.id, ids), eq(tasks.userId, userId)));
 }
 
 
@@ -744,10 +760,7 @@ export async function deleteTaskAction(id: number): Promise<void> {
   const ids = await subtreeIds(id, session.userId);
   if (ids.length === 0) throw new Error('Task not found');
 
-  await db.delete(taskCompletions).where(
-    and(inArray(taskCompletions.taskId, ids), eq(taskCompletions.userId, session.userId))
-  );
-  await db.delete(tasks).where(and(inArray(tasks.id, ids), eq(tasks.userId, session.userId)));
+  await deleteTaskRows(ids, session.userId);
 
   refresh();
 }
@@ -1099,10 +1112,7 @@ export async function deleteCompletedTasksAction(boardId: number | null): Promis
   }
   const allIds = [...all];
 
-  await db.delete(taskCompletions).where(
-    and(inArray(taskCompletions.taskId, allIds), eq(taskCompletions.userId, session.userId))
-  );
-  await db.delete(tasks).where(and(inArray(tasks.id, allIds), eq(tasks.userId, session.userId)));
+  await deleteTaskRows(allIds, session.userId);
 
   refresh();
   return allIds.length;
