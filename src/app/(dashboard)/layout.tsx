@@ -24,6 +24,7 @@ import {
   overridePendingDateAction,
   logoutAction,
 } from '@/app/actions';
+import DateInput from '@/app/components/DateInput';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -154,8 +155,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
               {/* Shift Date */}
               <form action={overridePendingDateAction} className="flex items-center gap-2">
-                <input
-                  type="date"
+                <DateInput
                   name="newDate"
                   required
                   defaultValue={todayStr}

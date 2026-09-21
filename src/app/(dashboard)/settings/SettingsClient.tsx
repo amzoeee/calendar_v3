@@ -40,6 +40,7 @@ import {
   type WeekStart,
 } from '@/lib/week';
 import type { BuildInfo } from '@/lib/version';
+import DateInput from '@/app/components/DateInput';
 
 interface Tag {
   id: number;
@@ -573,8 +574,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart }: Se
               <label className="block text-xs font-semibold text-muted-foreground uppercase">
                 Date Override <span className="text-muted-foreground font-normal">(optional)</span>
               </label>
-              <input
-                type="date"
+              <DateInput
                 value={logDateOverride}
                 onChange={(e) => setLogDateOverride(e.target.value)}
                 className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
@@ -631,8 +631,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart }: Se
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase">Start Date <span className="font-normal text-muted-foreground">(optional)</span></label>
-            <input
-              type="date"
+            <DateInput
               value={exportStartDate}
               onChange={(e) => setExportStartDate(e.target.value)}
               className="mt-1 block w-full bg-secondary border border-border rounded px-3 py-1.5 text-xs text-foreground"
@@ -640,8 +639,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart }: Se
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase">End Date <span className="font-normal text-muted-foreground">(optional)</span></label>
-            <input
-              type="date"
+            <DateInput
               value={exportEndDate}
               onChange={(e) => setExportEndDate(e.target.value)}
               className="mt-1 block w-full bg-secondary border border-border rounded px-3 py-1.5 text-xs text-foreground"

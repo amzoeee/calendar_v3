@@ -30,6 +30,7 @@ import {
   updateRecurringSeriesAction,
 } from '@/app/actions';
 import { getBrowserTimeZone, pacificDbStringToDate, formatDateInputValue, formatTimeInputValue } from '@/lib/timezone';
+import DateInput from '@/app/components/DateInput';
 
 interface Tag {
   id: number;
@@ -661,8 +662,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Start</label>
         <div className="mt-1 grid grid-cols-2 gap-2">
-          <input
-            type="date"
+          <DateInput
             required
             value={formStartDate}
             onChange={(e) => setFormStartDate(e.target.value)}
@@ -682,8 +682,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">End</label>
         <div className="mt-1 grid grid-cols-2 gap-2">
-          <input
-            type="date"
+          <DateInput
             required
             value={formEndDate}
             onChange={(e) => setFormEndDate(e.target.value)}
@@ -742,8 +741,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       {formRecur && (
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repeat until</label>
-          <input
-            type="date"
+          <DateInput
             value={formRecurEnd}
             onChange={(e) => setFormRecurEnd(e.target.value)}
             className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
@@ -1069,8 +1067,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
             <div>
               <label className="block text-muted-foreground">Start</label>
               <div className="mt-1 grid grid-cols-2 gap-1">
-                <input
-                  type="date"
+                <DateInput
                   value={editStartDate}
                   onChange={(e) => setEditStartDate(e.target.value)}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
@@ -1086,8 +1083,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
             <div>
               <label className="block text-muted-foreground">End</label>
               <div className="mt-1 grid grid-cols-2 gap-1">
-                <input
-                  type="date"
+                <DateInput
                   value={editEndDate}
                   onChange={(e) => setEditEndDate(e.target.value)}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
@@ -1264,8 +1260,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               <div>
                 <label className="block text-muted-foreground text-xs mb-1">Start</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
+                  <DateInput
                     value={editStartDate}
                     onChange={(e) => setEditStartDate(e.target.value)}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
@@ -1281,8 +1276,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               <div>
                 <label className="block text-muted-foreground text-xs mb-1">End</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
+                  <DateInput
                     value={editEndDate}
                     onChange={(e) => setEditEndDate(e.target.value)}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"

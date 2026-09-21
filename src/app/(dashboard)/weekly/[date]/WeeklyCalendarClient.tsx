@@ -37,6 +37,7 @@ import {
   formatTimeInputValue,
   formatEventTimeRange,
 } from '@/lib/timezone';
+import DateInput from '@/app/components/DateInput';
 
 interface Tag {
   id: number;
@@ -1262,8 +1263,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
             <div>
               <label className="block text-muted-foreground">Start</label>
               <div className="mt-1 grid grid-cols-2 gap-1">
-                <input
-                  type="date"
+                <DateInput
                   value={editStartDate}
                   onChange={(e) => setEditStartDate(e.target.value)}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
@@ -1279,8 +1279,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
             <div>
               <label className="block text-muted-foreground">End</label>
               <div className="mt-1 grid grid-cols-2 gap-1">
-                <input
-                  type="date"
+                <DateInput
                   value={editEndDate}
                   onChange={(e) => setEditEndDate(e.target.value)}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
@@ -1431,8 +1430,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               <div>
                 <label className="block text-muted-foreground text-xs mb-1">Start</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
+                  <DateInput
                     value={editStartDate}
                     onChange={(e) => setEditStartDate(e.target.value)}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
@@ -1448,8 +1446,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               <div>
                 <label className="block text-muted-foreground text-xs mb-1">End</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
+                  <DateInput
                     value={editEndDate}
                     onChange={(e) => setEditEndDate(e.target.value)}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
@@ -1573,8 +1570,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                 <div>
                   <label className="block text-muted-foreground">Start</label>
                   <div className="mt-1 grid grid-cols-2 gap-1">
-                    <input
-                      type="date"
+                    <DateInput
                       required
                       value={addStartDate}
                       onChange={(e) => setAddStartDate(e.target.value)}
@@ -1592,8 +1588,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                 <div>
                   <label className="block text-muted-foreground">End</label>
                   <div className="mt-1 grid grid-cols-2 gap-1">
-                    <input
-                      type="date"
+                    <DateInput
                       required
                       value={addEndDate}
                       onChange={(e) => setAddEndDate(e.target.value)}
