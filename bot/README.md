@@ -18,15 +18,21 @@ All replies are ephemeral — only you see them.
 ## How `/fetch` decides what to take
 
 It pages back through channel history 100 messages at a time, expanding the
-search until it finds a `---` marker or reaches `FETCH_MAX_MESSAGES`. From
+search until it finds a `---` marker or reaches `FETCH_MAX_MESSAGES` — and it
+says so when it stops at that limit, since there may be more log above. From
 everything newer than that marker it keeps only **your own** messages' lines
 that start with a valid shorthand time (`9`, `930`, `0930`, `1430`, optionally
-followed by `am`/`pm`), in chronological order. A marker posted by anyone —
-including the bot — ends the scan, so a shared log channel works fine.
+followed by `am`/`pm`), in chronological order. Any line opening with three or more dashes
+counts as a marker, whoever posted it — including the bot — so a shared log
+channel works fine.
 
-After a successful stage the bot posts a `---` of its own, so the next
-`/fetch` picks up exactly where this one stopped. Set `FETCH_POST_MARKER=false`
-if you would rather post the marker yourself.
+Once you **approve** the staged batch in the calendar, the bot posts a `---` of
+its own in the channel it took the lines from, so the next `/fetch` picks up
+exactly where this one stopped. Discarding the batch posts nothing: a marker
+drawn under a log you threw away would hide those lines from the next `/fetch`
+for good. Approval happens in a browser, so the bot asks the app every
+`MARKER_POLL_SECONDS` whether anything it staged has been approved since. Set
+`FETCH_POST_MARKER=false` if you would rather post markers yourself.
 
 Dates come from the log itself if it has one, otherwise from the day you posted
 the oldest line it took. `/fetch date:2026-09-19` overrides both.
@@ -70,4 +76,5 @@ DISCORD_BOT_TOKEN=... DISCORD_BOT_SECRET=... CALENDAR_API_URL=http://localhost:3
 | `CALENDAR_PUBLIC_URL` | no | `CALENDAR_API_URL` | URL used in links shown to people. |
 | `CALENDAR_TIMEZONE` | no | `America/Los_Angeles` | Zone the scraped times are read in. |
 | `FETCH_MAX_MESSAGES` | no | `500` | How far back `/fetch` will look for a marker. |
-| `FETCH_POST_MARKER` | no | `true` | Whether the bot posts `---` after staging. |
+| `FETCH_POST_MARKER` | no | `true` | Whether the bot posts `---` once a batch is approved. |
+| `MARKER_POLL_SECONDS` | no | `15` | How often it checks for newly approved batches. |

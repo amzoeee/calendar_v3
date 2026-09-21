@@ -28,7 +28,13 @@ module.exports = {
   // marker. Discord's history endpoint pages 100 messages at a time.
   maxMessages: Number(process.env.FETCH_MAX_MESSAGES || 500),
 
-  // Whether the bot drops a `---` in the channel after staging, so the next
-  // /fetch stops there instead of re-reading what it already took.
+  // Whether the bot drops a `---` in the channel once a staged batch is
+  // approved, so the next /fetch stops there instead of re-reading what it
+  // already took.
   postMarker: process.env.FETCH_POST_MARKER !== 'false',
+
+  // How often the bot asks the app whether anything it staged has been
+  // approved since. Approval happens in a browser, so there is nothing to
+  // push the news back here.
+  markerPollSeconds: Number(process.env.MARKER_POLL_SECONDS || 15),
 };

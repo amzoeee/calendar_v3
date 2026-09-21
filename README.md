@@ -194,7 +194,9 @@ A bot that reads your shorthand log out of a Discord channel so you don't have
 to copy and paste it. `/fetch` pages back through the channel until it hits a
 `---` marker, takes your lines that start with a valid time, and stages them
 as **pending** events — nothing lands in the calendar until you approve it in
-the day view, exactly like a pasted log.
+the day view, exactly like a pasted log. Once you approve, the bot posts a
+`---` of its own so the next `/fetch` starts where that one stopped.
+`/manual-fetch` runs the same scan but just prints the lines back for copying.
 
 `bot/README.md` has the full setup: creating the Discord application, the
 intents and permissions it needs, and every environment variable. The short
@@ -214,7 +216,8 @@ globally, and every log is routed by the Discord user who ran `/fetch`.
 
 ### If your database was built with `drizzle-kit push`
 
-The bot adds two tables (`discord_links`, `discord_link_codes`). A database
+The bot adds three tables (`discord_links`, `discord_link_codes`,
+`discord_stages`). A database
 with no Drizzle migration history — which is what the calendar_v2 import above
 produces — skips migrations on startup, so run `npx drizzle-kit push` against
 it once to pick them up.

@@ -19,6 +19,7 @@ import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timez
 import { todayForViewer } from '@/lib/server-timezone';
 import { isTagScope, type TagScope } from '@/lib/tags';
 import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
+import { dropUnapprovedStages, markStagesApproved } from '@/lib/discord-markers';
 
 // ==========================================
 // Authentication Actions
@@ -418,6 +419,9 @@ export async function approveAllPendingAction() {
     .set({ isPending: 0 })
     .where(and(eq(events.userId, session.userId), eq(events.isPending, 1)));
 
+  // Releases the `---` for the bot to post in whichever channel staged this.
+  await markStagesApproved(session.userId);
+
   revalidatePath('/calendar', 'layout');
 }
 
@@ -425,6 +429,7 @@ export async function discardAllPendingAction() {
   const session = await requireAuth();
 
   await db.delete(events).where(and(eq(events.userId, session.userId), eq(events.isPending, 1)));
+  await dropUnapprovedStages(session.userId);
 
   revalidatePath('/calendar', 'layout');
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { isAuthorizedBotRequest, resolveLinkedUser } from '@/lib/discord-link';
 import { stageLogForUser } from '@/lib/discord-log';
+import { recordStage } from '@/lib/discord-markers';
 import { SERVER_TIMEZONE } from '@/lib/timezone';
 
 // Called by the bot's /fetch with the log text it scraped out of a channel.
@@ -14,6 +15,7 @@ export async function POST(request: NextRequest) {
 
   let body: {
     discordUserId?: unknown;
+    channelId?: unknown;
     text?: unknown;
     dateOverride?: unknown;
     fallbackDate?: unknown;
@@ -26,6 +28,7 @@ export async function POST(request: NextRequest) {
   }
 
   const discordUserId = typeof body.discordUserId === 'string' ? body.discordUserId : '';
+  const channelId = typeof body.channelId === 'string' ? body.channelId : '';
   const text = typeof body.text === 'string' ? body.text : '';
   const dateOverride = typeof body.dateOverride === 'string' && body.dateOverride ? body.dateOverride : null;
   const fallbackDate = typeof body.fallbackDate === 'string' && body.fallbackDate ? body.fallbackDate : null;
@@ -47,6 +50,9 @@ export async function POST(request: NextRequest) {
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 422 });
   }
+
+  // Only once the user approves does this channel get its marker.
+  if (channelId) await recordStage(link.userId, channelId);
 
   revalidatePath('/calendar', 'layout');
   return NextResponse.json({

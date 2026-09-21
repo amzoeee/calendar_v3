@@ -151,3 +151,17 @@ export const discordLinkCodes = sqliteTable('discord_link_codes', {
   expiresAt: text('expires_at').notNull(),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
+
+// One row per batch the bot staged, remembering which channel it came from so
+// the `---` marker can be posted there *after* the user approves the batch —
+// posting it at stage time would close off a log that might still be discarded.
+// Resolved by the approve/discard actions and swept by age, so this table stays
+// near-empty too.
+export const discordStages = sqliteTable('discord_stages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull().references(() => users.id),
+  discordChannelId: text('discord_channel_id').notNull(),
+  // Set when the user approves; until then this batch is still in limbo.
+  approvedAt: text('approved_at'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});

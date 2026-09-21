@@ -150,6 +150,7 @@ async function handleFetch(interaction) {
 
   const result = await api.stageLog({
     discordUserId: interaction.user.id,
+    channelId: interaction.channelId,
     text: lines.join('\n'),
     dateOverride: interaction.options.getString('date') || null,
     fallbackDate: oldestAt ? dateStrInZone(oldestAt, config.timeZone) : null,
@@ -165,18 +166,15 @@ async function handleFetch(interaction) {
     return;
   }
 
-  if (config.postMarker) {
-    // Closes off what was just taken, so the next /fetch starts here.
-    await interaction.channel.send('---');
-  }
-
   const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
   const preview = lines.slice(0, 10).join('\n');
   const elided = lines.length > 10 ? `\n… and ${lines.length - 10} more` : '';
 
   await interaction.editReply(
     `Staged **${result.count}** pending events on **${result.dateUsed}** for **${result.username}**, ${boundary}.\n` +
-      `Approve them at ${config.publicUrl}/calendar/${result.dateUsed}\n\n` +
+      `Approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
+      (config.postMarker ? " — I'll post a `---` here once you do." : '') +
+      '\n\n' +
       '```\n' + `${preview}${elided}` + '\n```' +
       capWarning(markerFound, hitCap, messagesScanned),
   );
@@ -240,12 +238,45 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
+/**
+ * Posts the `---` for every batch the user has approved since the last check.
+ *
+ * Deliberately after approval rather than at stage time: a marker drawn under
+ * a log that then gets discarded would hide those lines from the next /fetch
+ * for good.
+ */
+async function postApprovedMarkers() {
+  const result = await api.listApprovedMarkers();
+  if (!result.ok || result.markers.length === 0) return;
+
+  const posted = [];
+  for (const marker of result.markers) {
+    try {
+      const channel = await client.channels.fetch(marker.discordChannelId);
+      await channel.send('---');
+      posted.push(marker.id);
+    } catch (error) {
+      // Left unacknowledged so the next poll retries it; the app drops rows
+      // that stay stuck for a week.
+      console.error(`Could not post marker in ${marker.discordChannelId}:`, error.message);
+    }
+  }
+
+  await api.acknowledgeMarkers(posted);
+}
+
 client.once('clientReady', async (readyClient) => {
   // Registered globally rather than per guild, so the bot works the moment
   // it's added to another server.
   const rest = new REST().setToken(config.token);
   await rest.put(Routes.applicationCommands(readyClient.user.id), { body: commands });
   console.log(`Logged in as ${readyClient.user.tag}; ${commands.length} commands registered.`);
+
+  if (config.postMarker) {
+    setInterval(() => {
+      postApprovedMarkers().catch((error) => console.error('Marker poll failed:', error));
+    }, config.markerPollSeconds * 1000);
+  }
 });
 
 client.login(config.token);

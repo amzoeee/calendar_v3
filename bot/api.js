@@ -29,4 +29,8 @@ const getLinkStatus = (discordUserId) =>
 
 const stageLog = (payload) => call('/api/discord/stage', { method: 'POST', body: payload });
 
-module.exports = { createLinkCode, getLinkStatus, stageLog };
+const listApprovedMarkers = () => call('/api/discord/markers');
+
+const acknowledgeMarkers = (ids) => call('/api/discord/markers', { method: 'POST', body: { ids } });
+
+module.exports = { acknowledgeMarkers, createLinkCode, getLinkStatus, listApprovedMarkers, stageLog };
