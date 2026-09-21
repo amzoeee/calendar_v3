@@ -6,6 +6,7 @@ import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import DateInput from '@/app/components/DateInput';
+import { weekdayOrder, type WeekStart } from '@/lib/week';
 
 interface Tag {
   id: number;
@@ -24,6 +25,7 @@ interface StatsClientProps {
   startDate: string;
   endDate: string;
   weekdaysOnly: boolean;
+  weekStart: WeekStart;
   tagHoursByDay: Record<string, Record<string, number>>;
   tags: Tag[];
   tasksDoneByDay: Record<string, Record<string, number>>;
@@ -77,6 +79,7 @@ export default function StatsClient({
   startDate,
   endDate,
   weekdaysOnly,
+  weekStart,
   tagHoursByDay,
   tags,
   tasksDoneByDay,
@@ -206,7 +209,8 @@ export default function StatsClient({
   // never need horizontal scrolling. Each bar stacks the *average* hours per tag
   // across that weekday's occurrences (counting only days that had data logged).
   const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const weekdayIndices = weekdaysOnly ? [1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6];
+  // Bars run in the viewer's own week order; weekdays-only is Mon–Fri either way.
+  const weekdayIndices = weekdaysOnly ? [1, 2, 3, 4, 5] : weekdayOrder(weekStart);
   const weekdayBars = weekdayIndices.map((wd) => {
     const daysOfWeekday = visibleDays.filter((d) => d.weekday === wd);
     const activeCount = daysOfWeekday.filter((d) => d.total > 0).length;
@@ -263,6 +267,19 @@ export default function StatsClient({
     if (tagName === 'Untagged') return '#6b7280';
     return tags.find((t) => t.name === tagName)?.color || '#6b7280';
   };
+
+  // Chart tooltip. Pinned to the pointer and rendered at the end of the page
+  // rather than inside the bar it describes: both charts sit in horizontally
+  // scrolling containers, which clip anything reaching above their own bars.
+  // Mouse only — a touch "hover" is a tap, and the bars aren't tappable.
+  const [hoverTip, setHoverTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const tipProps = (text: string) => ({
+    onPointerMove: (e: React.PointerEvent) => {
+      if (e.pointerType !== 'mouse') return;
+      setHoverTip({ x: e.clientX, y: e.clientY, text });
+    },
+    onPointerLeave: () => setHoverTip(null),
+  });
 
   const handleToggleWeekdays = () => {
     // Not a range change — same window, different filter — but it still goes
@@ -581,7 +598,8 @@ export default function StatsClient({
                         {Object.entries(d.counts).map(([tag, n]) => (
                           <div
                             key={tag}
-                            title={`${d.dayName} ${d.dayDisplay} · ${tag}: ${n}`}
+                            {...tipProps(`${d.dayName} ${d.dayDisplay} · ${tag}: ${n}`)}
+                            className="hover:brightness-110 transition-all"
                             style={{
                               height: `${maxTaskDay > 0 ? (n / maxTaskDay) * 88 : 0}px`,
                               backgroundColor: getTagColor(tag),
@@ -703,17 +721,13 @@ export default function StatsClient({
                           return (
                             <div
                               key={tag}
-                              className="w-full hover:brightness-110 transition-all relative group/segment"
+                              {...tipProps(`${tag}: ${hrs.toFixed(1)} hrs avg`)}
+                              className="w-full hover:brightness-110 transition-all"
                               style={{
                                 height: `${blockHeightPercent}%`,
                                 backgroundColor: getTagColor(tag),
                               }}
-                            >
-                              {/* Segment Tooltip */}
-                              <div className="absolute opacity-0 group-hover/segment:opacity-100 bg-black text-white text-[9px] font-semibold p-1.5 rounded pointer-events-none z-30 transition-all -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap border border-border">
-                                {tag}: {hrs.toFixed(1)} hrs avg
-                              </div>
-                            </div>
+                            />
                           );
                         })}
                       </div>
@@ -782,6 +796,16 @@ export default function StatsClient({
         </div>
 
       </div>
+
+      {hoverTip && (
+        <div
+          role="tooltip"
+          className="fixed z-50 -translate-x-1/2 -translate-y-full pointer-events-none whitespace-nowrap rounded border border-border bg-black px-1.5 py-1 text-[10px] font-semibold text-white"
+          style={{ left: hoverTip.x, top: hoverTip.y - 10 }}
+        >
+          {hoverTip.text}
+        </div>
+      )}
 
     </div>
   );

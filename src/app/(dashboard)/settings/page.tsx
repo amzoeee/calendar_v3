@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { getBuildInfo } from '@/lib/version';
 import SettingsClient from './SettingsClient';
+import { getWeekStart } from '@/lib/server-week';
 
 export default async function SettingsPage() {
   const session = await getSession();
@@ -19,5 +20,11 @@ export default async function SettingsPage() {
     .where(eq(tagsTable.userId, session.userId))
     .orderBy(tagsTable.orderIndex);
 
-  return <SettingsClient initialTags={dbTags} buildInfo={getBuildInfo()} />;
+  return (
+    <SettingsClient
+      initialTags={dbTags}
+      buildInfo={getBuildInfo()}
+      weekStart={await getWeekStart()}
+    />
+  );
 }

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { DEFAULT_WEEK_START, weekdayOrder, type WeekStart } from '@/lib/week';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toDateStr = (d: Date) =>
@@ -16,7 +17,8 @@ const DATE_VIEWS = ['calendar', 'weekly', 'stats'];
 // for the same reason Settings is: the sidebar shouldn't lose its month just
 // because the page you're on has no date.
 const DATELESS_VIEWS = ['settings', 'tasks'];
-const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+// Indexed by Date#getDay, so the grid can label whichever day comes first.
+const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -28,7 +30,7 @@ const MONTHS = [
  * (daily / weekly / stats). On dateless views that still opt in (e.g.
  * Settings), day clicks fall back to the daily view.
  */
-export default function MiniCalendar() {
+export default function MiniCalendar({ weekStart = DEFAULT_WEEK_START }: { weekStart?: WeekStart }) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -82,8 +84,8 @@ export default function MiniCalendar() {
   // reachable; the shown year sits in the middle so it opens scrolled to it.
   const years = Array.from({ length: 121 }, (_, i) => year - 60 + i);
 
-  // 6-week grid (42 cells) starting on the Sunday on/before the 1st.
-  const firstWeekday = new Date(year, month, 1).getDay();
+  // 6-week grid (42 cells) starting on the week's first day on/before the 1st.
+  const firstWeekday = (new Date(year, month, 1).getDay() - weekStart + 7) % 7;
   const gridStart = new Date(year, month, 1 - firstWeekday);
   const cells = Array.from(
     { length: 42 },
@@ -158,12 +160,12 @@ export default function MiniCalendar() {
 
         {/* Weekday labels */}
         <div className="grid grid-cols-7 gap-0.5 mb-1">
-          {WEEKDAYS.map((w, i) => (
+          {weekdayOrder(weekStart).map((day, i) => (
             <div
               key={i}
               className="text-center text-[9px] font-semibold text-muted-foreground select-none"
             >
-              {w}
+              {WEEKDAY_INITIALS[day]}
             </div>
           ))}
         </div>

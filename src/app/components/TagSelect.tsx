@@ -1,12 +1,14 @@
 'use client';
 
 import React from 'react';
+import { scopeAllows } from '@/lib/tags';
 
 interface Tag {
   id: number;
   name: string;
   color: string;
   isArchived: number;
+  scope: string;
 }
 
 interface TagSelectProps {
@@ -30,8 +32,9 @@ export default function TagSelect({ tags, value, onChange, className, name }: Ta
       }
     >
       <option value="">None</option>
+      {/* Events only: a tag scoped to tasks is deliberately absent here. */}
       {tags
-        .filter((t) => !t.isArchived)
+        .filter((t) => !t.isArchived && scopeAllows(t.scope, 'event'))
         .map((t) => (
           <option key={t.id} value={t.name}>
             {t.name}

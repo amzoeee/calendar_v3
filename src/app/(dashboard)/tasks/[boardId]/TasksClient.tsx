@@ -35,6 +35,10 @@ import {
   buildTaskTree,
   sortTaskTree,
   flattenTaskTree,
+  isFlatSort,
+  sortTasksFlat,
+  nestedRenderRows,
+  completedRenderRows,
   countOpenDescendants,
   ACTIVE_SORT_MODES,
   SORT_LABELS,
@@ -51,6 +55,7 @@ import {
   type VirtualList,
   type TaskRow,
   type TaskNode,
+  type TaskRenderRow,
 } from '@/lib/tasks';
 import {
   createTaskAction,
@@ -1025,16 +1030,40 @@ function BoardColumn({
     const done = visibleRows.filter((r) => r.completedAt);
     return {
       openTree: sortTaskTree(buildTaskTree(open), board.sortMode),
-      // Most recently finished first, regardless of the board's sort — the
-      // completed pile reads as a log, not as a list you're working through.
-      completedTree: sortTaskTree(buildTaskTree(done), 'manual').sort((a, b) =>
-        (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
-      ),
+      // Ordering happens in `completedRows`, which reads this pile as the log
+      // it is rather than as a list you're working through.
+      completedTree: buildTaskTree(done),
     };
   }, [visibleRows, board.sortMode]);
 
   const openCount = useMemo(() => flattenTaskTree(openTree).length, [openTree]);
-  const completedRows = useMemo(() => flattenTaskTree(completedTree), [completedTree]);
+
+  /**
+   * What the open list actually draws.
+   *
+   * Under manual order that's the tree, nesting and all. Under any other sort
+   * a subtask is sorted against every task rather than only against its
+   * siblings, so it lands where its own deadline says it should — unless it
+   * shares its parent's day, where staying nested says more. A detached row
+   * names its parent in grey above the title, which is all the indent was
+   * saying.
+   */
+  const flatSort = isFlatSort(board.sortMode);
+  const openRender = useMemo(
+    () => (flatSort ? sortTasksFlat(openTree, board.sortMode) : nestedRenderRows(openTree)),
+    [openTree, board.sortMode, flatSort]
+  );
+
+  // The completed pile is a log — newest first, whatever the board's sort is —
+  // so it detaches on the same terms, by the day things were finished.
+  const completedRender = useMemo(() => completedRenderRows(completedTree), [completedTree]);
+  const completedCount = useMemo(() => flattenTaskTree(completedTree).length, [completedTree]);
+
+  /** Titles of every task on this column, for a subtask row's grey parent line. */
+  const titleById = useMemo(
+    () => new Map(rows.map((r) => [r.id, displayTitle(r.title, r.counterValue)])),
+    [rows]
+  );
 
   /** The list `id` sits in, at whatever depth it lives. */
   const siblingListOf = (id: number): TaskNode[] | null => {
@@ -1101,13 +1130,20 @@ function BoardColumn({
     });
   };
 
-  // `level` is the row's position in the tree being rendered, which is not
+  // `level` is the row's position in the list being rendered, which is not
   // always node.depth: buildTaskTree promotes a row whose parent isn't in the
-  // list to the top level, and such a row has to render flush rather than
-  // indented under nothing.
-  const renderRow = (node: TaskNode, done: boolean, level = 0) => {
+  // list to the top level, and a flat sort draws every row flush.
+  //
+  // The `data-depth`/`data-parent-id` a row carries follow `level` for the same
+  // reason: a drag resolves its drop against the rows the viewer can see, and
+  // under a flat sort every one of those looks top level.
+  //
+  const renderRow = (row: TaskRenderRow, done: boolean, level = 0) => {
+    const node = row.node;
     const isEditing = editingId === node.id;
     const indent = level * 24;
+    // A row drawn flush that has a parent somewhere else in the list names it.
+    const parentTitle = level === 0 && node.parentId != null ? titleById.get(node.parentId) : undefined;
     const descendants = flattenTaskTree([node]);
     const subtreeIds = descendants.map((n) => n.id);
     // Deepest level below this task: a parent can't be nested, a leaf can.
@@ -1121,8 +1157,8 @@ function BoardColumn({
           data-task-row
           data-task-id={node.id}
           data-board-id={node.boardId}
-          data-parent-id={node.parentId ?? ''}
-          data-depth={node.depth}
+          data-parent-id={level > 0 ? node.parentId ?? '' : ''}
+          data-depth={level}
           className={`group/row flex items-start gap-1.5 rounded-lg pr-1 py-2 transition-colors ${
             handlers.selectedId === node.id ? 'bg-secondary' : 'hover:bg-secondary/50'
           } ${dragging ? 'opacity-40' : ''}`}
@@ -1161,6 +1197,11 @@ function BoardColumn({
           </button>
 
           <div className="flex-1 min-w-0">
+            {parentTitle && (
+              <span className="block text-[11px] leading-tight text-muted-foreground/60 truncate">
+                {parentTitle}
+              </span>
+            )}
             {isEditing ? (
               <EditableTitle
                 initial={node.title}
@@ -1275,8 +1316,8 @@ function BoardColumn({
           </div>
         )}
 
-        {node.children.map((child) =>
-          renderRow(child, Boolean(child.completedAt), level + 1)
+        {row.children.map((child) =>
+          renderRow(child, Boolean(child.node.completedAt), level + 1)
         )}
       </div>
     );
@@ -1542,16 +1583,16 @@ function BoardColumn({
                 <button
                   onClick={() => {
                     setMenuOpen(false);
-                    if (completedRows.length === 0) return;
+                    if (completedCount === 0) return;
                     if (
                       window.confirm(
-                        `Delete ${completedRows.length} completed task${completedRows.length === 1 ? '' : 's'} from “${board.name}”? Your stats keep the history.`
+                        `Delete ${completedCount} completed task${completedCount === 1 ? '' : 's'} from “${board.name}”? Your stats keep the history.`
                       )
                     ) {
                       handlers.run(() => deleteCompletedTasksAction(board.id));
                     }
                   }}
-                  disabled={completedRows.length === 0}
+                  disabled={completedCount === 0}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Delete completed
@@ -1691,7 +1732,7 @@ function BoardColumn({
           )}
         </div>
 
-        {openTree.length === 0 && (
+        {openRender.length === 0 && (
           <div className="py-12 text-center px-3">
             <ListChecks className="h-7 w-7 mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-xs text-muted-foreground">
@@ -1711,9 +1752,11 @@ function BoardColumn({
           </div>
         )}
 
-        <div className="space-y-0.5">{openTree.map((node) => renderRow(node, false))}</div>
+        <div className="space-y-0.5">
+          {openRender.map((row) => renderRow(row, false))}
+        </div>
 
-        {completedRows.length > 0 && (
+        {completedCount > 0 && (
           <div className="mt-5">
             <button
               onClick={() => setShowCompleted((s) => !s)}
@@ -1725,11 +1768,11 @@ function BoardColumn({
               ) : (
                 <ChevronRight className="h-3.5 w-3.5" />
               )}
-              Completed ({completedRows.length})
+              Completed ({completedCount})
             </button>
             {showCompleted && (
               <div className="space-y-0.5 mt-1">
-                {completedTree.map((node) => renderRow(node, true))}
+                {completedRender.map((row) => renderRow(row, true))}
               </div>
             )}
           </div>
