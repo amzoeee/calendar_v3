@@ -4,17 +4,30 @@ import React, { useRef } from 'react';
 import { flushSync } from 'react-dom';
 
 /**
- * A native date input that accepts a date with the year left blank: type
- * 09/07 and press Enter and it fills in the current year.
+ * A native date input that accepts a date with the year left blank: leave the
+ * year showing `----`, press Enter, and it fills in the current year.
  *
- * The browser gives us nothing to work with here — `value` stays '' until
- * every segment is filled, and there's no API for reading a half-typed one —
- * so this follows the digits as they're typed and reconstructs what's in the
- * field. Only ever used to fill an *empty* field, so a fully typed date is
- * never second-guessed.
+ * The browser gives us nothing to read here — `value` is '' until every
+ * segment is filled, and there's no API for the half-typed one — so the month
+ * and day come from two places:
+ *
+ *  - the digits, followed as they're typed — but only when we know which
+ *    segment typing began in, since a click can start it anywhere; and
+ *  - the last complete date the field itself held, which is what's still on
+ *    screen when only the year has been cleared.
+ *
+ * The second is what makes this work on a pre-filled field, where clearing the
+ * year is how you get to `09/07/----` in the first place. It's only trusted
+ * while nothing has been typed since — once digits land in a segment we can't
+ * identify, we'd rather fill nothing than fill the wrong thing.
  */
 
 type Segment = 'year' | 'month' | 'day';
+
+interface MonthDay {
+  month: number;
+  day: number;
+}
 
 /** Segment layout follows the locale: en-US shows MM/DD/YYYY, much of Europe DD/MM/YYYY. */
 function segmentOrder(): Segment[] {
@@ -40,11 +53,26 @@ interface Entry {
   digits: string;
   month: number | null;
   day: number | null;
-  /** Set once anything lands in the year, so a half-typed year isn't overwritten. */
+  /** Set once a digit lands in the year, so a half-typed year isn't overwritten. */
   yearTouched: boolean;
+  /** Any digit typed since the field last held a complete date. */
+  typed: boolean;
+  /** Whether `index` is trustworthy — false after a click into the middle of the field. */
+  indexKnown: boolean;
+  /** A key changed a segment to something we can't read — stop guessing. */
+  blind: boolean;
 }
 
-const emptyEntry = (): Entry => ({ index: 0, digits: '', month: null, day: null, yearTouched: false });
+const emptyEntry = (): Entry => ({
+  index: 0,
+  digits: '',
+  month: null,
+  day: null,
+  yearTouched: false,
+  typed: false,
+  indexKnown: true,
+  blind: false,
+});
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -52,6 +80,37 @@ const pad = (n: number) => String(n).padStart(2, '0');
 function isRealDate(year: number, month: number, day: number): boolean {
   const d = new Date(year, month - 1, day);
   return d.getMonth() === month - 1 && d.getDate() === day;
+}
+
+/**
+ * Whether a click landed in the field's first segment, which is the only way
+ * to know where typing is about to start. Measured against the input's own
+ * font: a click past the first separator could be any segment, and guessing
+ * would mean filling in a date the field never showed.
+ *
+ * The browser pads each segment's box a little, so this underestimates the
+ * first one — erring towards "don't know", which only costs the fill.
+ */
+let measureCtx: CanvasRenderingContext2D | null = null;
+
+function clickedFirstSegment(el: HTMLInputElement, clientX: number): boolean {
+  const ctx = (measureCtx ??= document.createElement('canvas').getContext('2d'));
+  if (!ctx) return false;
+
+  const style = getComputedStyle(el);
+  const rect = el.getBoundingClientRect();
+  const inset =
+    parseFloat(style.paddingLeft || '0') + parseFloat(style.borderLeftWidth || '0');
+  const x = clientX - rect.left - inset;
+  if (x < 0) return false;
+
+  ctx.font = style.font || `${style.fontSize} ${style.fontFamily}`;
+  return x <= ctx.measureText('00').width + ctx.measureText('/').width / 2;
+}
+
+function monthDayOf(value: string): MonthDay | null {
+  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(value);
+  return match ? { month: Number(match[1]), day: Number(match[2]) } : null;
 }
 
 /**
@@ -66,8 +125,13 @@ function setNativeValue(el: HTMLInputElement, value: string) {
 }
 
 export default function DateInput(props: React.ComponentPropsWithoutRef<'input'>) {
-  const { onKeyDown, onFocus, ...rest } = props;
+  const { onKeyDown, onFocus, onPointerDown, ...rest } = props;
   const entry = useRef<Entry>(emptyEntry());
+  const lastComplete = useRef<MonthDay | null>(null);
+  // Where the click that is about to focus the field landed. Null when focus
+  // arrives some other way — tab or script, which both start at the first
+  // segment.
+  const pendingIndexKnown = useRef<boolean | null>(null);
 
   const order = useRef<Segment[] | null>(null);
   const getOrder = () => (order.current ??= segmentOrder());
@@ -75,7 +139,9 @@ export default function DateInput(props: React.ComponentPropsWithoutRef<'input'>
   /** Feed one digit through the same segment-advancing rules the field itself uses. */
   const takeDigit = (digit: string) => {
     const state = entry.current;
-    const segment = getOrder()[state.index];
+    state.typed = true;
+
+    const segment = state.indexKnown ? getOrder()[state.index] : undefined;
     if (!segment) return;
     if (segment === 'year') {
       state.yearTouched = true;
@@ -92,53 +158,105 @@ export default function DateInput(props: React.ComponentPropsWithoutRef<'input'>
     state.digits = '';
   };
 
+  /** Commit whatever is half-typed and move on, the way `/` or → does in the field. */
+  const nextSegment = () => {
+    const state = entry.current;
+    if (state.digits !== '') {
+      const segment = getOrder()[state.index];
+      const value = Number(state.digits);
+      if (segment === 'month') state.month = value;
+      if (segment === 'day') state.day = value;
+      state.digits = '';
+    }
+    state.index = Math.min(state.index + 1, getOrder().length - 1);
+  };
+
+  /** Forget the segment the caret is on — it's about to be blank on screen too. */
+  const clearSegment = () => {
+    const state = entry.current;
+    const segment = getOrder()[state.index];
+    state.digits = '';
+    if (segment === 'month') state.month = null;
+    if (segment === 'day') state.day = null;
+    if (segment === 'year') state.yearTouched = false;
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const el = e.currentTarget;
+
+    // A complete date on screen beats anything inferred: remember it and start
+    // the digit tracking over from it.
+    if (el.value !== '') {
+      lastComplete.current = monthDayOf(el.value);
+      entry.current = emptyEntry();
+    }
     const state = entry.current;
 
     if (e.key === 'Enter') {
-      const year = new Date().getFullYear();
-      if (
-        el.value === '' &&
-        !state.yearTouched &&
-        state.month != null &&
-        state.day != null &&
-        isRealDate(year, state.month, state.day)
-      ) {
-        // Flushed synchronously: a consumer's own Enter handler runs right
-        // after this one and often reads the value back (commit on blur), so
-        // it has to see the date we just wrote rather than the empty field.
-        const filled = `${year}-${pad(state.month)}-${pad(state.day)}`;
-        flushSync(() => setNativeValue(el, filled));
-        entry.current = emptyEntry();
+      if (el.value === '' && !state.blind) {
+        const typedParts =
+          state.indexKnown && state.month != null && state.day != null && !state.yearTouched
+            ? { month: state.month, day: state.day }
+            : null;
+        // Nothing typed since the field went incomplete, so what it showed
+        // before is still on screen apart from the segment that was cleared.
+        const remembered = state.typed ? null : lastComplete.current;
+        const parts = typedParts ?? remembered;
+        const year = new Date().getFullYear();
+
+        if (parts && isRealDate(year, parts.month, parts.day)) {
+          // Flushed synchronously: a consumer's own Enter handler runs right
+          // after this one and often reads the value back (commit on blur), so
+          // it has to see the date we just wrote rather than the empty field.
+          const filled = `${year}-${pad(parts.month)}-${pad(parts.day)}`;
+          flushSync(() => setNativeValue(el, filled));
+          lastComplete.current = parts;
+          entry.current = emptyEntry();
+        }
       }
     } else if (/^\d$/.test(e.key)) {
       takeDigit(e.key);
     } else if (['/', '-', '.', ' ', 'ArrowRight'].includes(e.key)) {
-      // Explicit "next segment" — whatever's half-typed stays as it is.
-      if (state.digits !== '') {
-        const segment = getOrder()[state.index];
-        const value = Number(state.digits);
-        if (segment === 'month') state.month = value;
-        if (segment === 'day') state.day = value;
-        state.digits = '';
-        state.index += 1;
-      }
-    } else if (!['Tab', 'Shift', 'Meta', 'Control', 'Alt', 'Escape'].includes(e.key)) {
-      // Arrows, backspace, anything else that edits a segment out from under
-      // us: stop guessing rather than guess wrong.
-      entry.current = emptyEntry();
+      nextSegment();
+    } else if (e.key === 'ArrowLeft') {
+      state.digits = '';
+      state.index = Math.max(state.index - 1, 0);
+    } else if (e.key === 'Backspace' || e.key === 'Delete') {
+      clearSegment();
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      // These set the segment to something we never see. Anything we'd fill in
+      // from here would be a guess.
+      state.blind = true;
     }
 
     onKeyDown?.(e);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLInputElement>) => {
+    const el = e.currentTarget;
+    const known = clickedFirstSegment(el, e.clientX);
+    if (document.activeElement === el) {
+      // Moving the caret inside a field that's already focused fires no focus
+      // event, so the reset has to happen here.
+      entry.current = emptyEntry();
+      entry.current.indexKnown = known;
+      lastComplete.current = monthDayOf(el.value) ?? lastComplete.current;
+    } else {
+      pendingIndexKnown.current = known;
+    }
+    onPointerDown?.(e);
   };
 
   return (
     <input
       {...rest}
       type="date"
+      onPointerDown={handlePointerDown}
       onFocus={(e) => {
         entry.current = emptyEntry();
+        entry.current.indexKnown = pendingIndexKnown.current ?? true;
+        pendingIndexKnown.current = null;
+        lastComplete.current = monthDayOf(e.currentTarget.value);
         onFocus?.(e);
       }}
       onKeyDown={handleKeyDown}
