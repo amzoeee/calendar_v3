@@ -9,6 +9,14 @@ permissions:
   contents: read
   packages: write
 
+# Only the newest commit on a branch is worth building: the image it publishes
+# is `latest`, and a slower older build finishing afterwards would re-tag
+# `latest` backwards to the commit it started from. Cancelling also keeps
+# several builds from evicting each other's layers out of the shared cache.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
