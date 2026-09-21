@@ -10,6 +10,7 @@ const {
 const config = require('./config');
 const api = require('./api');
 const { collectLogLines } = require('./log-lines');
+const { capWarning } = require('./reply');
 
 const commands = [
   new SlashCommandBuilder()
@@ -48,18 +49,24 @@ function dateStrInZone(date, timeZone) {
  * Pulls channel history newest-first, a page at a time, stopping as soon as
  * the scraper has seen a marker — the "dynamic lookback" the feature needs, so
  * a short day costs one request and a long gap keeps expanding up to the cap.
+ *
+ * `hitCap` distinguishes the two ways this ends without a marker: the search
+ * ran out of budget (there may well be more log above) or it ran out of
+ * channel. Only the first is worth warning about.
  */
 async function scrapeLogLines(channel, userId) {
   const collected = [];
   let before;
-  let pagesRead = 0;
+  let reachedChannelStart = false;
 
   while (collected.length < config.maxMessages) {
     const limit = Math.min(100, config.maxMessages - collected.length);
     const page = await channel.messages.fetch({ limit, ...(before ? { before } : {}) });
-    if (page.size === 0) break;
+    if (page.size === 0) {
+      reachedChannelStart = true;
+      break;
+    }
 
-    pagesRead += 1;
     for (const message of page.values()) {
       collected.push({
         content: message.content,
@@ -70,12 +77,20 @@ async function scrapeLogLines(channel, userId) {
     }
 
     const result = collectLogLines(collected, userId);
-    if (result.markerFound) return { ...result, messagesScanned: collected.length, pagesRead };
-    if (page.size < limit) break;
+    if (result.markerFound) return { ...result, messagesScanned: collected.length, hitCap: false };
+    if (page.size < limit) {
+      reachedChannelStart = true;
+      break;
+    }
   }
 
-  return { ...collectLogLines(collected, userId), messagesScanned: collected.length, pagesRead };
+  return {
+    ...collectLogLines(collected, userId),
+    messagesScanned: collected.length,
+    hitCap: !reachedChannelStart,
+  };
 }
+
 
 async function handleLink(interaction) {
   const result = await api.createLinkCode(interaction.user.id, interaction.user.tag);
@@ -115,16 +130,17 @@ async function handleFetch(interaction) {
     return;
   }
 
-  const { lines, markerFound, oldestAt, messagesScanned } = await scrapeLogLines(
+  const { lines, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
 
   if (lines.length === 0) {
     await interaction.editReply(
-      markerFound
+      (markerFound
         ? 'No log lines since the last `---` marker.'
-        : `No log lines found in the last ${messagesScanned} messages, and no \`---\` marker either.`,
+        : `No log lines found in the last ${messagesScanned} messages.`) +
+        capWarning(markerFound, hitCap, messagesScanned),
     );
     return;
   }
@@ -158,9 +174,12 @@ async function handleFetch(interaction) {
   await interaction.editReply(
     `Staged **${result.count}** pending events on **${result.dateUsed}** for **${result.username}**, ${boundary}.\n` +
       `Approve them at ${config.publicUrl}/calendar/${result.dateUsed}\n\n` +
-      '```\n' + `${preview}${elided}` + '\n```',
+      '```\n' + `${preview}${elided}` + '\n```' +
+      capWarning(markerFound, hitCap, messagesScanned),
   );
 }
+
+
 
 const handlers = { link: handleLink, whoami: handleWhoami, fetch: handleFetch };
 
