@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
+import { weekdayOrder, type WeekStart } from '@/lib/week';
 
 interface Tag {
   id: number;
@@ -23,6 +24,7 @@ interface StatsClientProps {
   startDate: string;
   endDate: string;
   weekdaysOnly: boolean;
+  weekStart: WeekStart;
   tagHoursByDay: Record<string, Record<string, number>>;
   tags: Tag[];
   tasksDoneByDay: Record<string, Record<string, number>>;
@@ -76,6 +78,7 @@ export default function StatsClient({
   startDate,
   endDate,
   weekdaysOnly,
+  weekStart,
   tagHoursByDay,
   tags,
   tasksDoneByDay,
@@ -205,7 +208,8 @@ export default function StatsClient({
   // never need horizontal scrolling. Each bar stacks the *average* hours per tag
   // across that weekday's occurrences (counting only days that had data logged).
   const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const weekdayIndices = weekdaysOnly ? [1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6];
+  // Bars run in the viewer's own week order; weekdays-only is Mon–Fri either way.
+  const weekdayIndices = weekdaysOnly ? [1, 2, 3, 4, 5] : weekdayOrder(weekStart);
   const weekdayBars = weekdayIndices.map((wd) => {
     const daysOfWeekday = visibleDays.filter((d) => d.weekday === wd);
     const activeCount = daysOfWeekday.filter((d) => d.total > 0).length;
