@@ -124,3 +124,44 @@ export const taskCompletions = sqliteTable('task_completions', {
   // before this existed, and on tasks that never had a deadline.
   dueSnapshot: text('due_snapshot'),
 });
+
+// ==========================================
+// Discord bot
+// ==========================================
+
+// A confirmed Discord account -> calendar account pairing. One row per Discord
+// user (the bot only ever knows a snowflake), so linking a Discord account to a
+// second calendar account replaces the first pairing rather than duplicating it.
+export const discordLinks = sqliteTable('discord_links', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  discordUserId: text('discord_user_id').notNull().unique(),
+  discordUsername: text('discord_username'),
+  userId: integer('user_id').notNull().references(() => users.id),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Short-lived codes handed out by `/link` in Discord and redeemed while signed
+// in to the calendar. Holding the code proves control of the Discord account;
+// redeeming it from a session proves control of the calendar account. Rows are
+// deleted on redemption and on expiry, so this table stays near-empty.
+export const discordLinkCodes = sqliteTable('discord_link_codes', {
+  code: text('code').primaryKey(),
+  discordUserId: text('discord_user_id').notNull(),
+  discordUsername: text('discord_username'),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+// One row per batch the bot staged, remembering which channel it came from so
+// the `---` marker can be posted there *after* the user approves the batch —
+// posting it at stage time would close off a log that might still be discarded.
+// Resolved by the approve/discard actions and swept by age, so this table stays
+// near-empty too.
+export const discordStages = sqliteTable('discord_stages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull().references(() => users.id),
+  discordChannelId: text('discord_channel_id').notNull(),
+  // Set when the user approves; until then this batch is still in limbo.
+  approvedAt: text('approved_at'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});

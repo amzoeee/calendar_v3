@@ -11,3 +11,6 @@ node_modules
 __pycache__
 .DS_Store
 npm-debug.log*
+
+# The bot ships as its own image (bot/Dockerfile); the app never needs it.
+bot
