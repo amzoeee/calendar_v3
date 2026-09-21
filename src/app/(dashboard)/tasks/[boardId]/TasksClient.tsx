@@ -37,6 +37,8 @@ import {
   flattenTaskTree,
   isFlatSort,
   sortTasksFlat,
+  nestedRenderRows,
+  completedRenderRows,
   countOpenDescendants,
   ACTIVE_SORT_MODES,
   SORT_LABELS,
@@ -53,6 +55,7 @@ import {
   type VirtualList,
   type TaskRow,
   type TaskNode,
+  type TaskRenderRow,
 } from '@/lib/tasks';
 import {
   createTaskAction,
@@ -1038,26 +1041,22 @@ function BoardColumn({
    * What the open list actually draws.
    *
    * Under manual order that's the tree, nesting and all. Under any other sort
-   * it's one flat list: a subtask is sorted against every task, not just
-   * against its siblings, so it lands wherever its own deadline (or title, or
-   * reminder) says it should. The parent doesn't disappear — the row names it
-   * in grey above the title, which is the only thing the indent was saying.
+   * a subtask is sorted against every task rather than only against its
+   * siblings, so it lands where its own deadline says it should — unless it
+   * shares its parent's day, where staying nested says more. A detached row
+   * names its parent in grey above the title, which is all the indent was
+   * saying.
    */
   const flatSort = isFlatSort(board.sortMode);
   const openRender = useMemo(
-    () => (flatSort ? sortTasksFlat(openTree, board.sortMode) : openTree),
+    () => (flatSort ? sortTasksFlat(openTree, board.sortMode) : nestedRenderRows(openTree)),
     [openTree, board.sortMode, flatSort]
   );
 
-  // The completed pile is a log — most recently finished first, whatever the
-  // board's sort is — so it's always flat for the same reason.
-  const completedRows = useMemo(
-    () =>
-      flattenTaskTree(completedTree).sort((a, b) =>
-        (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
-      ),
-    [completedTree]
-  );
+  // The completed pile is a log — newest first, whatever the board's sort is —
+  // so it detaches on the same terms, by the day things were finished.
+  const completedRender = useMemo(() => completedRenderRows(completedTree), [completedTree]);
+  const completedCount = useMemo(() => flattenTaskTree(completedTree).length, [completedTree]);
 
   /** Titles of every task on this column, for a subtask row's grey parent line. */
   const titleById = useMemo(
@@ -1138,13 +1137,12 @@ function BoardColumn({
   // reason: a drag resolves its drop against the rows the viewer can see, and
   // under a flat sort every one of those looks top level.
   //
-  // `flat` says this row stands on its own: no indent, no children drawn under
-  // it (they have their own place in the sorted list), and the parent named in
-  // grey above the title instead.
-  const renderRow = (node: TaskNode, done: boolean, level = 0, flat = false) => {
+  const renderRow = (row: TaskRenderRow, done: boolean, level = 0) => {
+    const node = row.node;
     const isEditing = editingId === node.id;
     const indent = level * 24;
-    const parentTitle = flat && node.parentId != null ? titleById.get(node.parentId) : undefined;
+    // A row drawn flush that has a parent somewhere else in the list names it.
+    const parentTitle = level === 0 && node.parentId != null ? titleById.get(node.parentId) : undefined;
     const descendants = flattenTaskTree([node]);
     const subtreeIds = descendants.map((n) => n.id);
     // Deepest level below this task: a parent can't be nested, a leaf can.
@@ -1317,10 +1315,9 @@ function BoardColumn({
           </div>
         )}
 
-        {!flat &&
-          node.children.map((child) =>
-            renderRow(child, Boolean(child.completedAt), level + 1)
-          )}
+        {row.children.map((child) =>
+          renderRow(child, Boolean(child.node.completedAt), level + 1)
+        )}
       </div>
     );
   };
@@ -1585,16 +1582,16 @@ function BoardColumn({
                 <button
                   onClick={() => {
                     setMenuOpen(false);
-                    if (completedRows.length === 0) return;
+                    if (completedCount === 0) return;
                     if (
                       window.confirm(
-                        `Delete ${completedRows.length} completed task${completedRows.length === 1 ? '' : 's'} from “${board.name}”? Your stats keep the history.`
+                        `Delete ${completedCount} completed task${completedCount === 1 ? '' : 's'} from “${board.name}”? Your stats keep the history.`
                       )
                     ) {
                       handlers.run(() => deleteCompletedTasksAction(board.id));
                     }
                   }}
-                  disabled={completedRows.length === 0}
+                  disabled={completedCount === 0}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Delete completed
@@ -1756,10 +1753,10 @@ function BoardColumn({
         )}
 
         <div className="space-y-0.5">
-          {openRender.map((node) => renderRow(node, false, 0, flatSort))}
+          {openRender.map((row) => renderRow(row, false))}
         </div>
 
-        {completedRows.length > 0 && (
+        {completedCount > 0 && (
           <div className="mt-5">
             <button
               onClick={() => setShowCompleted((s) => !s)}
@@ -1771,11 +1768,11 @@ function BoardColumn({
               ) : (
                 <ChevronRight className="h-3.5 w-3.5" />
               )}
-              Completed ({completedRows.length})
+              Completed ({completedCount})
             </button>
             {showCompleted && (
               <div className="space-y-0.5 mt-1">
-                {completedRows.map((node) => renderRow(node, true, 0, true))}
+                {completedRender.map((row) => renderRow(row, true))}
               </div>
             )}
           </div>
