@@ -14,4 +14,33 @@ function capWarning(markerFound, hitCap, messagesScanned) {
 }
 
 
-module.exports = { capWarning };
+
+/**
+ * Splits lines into groups that each fit inside `budget` characters. Discord
+ * rejects a message over 2000 and a long day's log can pass that; splitting on
+ * line boundaries keeps every block copy-pasteable.
+ *
+ * A single line longer than the budget gets its own group rather than being
+ * cut in half — Discord will reject it, which is a better failure than handing
+ * someone a silently truncated log line.
+ */
+function chunkLines(lines, budget) {
+  const chunks = [];
+  let current = [];
+  let size = 0;
+
+  for (const line of lines) {
+    if (current.length > 0 && size + line.length + 1 > budget) {
+      chunks.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(line);
+    size += line.length + 1;
+  }
+  if (current.length > 0) chunks.push(current);
+
+  return chunks;
+}
+
+module.exports = { capWarning, chunkLines };

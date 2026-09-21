@@ -11,6 +11,7 @@ the web UI. Nothing it does writes to your calendar directly.
 | `/link` | Gives you a one-time code to connect this Discord account to a calendar account. |
 | `/whoami` | Says which calendar account this Discord account is linked to. |
 | `/fetch [date]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
+| `/manual-fetch` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
 
 All replies are ephemeral — only you see them.
 

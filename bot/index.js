@@ -10,7 +10,7 @@ const {
 const config = require('./config');
 const api = require('./api');
 const { collectLogLines } = require('./log-lines');
-const { capWarning } = require('./reply');
+const { capWarning, chunkLines } = require('./reply');
 
 const commands = [
   new SlashCommandBuilder()
@@ -19,6 +19,9 @@ const commands = [
   new SlashCommandBuilder()
     .setName('whoami')
     .setDescription('Show which calendar account this Discord account is linked to'),
+  new SlashCommandBuilder()
+    .setName('manual-fetch')
+    .setDescription('Print your log lines since the last --- marker, without staging anything'),
   new SlashCommandBuilder()
     .setName('fetch')
     .setDescription('Read your log lines since the last --- marker and stage them in your calendar')
@@ -179,9 +182,46 @@ async function handleFetch(interaction) {
   );
 }
 
+async function handleManualFetch(interaction) {
+  const { lines, markerFound, messagesScanned, hitCap } = await scrapeLogLines(
+    interaction.channel,
+    interaction.user.id,
+  );
 
+  const warning = capWarning(markerFound, hitCap, messagesScanned);
 
-const handlers = { link: handleLink, whoami: handleWhoami, fetch: handleFetch };
+  if (lines.length === 0) {
+    await interaction.editReply(
+      (markerFound
+        ? 'No log lines since the last `---` marker.'
+        : `No log lines found in the last ${messagesScanned} messages.`) + warning,
+    );
+    return;
+  }
+
+  const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
+  // Room for the code fences and the trailing newline inside the 2000 budget.
+  const chunks = chunkLines(lines, 1900);
+
+  await interaction.editReply(
+    `**${lines.length}** log lines ${boundary}. Nothing was staged — copy them wherever you need.` +
+      warning,
+  );
+
+  for (const chunk of chunks) {
+    await interaction.followUp({
+      content: '```\n' + chunk.join('\n') + '\n```',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}
+
+const handlers = {
+  link: handleLink,
+  whoami: handleWhoami,
+  fetch: handleFetch,
+  'manual-fetch': handleManualFetch,
+};
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
