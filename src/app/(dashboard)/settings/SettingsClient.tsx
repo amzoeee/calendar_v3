@@ -310,35 +310,6 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart }: Se
     <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 max-w-4xl mx-auto">
 
-      {/* Calendar preferences */}
-      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <CalendarDays className="h-5 w-5 text-primary" />
-          <h2 className="text-xl font-bold tracking-tight">Calendar</h2>
-        </div>
-
-        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
-          <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="week-start">
-            Week starts on
-          </label>
-          <select
-            id="week-start"
-            value={weekStart}
-            onChange={(e) => handleWeekStartChange(Number(e.target.value) as WeekStart)}
-            className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-          >
-            {WEEK_START_OPTIONS.map((day) => (
-              <option key={day} value={day}>
-                {WEEK_START_LABELS[day]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Applies to the weekly view, the mini calendar and the stats page.
-        </p>
-      </section>
-
       {/* Tag Management */}
       <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">
         <div className="flex items-center gap-3">
@@ -651,6 +622,32 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart }: Se
         >
           Export ICS File
         </button>
+      </section>
+
+      {/* Calendar preferences */}
+      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <CalendarDays className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-bold tracking-tight">Calendar</h2>
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+          <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="week-start">
+            Week starts on
+          </label>
+          <select
+            id="week-start"
+            value={weekStart}
+            onChange={(e) => handleWeekStartChange(Number(e.target.value) as WeekStart)}
+            className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+          >
+            {WEEK_START_OPTIONS.map((day) => (
+              <option key={day} value={day}>
+                {WEEK_START_LABELS[day]}
+              </option>
+            ))}
+          </select>
+        </div>
       </section>
 
       {/* Build info */}
