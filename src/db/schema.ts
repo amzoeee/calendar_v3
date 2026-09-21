@@ -48,6 +48,10 @@ export const taskBoards = sqliteTable('task_boards', {
   orderIndex: integer('order_index').notNull(),
   // manual | alpha | created | remind | deadline
   sortMode: text('sort_mode').notNull().default('manual'),
+  // Where a task added from a view across every board (All tasks, Starred)
+  // lands. At most one per user; with none set the first board stands in, so
+  // existing accounts need no backfill.
+  isDefault: integer('is_default').notNull().default(0),
   userId: integer('user_id').notNull().references(() => users.id),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
