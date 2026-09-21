@@ -1,6 +1,9 @@
-// The marker that separates "already imported" from "new". A message that is
-// nothing but three or more dashes, em-dashes or box-drawing dashes.
-const MARKER = /^\s*[-—─]{3,}\s*$/;
+// The marker that separates "already imported" from "new": a line that opens
+// with three or more dashes, em-dashes or box-drawing dashes. Any number of
+// them counts, and anything after them is allowed — a Discord copy-paste
+// separator like `--- Yesterday at 9:00 PM ---` is still a marker. Log lines
+// open with a digit, so nothing legitimate is swallowed.
+const MARKER = /^\s*[-—─]{3,}/;
 
 // A log line: a shorthand time, an optional am/pm, then the activity.
 // Deliberately the same shape the calendar's own parser accepts, so the bot
