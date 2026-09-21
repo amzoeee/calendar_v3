@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
+import DateInput from '@/app/components/DateInput';
 
 interface Tag {
   id: number;
@@ -436,8 +437,7 @@ export default function StatsClient({
 
           <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
             <span className="uppercase tracking-wider">From</span>
-            <input
-              type="date"
+            <DateInput
               value={localStart}
               max={localEnd}
               onChange={(e) => setLocalStart(e.target.value)}
@@ -448,8 +448,7 @@ export default function StatsClient({
               className="bg-secondary border border-border px-2 py-1 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <span className="uppercase tracking-wider">To</span>
-            <input
-              type="date"
+            <DateInput
               value={localEnd}
               min={localStart}
               onChange={(e) => setLocalEnd(e.target.value)}
@@ -507,8 +506,7 @@ export default function StatsClient({
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">From</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={localStart}
                     max={localEnd}
                     onChange={(e) => setLocalStart(e.target.value)}
@@ -518,8 +516,7 @@ export default function StatsClient({
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">To</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={localEnd}
                     min={localStart}
                     onChange={(e) => setLocalEnd(e.target.value)}

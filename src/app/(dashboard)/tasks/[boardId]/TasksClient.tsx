@@ -94,6 +94,7 @@ import {
 } from '@/lib/taskSchedule';
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
+import DateInput from '@/app/components/DateInput';
 
 // Every small control in the editor and the composer shares one look. Kept in
 // one place so the three pickers can't drift apart.
@@ -1670,8 +1671,7 @@ function BoardColumn({
           {detailsOpen && (
             <div className="px-2 pb-2 space-y-2">
               <div className="flex gap-1.5">
-                <input
-                  type="date"
+                <DateInput
                   value={draftDate}
                   onChange={(e) => setDraftDate(e.target.value)}
                   aria-label="Deadline for the new task"
@@ -2022,8 +2022,7 @@ function SchedulePicker({
           Deadline
         </span>
         <div className="flex gap-1.5">
-          <input
-            type="date"
+          <DateInput
             value={dueDate}
             onChange={(e) => {
               setDueDate(e.target.value);
@@ -2411,8 +2410,7 @@ function PasteListDialog({
               <option value="series">Spread out, starting…</option>
             </select>
             {mode !== 'none' && (
-              <input
-                type="date"
+              <DateInput
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className={`${field} cursor-pointer`}
