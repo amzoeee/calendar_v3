@@ -17,6 +17,7 @@ import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } fr
 import { parseLogText, recalculatePendingEventsDate } from '@/lib/discord-log';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 import { todayForViewer } from '@/lib/server-timezone';
+import { isTagScope, type TagScope } from '@/lib/tags';
 
 // ==========================================
 // Authentication Actions
@@ -108,11 +109,12 @@ export async function logoutAction() {
 // Tag Actions
 // ==========================================
 
-export async function addTagAction(name: string, color: string) {
+export async function addTagAction(name: string, color: string, scope: TagScope = 'both') {
   const session = await requireAuth();
   const trimmedName = name.trim();
 
   if (!trimmedName) throw new Error('Tag name is required');
+  if (!isTagScope(scope)) throw new Error('Unknown tag scope');
 
   // Check if tag already exists for user
   const existing = await db
@@ -137,17 +139,26 @@ export async function addTagAction(name: string, color: string) {
     name: trimmedName,
     color,
     orderIndex,
+    scope,
     userId: session.userId,
   });
 
   revalidatePath('/settings');
 }
 
-export async function updateTagAction(id: number, name: string, color: string) {
+export async function updateTagAction(
+  id: number,
+  name: string,
+  color: string,
+  scope?: TagScope
+) {
   const session = await requireAuth();
   const trimmedName = name.trim();
 
   if (!trimmedName) throw new Error('Tag name is required');
+  // Omitted rather than defaulted: a caller that doesn't know about scope
+  // shouldn't silently widen one back to 'both'.
+  if (scope !== undefined && !isTagScope(scope)) throw new Error('Unknown tag scope');
 
   const [tag] = await db
     .select()
@@ -172,7 +183,7 @@ export async function updateTagAction(id: number, name: string, color: string) {
   // Update tag
   await db
     .update(tags)
-    .set({ name: trimmedName, color })
+    .set({ name: trimmedName, color, ...(scope !== undefined && { scope }) })
     .where(eq(tags.id, id));
 
   // If name changed, update events using the old name
@@ -185,6 +196,8 @@ export async function updateTagAction(id: number, name: string, color: string) {
 
   revalidatePath('/settings');
   revalidatePath('/calendar', 'layout');
+  // Narrowing the scope changes which pickers offer the tag, tasks' included.
+  revalidatePath('/tasks', 'layout');
 }
 
 export async function deleteTagAction(id: number) {

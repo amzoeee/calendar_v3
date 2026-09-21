@@ -42,6 +42,7 @@ interface Tag {
   name: string;
   color: string;
   isArchived: number;
+  scope: string;
 }
 
 // The two ways mobile can read a week, and where the choice is remembered.
