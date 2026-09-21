@@ -35,6 +35,10 @@ export default async function TasksBoardPage({ params }: PageProps) {
     .where(eq(taskBoards.userId, session.userId))
     .orderBy(asc(taskBoards.orderIndex), asc(taskBoards.id));
 
+  // Where a virtual list's composer writes. An account that has never chosen
+  // one falls back to the top of the rail, which is what it always did.
+  const defaultBoard = boards.find((b) => b.isDefault === 1) ?? boards[0];
+
   const segment = decodeURIComponent(boardIdParam);
 
   // "/tasks/all" and "/tasks/starred" are views across every board rather than
@@ -153,19 +157,19 @@ export default async function TasksBoardPage({ params }: PageProps) {
     <TasksClient
       availableTags={availableTags}
       tagsByTask={tagsByTask}
-      boards={boards.map((b) => ({ id: b.id, name: b.name }))}
+      boards={boards.map((b) => ({ id: b.id, name: b.name, isDefault: b.id === defaultBoard.id }))}
       visibleBoards={
         virtual
           ? [
               {
                 // A list that isn't a list still has to answer "where does a
-                // new task go". It goes to the first board, and the composer
+                // new task go". It goes to the default board, and the composer
                 // says so by name rather than leaving you to find out.
-                id: boards[0].id,
+                id: defaultBoard.id,
                 name: VIRTUAL_LIST_NAMES[virtual],
                 sortMode: virtualSort,
                 virtual,
-                targetName: boards[0].name,
+                targetName: defaultBoard.name,
               },
             ]
           : selected.map((b) => ({

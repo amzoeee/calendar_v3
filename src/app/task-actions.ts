@@ -2,7 +2,7 @@
 
 import { db } from '@/db';
 import { taskBoards, tasks, taskCompletions, taskTags, tags } from '@/db/schema';
-import { eq, and, sql, isNull, isNotNull, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull, isNotNull, inArray } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { dateToServerDbString, browserDatetimeToServerDbString } from '@/lib/timezone';
@@ -37,7 +37,9 @@ export async function ensureDefaultBoard(userId: number): Promise<number> {
     .select({ id: taskBoards.id })
     .from(taskBoards)
     .where(eq(taskBoards.userId, userId))
-    .orderBy(taskBoards.orderIndex)
+    // The chosen default first, then the top of the rail for an account that
+    // has never picked one.
+    .orderBy(desc(taskBoards.isDefault), taskBoards.orderIndex)
     .limit(1);
 
   if (existing) return existing.id;
@@ -67,6 +69,54 @@ export async function createBoardAction(name: string): Promise<number> {
 
   refresh();
   return created.id;
+}
+
+/**
+ * Reorder the rail. Sent as the complete list of the user's board ids in
+ * their new order; ids that aren't theirs are refused rather than skipped, so
+ * a partial list can't silently renumber the rest.
+ */
+export async function reorderBoardsAction(orderedIds: number[]): Promise<void> {
+  const session = await requireAuth();
+
+  const owned = await db
+    .select({ id: taskBoards.id })
+    .from(taskBoards)
+    .where(eq(taskBoards.userId, session.userId));
+
+  const ownedIds = new Set(owned.map((b) => b.id));
+  if (orderedIds.length !== ownedIds.size || orderedIds.some((id) => !ownedIds.has(id))) {
+    throw new Error('Board order must list every board exactly once');
+  }
+
+  for (let index = 0; index < orderedIds.length; index++) {
+    await db
+      .update(taskBoards)
+      .set({ orderIndex: index + 1 })
+      .where(and(eq(taskBoards.id, orderedIds[index]), eq(taskBoards.userId, session.userId)));
+  }
+
+  refresh();
+}
+
+/** Make `id` the board that All tasks and Starred add to. At most one per user. */
+export async function setDefaultBoardAction(id: number): Promise<void> {
+  const session = await requireAuth();
+
+  const [board] = await db
+    .select({ id: taskBoards.id })
+    .from(taskBoards)
+    .where(and(eq(taskBoards.id, id), eq(taskBoards.userId, session.userId)))
+    .limit(1);
+  if (!board) throw new Error('Board not found');
+
+  await db
+    .update(taskBoards)
+    .set({ isDefault: 0 })
+    .where(eq(taskBoards.userId, session.userId));
+  await db.update(taskBoards).set({ isDefault: 1 }).where(eq(taskBoards.id, id));
+
+  refresh();
 }
 
 export async function renameBoardAction(id: number, name: string): Promise<void> {

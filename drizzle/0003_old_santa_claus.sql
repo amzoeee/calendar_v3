@@ -1,0 +1,1 @@
+ALTER TABLE `task_boards` ADD `is_default` integer DEFAULT 0 NOT NULL;

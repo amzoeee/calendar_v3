@@ -62,6 +62,8 @@ import {
   moveTaskToBoardAction,
   createBoardAction,
   renameBoardAction,
+  reorderBoardsAction,
+  setDefaultBoardAction,
   deleteBoardAction,
   setBoardSortAction,
   deleteCompletedTasksAction,
@@ -103,9 +105,13 @@ const FIELD_CLASS =
 interface BoardSummary {
   id: number;
   name: string;
+  /** Where All tasks and Starred add a task. Exactly one board carries it. */
+  isDefault: boolean;
 }
 
-interface VisibleBoard extends BoardSummary {
+// A column stands for a board or for a view across all of them, so it carries
+// no default flag of its own — `boards` is where that lives.
+interface VisibleBoard extends Omit<BoardSummary, 'isDefault'> {
   sortMode: SortMode;
   /** Set when this column is a view across every board, not a board. */
   virtual: VirtualList | null;
@@ -184,6 +190,16 @@ export default function TasksClient({
     setSyncedRows(rows);
     setLocalRows(rows);
   }
+
+  // The rail's order, mirrored locally so a drag rearranges under the pointer
+  // rather than after a round trip.
+  const [railBoards, setRailBoards] = useState<BoardSummary[]>(boards);
+  const [syncedBoards, setSyncedBoards] = useState<BoardSummary[]>(boards);
+  if (boards !== syncedBoards) {
+    setSyncedBoards(boards);
+    setRailBoards(boards);
+  }
+  const [draggedBoard, setDraggedBoard] = useState<number | null>(null);
 
   const [localTags, setLocalTags] = useState<Record<number, number[]>>(tagsByTask);
   const [syncedTags, setSyncedTags] = useState<Record<number, number[]>>(tagsByTask);
@@ -279,6 +295,26 @@ export default function TasksClient({
 
   const showOnly = (id: number) => router.push(`/tasks/${id}`);
   const showList = (kind: VirtualList) => router.push(`/tasks/${kind}`);
+
+  // ----- reordering the rail -----
+
+  const onBoardDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedBoard === null || draggedBoard === index) return;
+    const next = [...railBoards];
+    const [moved] = next.splice(draggedBoard, 1);
+    next.splice(index, 0, moved);
+    setRailBoards(next);
+    setDraggedBoard(index);
+  };
+
+  const onBoardDragEnd = () => {
+    setDraggedBoard(null);
+    const ids = railBoards.map((b) => b.id);
+    // Only worth a write when the drag actually moved something.
+    if (ids.join() === boards.map((b) => b.id).join()) return;
+    run(() => reorderBoardsAction(ids));
+  };
 
   const toggleColumn = (id: number) => {
     const next = visibleIds.includes(id)
@@ -572,25 +608,37 @@ export default function TasksClient({
 
           <div className="!my-2 border-t border-border" />
 
-          {boards.map((b) => {
+          {railBoards.map((b, index) => {
             const shown = visibleIds.includes(b.id);
             const atLimit = !shown && visibleIds.length >= MAX_VISIBLE_BOARDS;
             return (
               <div
                 key={b.id}
+                draggable
+                onDragStart={() => setDraggedBoard(index)}
+                onDragOver={(e) => onBoardDragOver(e, index)}
+                onDragEnd={onBoardDragEnd}
                 className={`flex items-center gap-1 rounded-lg transition-colors ${
                   shown ? 'bg-secondary' : 'hover:bg-secondary/50'
-                }`}
+                } ${draggedBoard === index ? 'opacity-50' : ''}`}
               >
                 <button
                   onClick={() => showOnly(b.id)}
                   aria-current={shown ? 'page' : undefined}
-                  title={`Show only ${b.name}`}
-                  className={`flex-1 min-w-0 text-left pl-2.5 pr-1 py-2 text-sm font-medium truncate cursor-pointer ${
+                  title={b.isDefault ? `Show only ${b.name} (default list)` : `Show only ${b.name}`}
+                  className={`flex-1 min-w-0 flex items-center gap-1.5 text-left pl-2.5 pr-1 py-2 text-sm font-medium cursor-pointer ${
                     shown ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {b.name}
+                  <span className="truncate">{b.name}</span>
+                  {/* Which list All tasks and Starred add to — worth saying in
+                      the rail, since that's where it's chosen. The name gives
+                      way to it rather than the other way round. */}
+                  {b.isDefault && (
+                    <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      default
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => toggleColumn(b.id)}
@@ -944,6 +992,8 @@ function BoardColumn({
   // Which list a task actually belongs to only needs saying in a view that
   // spans several.
   const boardNames = useMemo(() => new Map(boards.map((b) => [b.id, b.name])), [boards]);
+
+  const isDefaultBoard = boards.some((b) => b.id === board.id && b.isDefault);
 
   const { subtaskParent, setSubtaskParent, editingId, setEditingId } = handlers;
 
@@ -1537,6 +1587,17 @@ function BoardColumn({
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
                 >
                   Rename list
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    handlers.run(() => setDefaultBoardAction(board.id));
+                  }}
+                  disabled={isDefaultBoard}
+                  title="Where All tasks and Starred add a new task"
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isDefaultBoard ? 'Default list' : 'Make default list'}
                 </button>
                 <button
                   onClick={() => {
