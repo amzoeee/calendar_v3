@@ -6,18 +6,19 @@ import { redirect } from 'next/navigation';
 import WeeklyCalendarClient from './WeeklyCalendarClient';
 import { todayForViewer } from '@/lib/server-timezone';
 import { shiftDateStr } from '@/lib/timezone';
+import { getWeekStart } from '@/lib/server-week';
+import { startOfWeek, type WeekStart } from '@/lib/week';
 
 interface PageProps {
   params: Promise<{ date: string }> | { date: string };
 }
 
-// Helper to get Sunday and Saturday dates for a given date
-function getWeekRange(dateStr: string): { sunday: Date; saturday: Date } {
-  const date = new Date(dateStr + 'T00:00:00');
-  const day = date.getDay(); // 0 = Sunday
-  const sunday = new Date(date.getTime() - day * 24 * 60 * 60 * 1000);
-  const saturday = new Date(sunday.getTime() + 6 * 24 * 60 * 60 * 1000);
-  return { sunday, saturday };
+// First and last day of the week containing `dateStr`, which is Sun–Sat only
+// for a viewer who hasn't changed where their week starts.
+function getWeekRange(dateStr: string, weekStart: WeekStart): { first: Date; last: Date } {
+  const first = startOfWeek(new Date(dateStr + 'T00:00:00'), weekStart);
+  const last = new Date(first.getFullYear(), first.getMonth(), first.getDate() + 6);
+  return { first, last };
 }
 
 export default async function WeeklyPage({ params }: PageProps) {
@@ -36,18 +37,19 @@ export default async function WeeklyPage({ params }: PageProps) {
     redirect(`/weekly/${today}`);
   }
 
-  const { sunday, saturday } = getWeekRange(date);
+  const weekStart = await getWeekStart();
+  const { first, last } = getWeekRange(date, weekStart);
 
-  // Pad query range to cover entire week (Sunday 00:00:00 to Saturday 23:59:59).
+  // Pad query range to cover the entire week (first day 00:00:00 to last day 23:59:59).
   // The DB stores Pacific-time strings, but this week is the viewer's own —
   // widen by a day on each side so an event whose Pacific string falls just
   // outside the week (while still belonging to it in the viewer's timezone)
   // isn't silently excluded. The client filters per-viewer-day from there.
   const pad = (n: number) => String(n).padStart(2, '0');
-  const sundayStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`;
-  const saturdayStr = `${saturday.getFullYear()}-${pad(saturday.getMonth() + 1)}-${pad(saturday.getDate())}`;
-  const startStr = `${shiftDateStr(sundayStr, -1)} 00:00:00`;
-  const endStr = `${shiftDateStr(saturdayStr, 1)} 23:59:59`;
+  const firstStr = `${first.getFullYear()}-${pad(first.getMonth() + 1)}-${pad(first.getDate())}`;
+  const lastStr = `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`;
+  const startStr = `${shiftDateStr(firstStr, -1)} 00:00:00`;
+  const endStr = `${shiftDateStr(lastStr, 1)} 23:59:59`;
 
   const dbEvents = await db
     .select()
@@ -85,7 +87,8 @@ export default async function WeeklyPage({ params }: PageProps) {
   return (
     <WeeklyCalendarClient
       date={date}
-      sundayDate={sunday.toLocaleDateString('en-CA')}
+      weekStartDate={first.toLocaleDateString('en-CA')}
+      weekStart={weekStart}
       initialEvents={dbEvents}
       tags={dbTags}
     />

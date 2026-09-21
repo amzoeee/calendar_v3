@@ -177,6 +177,104 @@ export function sortTaskTree(nodes: TaskNode[], mode: SortMode): TaskNode[] {
   return nodes;
 }
 
+/**
+ * Whether a mode orders every task against every other one, subtasks included.
+ *
+ * Manual order is the only per-parent order: it is the sibling order you
+ * dragged, and has nothing to say about where a subtask sits among tasks that
+ * aren't its siblings. Every other mode reads a property of the task itself,
+ * so a subtask due today belongs beside everything else due today rather than
+ * buried under a parent due next month.
+ */
+export function isFlatSort(mode: SortMode): boolean {
+  return mode !== 'manual';
+}
+
+/**
+ * What a row is drawn as: the task, plus the subtasks still nested under it.
+ */
+export interface TaskRenderRow {
+  node: TaskNode;
+  children: TaskRenderRow[];
+}
+
+/**
+ * How a mode decides a subtask belongs with its parent. `null` never groups —
+ * a title or a creation time says nothing about being part of the same job.
+ */
+function groupKey(node: TaskNode, mode: SortMode): string | null {
+  switch (mode) {
+    // Same day, whatever the time: due 9am and due 5pm on Friday is one job.
+    case 'deadline':
+      return node.dueDatetime?.slice(0, 10) ?? 'undated';
+    case 'remind':
+      return node.remindAt?.slice(0, 10) ?? 'unset';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Turn a forest into rows, detaching any subtask whose key differs from its
+ * parent's so it can be sorted on its own.
+ *
+ * Nodes keep their `children` throughout, so callers that reason about a
+ * subtree (completion cascades, dragging a task with its family) still can —
+ * only where a row is drawn changes.
+ */
+function detachRows(
+  roots: TaskNode[],
+  key: (node: TaskNode) => string | null,
+  order: (a: TaskNode, b: TaskNode) => number
+): TaskRenderRow[] {
+  const all = flattenTaskTree(roots);
+  const byId = new Map(all.map((n) => [n.id, n]));
+
+  const stays = (node: TaskNode): boolean => {
+    const parent = node.parentId != null ? byId.get(node.parentId) : undefined;
+    if (!parent) return false;
+    const k = key(node);
+    return k != null && k === key(parent);
+  };
+
+  const rowFor = (node: TaskNode): TaskRenderRow => ({
+    node,
+    children: node.children.filter(stays).sort(order).map(rowFor),
+  });
+
+  return all.filter((n) => !stays(n)).sort(order).map(rowFor);
+}
+
+/**
+ * Every task in sort order, parents and subtasks competing on equal terms —
+ * except a subtask that shares its parent's key, which stays nested, since
+ * splitting up a family that's all due the same day only loses information.
+ */
+export function sortTasksFlat(nodes: TaskNode[], mode: SortMode): TaskRenderRow[] {
+  return detachRows(
+    nodes,
+    (n) => groupKey(n, mode),
+    (a, b) => compare(a, b, mode)
+  );
+}
+
+/**
+ * The completed pile: a log, newest first, grouped by the day things were
+ * finished — which keeps a parent and the subtasks it closed with it together.
+ */
+export function completedRenderRows(nodes: TaskNode[]): TaskRenderRow[] {
+  return detachRows(
+    nodes,
+    (n) => n.completedAt?.slice(0, 10) ?? 'unknown',
+    (a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')
+  );
+}
+
+/** The whole tree as rows, nothing detached. */
+export function nestedRenderRows(nodes: TaskNode[]): TaskRenderRow[] {
+  return nodes.map((node) => ({ node, children: nestedRenderRows(node.children) }));
+}
+
 /** Depth-first flatten, for rendering a tree as rows. */
 export function flattenTaskTree(nodes: TaskNode[]): TaskNode[] {
   const out: TaskNode[] = [];

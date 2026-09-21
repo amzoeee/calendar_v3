@@ -9,6 +9,7 @@ import MobileTabBar from '@/app/components/MobileTabBar';
 import MobileProfileMenu from '@/app/components/MobileProfileMenu';
 import TimezoneSync from '@/app/components/TimezoneSync';
 import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
+import { getWeekStart } from '@/lib/server-week';
 import { dbStringToUtcMillis, dayStrOfInstant, shiftDateStr } from '@/lib/timezone';
 import {
   LogOut,
@@ -42,6 +43,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const pendingCount = pendingCountResult[0]?.count || 0;
 
   const todayStr = await todayForViewer();
+  const weekStart = await getWeekStart();
 
   // Tasks due today or already overdue, for the badge on the Tasks tab.
   // Deadlines are Pacific strings but "today" is the viewer's day, so the
@@ -79,7 +81,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
           </div>
 
           {/* Mini month calendar for quick day navigation */}
-          <MiniCalendar />
+          <MiniCalendar weekStart={weekStart} />
 
           {/* Navigation (preserves the currently-viewed date across views) */}
           <SidebarNav todayStr={todayStr} dueCount={dueCount} />

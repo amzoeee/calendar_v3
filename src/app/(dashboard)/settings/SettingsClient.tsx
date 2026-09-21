@@ -12,6 +12,7 @@ import {
   MessageSquareCode,
   GripVertical,
   GitCommitHorizontal,
+  CalendarDays,
   X,
   Plus,
 } from 'lucide-react';
@@ -25,7 +26,19 @@ import {
   stageLogAction,
 } from '@/app/actions';
 import TagSelect from '@/app/components/TagSelect';
+import {
+  TAG_SCOPES,
+  TAG_SCOPE_BADGES,
+  TAG_SCOPE_LABELS,
+  type TagScope,
+} from '@/lib/tags';
 import { getBrowserTimeZone } from '@/lib/timezone';
+import {
+  WEEK_START_COOKIE,
+  WEEK_START_LABELS,
+  WEEK_START_OPTIONS,
+  type WeekStart,
+} from '@/lib/week';
 import type { BuildInfo } from '@/lib/version';
 
 interface Tag {
@@ -34,6 +47,7 @@ interface Tag {
   color: string;
   isArchived: number;
   orderIndex: number;
+  scope: string;
 }
 
 /**
@@ -57,9 +71,10 @@ function formatBuildTime(iso: string): string {
 interface SettingsClientProps {
   initialTags: Tag[];
   buildInfo: BuildInfo;
+  weekStart: WeekStart;
 }
 
-export default function SettingsClient({ initialTags, buildInfo }: SettingsClientProps) {
+export default function SettingsClient({ initialTags, buildInfo, weekStart }: SettingsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -96,12 +111,21 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
     importBannerRef.current?.scrollIntoView({ block: 'center' });
   }, [importResult]);
 
+  // --- Week start ---
+  // A cookie rather than a row: every page that draws a week reads it on the
+  // server, before the client runs. Refresh so they re-render with the new one.
+  const handleWeekStartChange = (value: WeekStart) => {
+    document.cookie = `${WEEK_START_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;
+    router.refresh();
+  };
+
   // --- Tags list state ---
   const [tagsList, setTagsList] = useState<Tag[]>(initialTags);
 
   // --- Add Tag State ---
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#6b7280');
+  const [newTagScope, setNewTagScope] = useState<TagScope>('both');
   const [addTagError, setAddTagError] = useState('');
 
   // --- Edit Tag Modal State ---
@@ -109,6 +133,7 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
   const [editTagName, setEditTagName] = useState('');
   const [editTagColor, setEditTagColor] = useState('');
+  const [editTagScope, setEditTagScope] = useState<TagScope>('both');
   const [editTagError, setEditTagError] = useState('');
 
   // --- Import/Export States ---
@@ -173,9 +198,10 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
     e.preventDefault();
     setAddTagError('');
     try {
-      await addTagAction(newTagName, newTagColor);
+      await addTagAction(newTagName, newTagColor, newTagScope);
       setNewTagName('');
       setNewTagColor('#6b7280');
+      setNewTagScope('both');
       // Refresh local page data
       router.refresh();
     } catch (e: any) {
@@ -188,6 +214,7 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
     setEditingTag(tag);
     setEditTagName(tag.name);
     setEditTagColor(tag.color);
+    setEditTagScope((tag.scope as TagScope) ?? 'both');
     setEditTagError('');
     setShowEditModal(true);
   };
@@ -197,7 +224,7 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
     if (!editingTag) return;
     setEditTagError('');
     try {
-      await updateTagAction(editingTag.id, editTagName, editTagColor);
+      await updateTagAction(editingTag.id, editTagName, editTagColor, editTagScope);
       setShowEditModal(false);
       setEditingTag(null);
       router.refresh();
@@ -318,6 +345,11 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
                   <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
                   <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }}></span>
                   <span className="text-sm font-semibold truncate text-foreground">{tag.name}</span>
+                  {tag.scope !== 'both' && (
+                    <span className="shrink-0 px-1.5 py-0.5 rounded bg-secondary border border-border text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {TAG_SCOPE_BADGES[tag.scope as keyof typeof TAG_SCOPE_BADGES]}
+                    </span>
+                  )}
                 </div>
                 
                 <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
@@ -421,6 +453,23 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
                 alignment — that's what kept drifting out of sync with the
                 Discord Log button above. */}
             <div className="flex items-end gap-3 shrink-0">
+              <div className="shrink-0 w-44">
+                <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="new-tag-scope">
+                  Use for
+                </label>
+                <select
+                  id="new-tag-scope"
+                  value={newTagScope}
+                  onChange={(e) => setNewTagScope(e.target.value as TagScope)}
+                  className="mt-1 block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  {TAG_SCOPES.map((scope) => (
+                    <option key={scope} value={scope}>
+                      {TAG_SCOPE_LABELS[scope]}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="shrink-0 w-24">
                 <label className="block text-xs font-semibold text-muted-foreground uppercase">Color</label>
                 <input
@@ -608,6 +657,32 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
         </button>
       </section>
 
+      {/* Calendar preferences */}
+      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <CalendarDays className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-bold tracking-tight">Calendar</h2>
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+          <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="week-start">
+            Week starts on
+          </label>
+          <select
+            id="week-start"
+            value={weekStart}
+            onChange={(e) => handleWeekStartChange(Number(e.target.value) as WeekStart)}
+            className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+          >
+            {WEEK_START_OPTIONS.map((day) => (
+              <option key={day} value={day}>
+                {WEEK_START_LABELS[day]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
+
       {/* Build info */}
       <footer className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 pb-2 text-xs text-muted-foreground">
         <GitCommitHorizontal className="h-4 w-4" />
@@ -661,6 +736,28 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
                   onChange={(e) => setEditTagColor(e.target.value)}
                   className="mt-1 block w-full h-8 rounded bg-secondary border border-border px-1 py-0.5 cursor-pointer"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="edit-tag-scope">
+                  Use for
+                </label>
+                <select
+                  id="edit-tag-scope"
+                  value={editTagScope}
+                  onChange={(e) => setEditTagScope(e.target.value as TagScope)}
+                  className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none cursor-pointer"
+                >
+                  {TAG_SCOPES.map((scope) => (
+                    <option key={scope} value={scope}>
+                      {TAG_SCOPE_LABELS[scope]}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Keeps the tag out of the other picker. Anything already tagged with it stays
+                  tagged.
+                </p>
               </div>
 
               {editTagError && <p className="text-xs text-red-400 mt-1">{editTagError}</p>}
