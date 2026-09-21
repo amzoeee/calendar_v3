@@ -108,6 +108,17 @@ function clickedFirstSegment(el: HTMLInputElement, clientX: number): boolean {
   return x <= ctx.measureText('00').width + ctx.measureText('/').width / 2;
 }
 
+/** Roughly where the browser draws the calendar button, at the trailing edge. */
+const PICKER_BUTTON_WIDTH = 28;
+
+function clickedPickerButton(el: HTMLInputElement, clientX: number): boolean {
+  const style = getComputedStyle(el);
+  const rect = el.getBoundingClientRect();
+  const inset =
+    parseFloat(style.paddingRight || '0') + parseFloat(style.borderRightWidth || '0');
+  return clientX >= rect.right - inset - PICKER_BUTTON_WIDTH;
+}
+
 function monthDayOf(value: string): MonthDay | null {
   const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(value);
   return match ? { month: Number(match[1]), day: Number(match[2]) } : null;
@@ -125,7 +136,7 @@ function setNativeValue(el: HTMLInputElement, value: string) {
 }
 
 export default function DateInput(props: React.ComponentPropsWithoutRef<'input'>) {
-  const { onKeyDown, onFocus, onPointerDown, ...rest } = props;
+  const { onKeyDown, onFocus, onMouseDown, ...rest } = props;
   const entry = useRef<Entry>(emptyEntry());
   const lastComplete = useRef<MonthDay | null>(null);
   // Where the click that is about to focus the field landed. Null when focus
@@ -232,8 +243,26 @@ export default function DateInput(props: React.ComponentPropsWithoutRef<'input'>
     onKeyDown?.(e);
   };
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLInputElement>) => {
+  const handleMouseDown = (e: React.MouseEvent<HTMLInputElement>) => {
     const el = e.currentTarget;
+
+    // An empty field is about to be typed from the start, so put the caret
+    // there rather than wherever the click landed — otherwise the digits we
+    // follow don't line up with the segments they go into, and we'd have to
+    // sit the fill out. Clicks on the calendar button open the picker as
+    // usual, and a field that already has a date is left alone: clicking a
+    // segment to correct it is the whole point of clicking there.
+    if (
+      el.value === '' &&
+      document.activeElement !== el &&
+      !clickedPickerButton(el, e.clientX)
+    ) {
+      e.preventDefault();
+      el.focus();
+      onMouseDown?.(e);
+      return;
+    }
+
     const known = clickedFirstSegment(el, e.clientX);
     if (document.activeElement === el) {
       // Moving the caret inside a field that's already focused fires no focus
@@ -244,14 +273,14 @@ export default function DateInput(props: React.ComponentPropsWithoutRef<'input'>
     } else {
       pendingIndexKnown.current = known;
     }
-    onPointerDown?.(e);
+    onMouseDown?.(e);
   };
 
   return (
     <input
       {...rest}
       type="date"
-      onPointerDown={handlePointerDown}
+      onMouseDown={handleMouseDown}
       onFocus={(e) => {
         entry.current = emptyEntry();
         entry.current.indexKnown = pendingIndexKnown.current ?? true;
