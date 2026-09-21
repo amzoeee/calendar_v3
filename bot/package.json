@@ -1,0 +1,13 @@
+{
+  "name": "calendar-discord-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Discord bot that scrapes shorthand logs out of a channel and stages them in the calendar app.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  }
+}
