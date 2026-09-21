@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
     discordUserId?: unknown;
     text?: unknown;
     dateOverride?: unknown;
+    fallbackDate?: unknown;
     timeZone?: unknown;
   };
   try {
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
   const discordUserId = typeof body.discordUserId === 'string' ? body.discordUserId : '';
   const text = typeof body.text === 'string' ? body.text : '';
   const dateOverride = typeof body.dateOverride === 'string' && body.dateOverride ? body.dateOverride : null;
+  const fallbackDate = typeof body.fallbackDate === 'string' && body.fallbackDate ? body.fallbackDate : null;
   const timeZone = typeof body.timeZone === 'string' && body.timeZone ? body.timeZone : SERVER_TIMEZONE;
 
   if (!discordUserId) {
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'not_linked' }, { status: 403 });
   }
 
-  const result = await stageLogForUser(link.userId, text, dateOverride, timeZone);
+  const result = await stageLogForUser(link.userId, text, dateOverride, timeZone, fallbackDate);
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 422 });
   }

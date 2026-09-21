@@ -305,7 +305,11 @@ export async function parseLogText(
   text: string,
   userId: number,
   dateOverride?: string | null,
-  browserTimeZone: string = SERVER_TIMEZONE
+  browserTimeZone: string = SERVER_TIMEZONE,
+  // Used only when the log carries no date of its own. The bot supplies the
+  // date of the oldest message it scraped, so a channel log that is just bare
+  // times still lands on the right day instead of being rejected.
+  fallbackDate?: string | null
 ): Promise<{
   events: Array<{ start: string; end: string; title: string; tag: string }>;
   dateUsed: string;
@@ -347,6 +351,11 @@ export async function parseLogText(
         }
       }
     }
+  }
+
+  if (!resolvedDate && fallbackDate) {
+    resolvedDate = fallbackDate;
+    warnings.push(`No date in the log; used ${resolvedDate}.`);
   }
 
   if (!resolvedDate) {
@@ -446,6 +455,7 @@ export async function stageLogForUser(
   text: string,
   dateOverride?: string | null,
   browserTimeZone: string = SERVER_TIMEZONE,
+  fallbackDate?: string | null,
 ): Promise<StageLogResult> {
   try {
     const hasPendingResult = await db
@@ -462,6 +472,7 @@ export async function stageLogForUser(
       userId,
       dateOverride,
       browserTimeZone,
+      fallbackDate,
     );
 
     const valuesToInsert = parsedEvents.map((e) => ({
