@@ -10,6 +10,8 @@ import {
   FileDown,
   FileUp,
   MessageSquareCode,
+  Link2,
+  Link2Off,
   GripVertical,
   GitCommitHorizontal,
   CalendarDays,
@@ -24,6 +26,8 @@ import {
   unarchiveTagAction,
   reorderTagsAction,
   stageLogAction,
+  linkDiscordAction,
+  unlinkDiscordAction,
 } from '@/app/actions';
 import TagSelect from '@/app/components/TagSelect';
 import {
@@ -69,13 +73,19 @@ function formatBuildTime(iso: string): string {
   })} UTC`;
 }
 
+interface DiscordLinkView {
+  discordUserId: string;
+  discordUsername: string | null;
+}
+
 interface SettingsClientProps {
   initialTags: Tag[];
   buildInfo: BuildInfo;
   weekStart: WeekStart;
+  discordLinks: DiscordLinkView[];
 }
 
-export default function SettingsClient({ initialTags, buildInfo, weekStart }: SettingsClientProps) {
+export default function SettingsClient({ initialTags, buildInfo, weekStart, discordLinks }: SettingsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -153,6 +163,11 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart }: Se
   const [logDateOverride, setLogDateOverride] = useState('');
   const [logError, setLogError] = useState('');
   const [isLogStaging, setIsLogStaging] = useState(false);
+
+  // --- Discord Link State ---
+  const [linkCode, setLinkCode] = useState('');
+  const [linkError, setLinkError] = useState('');
+  const [isLinking, setIsLinking] = useState(false);
 
   // --- ICS Export State ---
   const [exportTagId, setExportTagId] = useState('');
@@ -295,6 +310,29 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart }: Se
       setLogError(e.message || 'Network error staging log');
       setIsLogStaging(false);
     }
+  };
+
+  const handleLinkDiscord = async () => {
+    setLinkError('');
+    if (!linkCode.trim()) {
+      setLinkError('Enter the code the bot gave you.');
+      return;
+    }
+
+    setIsLinking(true);
+    const res = await linkDiscordAction(linkCode);
+    setIsLinking(false);
+    if (res?.error) {
+      setLinkError(res.error);
+      return;
+    }
+    setLinkCode('');
+    router.refresh();
+  };
+
+  const handleUnlinkDiscord = async (discordUserId: string) => {
+    await unlinkDiscordAction(discordUserId);
+    router.refresh();
   };
 
   // Export handler
@@ -556,6 +594,63 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart }: Se
             Import ICS File
           </button>
         </form>
+      </section>
+
+      {/* Discord Bot */}
+      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <Link2 className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-bold tracking-tight">Discord Bot</h2>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Link a Discord account so the bot&apos;s <code className="bg-secondary px-1 rounded text-primary">/fetch</code> can
+          stage logs straight into this calendar. Run <code className="bg-secondary px-1 rounded text-primary">/link</code> in
+          Discord to get a code, then paste it here. Codes expire after 15 minutes.
+        </p>
+
+        {discordLinks.length > 0 && (
+          <ul className="space-y-2">
+            {discordLinks.map((link) => (
+              <li
+                key={link.discordUserId}
+                className="flex items-center justify-between gap-3 rounded bg-secondary border border-border px-3 py-2"
+              >
+                <span className="text-xs text-foreground font-mono">
+                  {link.discordUsername || link.discordUserId}
+                </span>
+                <button
+                  onClick={() => handleUnlinkDiscord(link.discordUserId)}
+                  className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition cursor-pointer"
+                >
+                  <Link2Off className="h-3.5 w-3.5" />
+                  Unlink
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+          <div className="w-full lg:w-48">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase">Link Code</label>
+            <input
+              value={linkCode}
+              onChange={(e) => setLinkCode(e.target.value.toUpperCase())}
+              placeholder="ABCD2345"
+              maxLength={16}
+              className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs font-mono tracking-widest text-foreground"
+            />
+          </div>
+          <button
+            onClick={handleLinkDiscord}
+            disabled={isLinking}
+            className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+          >
+            {isLinking ? 'Linking...' : 'Link Discord Account'}
+          </button>
+        </div>
+
+        {linkError && <p className="text-xs text-red-400">{linkError}</p>}
       </section>
 
       {/* Import Discord Log */}
