@@ -11,6 +11,8 @@ import { redirect } from 'next/navigation';
 import StatsClient from './StatsClient';
 import { dbStringToUtcMillis, dayStrOfInstant } from '@/lib/timezone';
 import { getViewerTimeZone, todayForViewer } from '@/lib/server-timezone';
+import { getWeekStart } from '@/lib/server-week';
+import { startOfWeek } from '@/lib/week';
 
 interface PageProps {
   params: Promise<{ date: string }> | { date: string };
@@ -30,8 +32,6 @@ const parseLocalDate = (dateStr: string) => new Date(dateStr + 'T00:00:00');
 const isRealDate = (dateStr: string) => !isNaN(parseLocalDate(dateStr).getTime());
 // Midnight anchor, safe to iterate day-by-day across DST boundaries.
 const dayAnchor = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const sundayOf = (d: Date) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay());
 
 export default async function StatsPage({ params, searchParams }: PageProps) {
   const resolvedParams = await params;
@@ -45,6 +45,7 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
   }
 
   const viewerTimeZone = await getViewerTimeZone();
+  const weekStart = await getWeekStart();
 
   // Validate date format AND that it's a real calendar date (e.g. reject
   // "2026-13-45", which passes the regex but is not a parseable date).
@@ -55,7 +56,8 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
   }
 
   // Determine the range. With no `end` param we default to the one-week
-  // (Sun–Sat) span containing `date`, preserving the original weekly view.
+  // span containing `date` — starting on the viewer's chosen first day —
+  // preserving the original weekly view.
   // When `end` is provided, `date` is treated as the literal range start.
   const hasEnd =
     typeof resolvedSearchParams.end === 'string' &&
@@ -63,7 +65,7 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
     isRealDate(resolvedSearchParams.end);
 
   const startDate = dayAnchor(
-    hasEnd ? parseLocalDate(date) : sundayOf(parseLocalDate(date))
+    hasEnd ? parseLocalDate(date) : startOfWeek(parseLocalDate(date), weekStart)
   );
   let endDate = hasEnd
     ? dayAnchor(parseLocalDate(resolvedSearchParams.end as string))
@@ -234,6 +236,7 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
       startDate={toDateStr(startDate)}
       endDate={toDateStr(endDate)}
       weekdaysOnly={weekdaysOnly}
+      weekStart={weekStart}
       tagHoursByDay={tagHoursByDay}
       tags={dbTags}
     />

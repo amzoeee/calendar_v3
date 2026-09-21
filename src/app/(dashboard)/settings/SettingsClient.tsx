@@ -12,6 +12,7 @@ import {
   MessageSquareCode,
   GripVertical,
   GitCommitHorizontal,
+  CalendarDays,
   X,
   Plus,
 } from 'lucide-react';
@@ -26,6 +27,12 @@ import {
 } from '@/app/actions';
 import TagSelect from '@/app/components/TagSelect';
 import { getBrowserTimeZone } from '@/lib/timezone';
+import {
+  WEEK_START_COOKIE,
+  WEEK_START_LABELS,
+  WEEK_START_OPTIONS,
+  type WeekStart,
+} from '@/lib/week';
 import type { BuildInfo } from '@/lib/version';
 
 interface Tag {
@@ -57,9 +64,10 @@ function formatBuildTime(iso: string): string {
 interface SettingsClientProps {
   initialTags: Tag[];
   buildInfo: BuildInfo;
+  weekStart: WeekStart;
 }
 
-export default function SettingsClient({ initialTags, buildInfo }: SettingsClientProps) {
+export default function SettingsClient({ initialTags, buildInfo, weekStart }: SettingsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -95,6 +103,14 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
   useEffect(() => {
     importBannerRef.current?.scrollIntoView({ block: 'center' });
   }, [importResult]);
+
+  // --- Week start ---
+  // A cookie rather than a row: every page that draws a week reads it on the
+  // server, before the client runs. Refresh so they re-render with the new one.
+  const handleWeekStartChange = (value: WeekStart) => {
+    document.cookie = `${WEEK_START_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;
+    router.refresh();
+  };
 
   // --- Tags list state ---
   const [tagsList, setTagsList] = useState<Tag[]>(initialTags);
@@ -293,6 +309,35 @@ export default function SettingsClient({ initialTags, buildInfo }: SettingsClien
     // this page got a different-looking bar from the rest of the app.
     <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 max-w-4xl mx-auto">
+
+      {/* Calendar preferences */}
+      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <CalendarDays className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-bold tracking-tight">Calendar</h2>
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+          <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="week-start">
+            Week starts on
+          </label>
+          <select
+            id="week-start"
+            value={weekStart}
+            onChange={(e) => handleWeekStartChange(Number(e.target.value) as WeekStart)}
+            className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+          >
+            {WEEK_START_OPTIONS.map((day) => (
+              <option key={day} value={day}>
+                {WEEK_START_LABELS[day]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Applies to the weekly view, the mini calendar and the stats page.
+        </p>
+      </section>
 
       {/* Tag Management */}
       <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">

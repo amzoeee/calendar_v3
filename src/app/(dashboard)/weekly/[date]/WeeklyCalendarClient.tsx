@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TagSelect from '@/app/components/TagSelect';
+import { startOfWeek, type WeekStart } from '@/lib/week';
 import {
   ChevronLeft,
   ChevronRight,
@@ -68,12 +69,14 @@ const MOBILE_BLOCK_RADIUS = '2px';
 
 interface WeeklyCalendarClientProps {
   date: string;
-  sundayDate: string;
+  weekStartDate: string;
+  /** 0 = Sunday. Only the Today button needs it; the grid follows weekStartDate. */
+  weekStart: WeekStart;
   initialEvents: any[];
   tags: Tag[];
 }
 
-export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, tags }: WeeklyCalendarClientProps) {
+export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags }: WeeklyCalendarClientProps) {
 
   // --- Zoom & Scroll ---
   const [zoomLevel, setZoomLevel] = useState<number>(60);
@@ -148,29 +151,29 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   const [addRecur, setAddRecur] = useState('');
   const [addRecurEnd, setAddRecurEnd] = useState('');
 
-  // Get week dates (7 dates from the given Sunday)
-  const getWeekDates = (sunday: string): Date[] => {
+  // Get week dates (7 dates from the given first day of the week)
+  const getWeekDates = (first: string): Date[] => {
     const dates: Date[] = [];
-    const sun = new Date(sunday + 'T00:00:00');
+    const start = new Date(first + 'T00:00:00');
     for (let i = 0; i < 7; i++) {
-      dates.push(new Date(sun.getTime() + i * 24 * 60 * 60 * 1000));
+      dates.push(new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
     }
     return dates;
   };
 
-  // Depends only on sundayDate, so it stays referentially stable across the
+  // Depends only on weekStartDate, so it stays referentially stable across the
   // frequent re-renders that don't change the week (zoom, overlay state).
-  const weekDates = useMemo(() => getWeekDates(sundayDate), [sundayDate]);
+  const weekDates = useMemo(() => getWeekDates(weekStartDate), [weekStartDate]);
 
-  // Navigation. Paging is debounced, so `activeSunday` is the week the user has
-  // paged to, which is `sundayDate` except while a coalesced fetch is catching
-  // up. Navigation and the header title read it so a held arrow key keeps
-  // stepping; the grid below keeps rendering `weekDates` — the week the server
-  // actually sent — until the new one arrives.
-  const { active: activeSunday, navigateTo } = useDateNavigation(sundayDate, (d) => `/weekly/${d}`);
-  const prevWeekStr = new Date(new Date(activeSunday + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const nextWeekStr = new Date(new Date(activeSunday + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const titleWeekDates = useMemo(() => getWeekDates(activeSunday), [activeSunday]);
+  // Navigation. Paging is debounced, so `activeWeekStart` is the week the user
+  // has paged to, which is `weekStartDate` except while a coalesced fetch is
+  // catching up. Navigation and the header title read it so a held arrow key
+  // keeps stepping; the grid below keeps rendering `weekDates` — the week the
+  // server actually sent — until the new one arrives.
+  const { active: activeWeekStart, navigateTo } = useDateNavigation(weekStartDate, (d) => `/weekly/${d}`);
+  const prevWeekStr = new Date(new Date(activeWeekStart + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const nextWeekStr = new Date(new Date(activeWeekStart + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const titleWeekDates = useMemo(() => getWeekDates(activeWeekStart), [activeWeekStart]);
   const weekStartStr = titleWeekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const weekEndStr = titleWeekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   // Compact form for the mobile header — "8/2 - 8/8" instead of "Aug 2 - Aug 8, 2026".
@@ -644,7 +647,7 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
   const today = new Date();
 
   // Mobile: tapping Today should jump the agenda list to today's section, not
-  // just land at the top (Sunday). Clicking Today navigates to a new `date`
+  // just land at the top (the week's first day). Clicking Today navigates to a new `date`
   // (even within the same week), which fully remounts this component — so a
   // ref set before the click can't survive to the other side. Instead it's
   // driven by a `?scrollToday=` query param (same deep-link pattern as the
@@ -749,11 +752,11 @@ export default function WeeklyCalendarClient({ date, sundayDate, initialEvents, 
               saveScroll();
               const now = new Date();
               const todayStr = now.toLocaleDateString('en-CA');
-              // The route derives the week's Sunday itself, but the title needs
+              // The route derives the week's first day itself, but the title needs
               // it up front to show the right range while the fetch is queued.
-              const todaySunday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay())
+              const todayWeekStart = startOfWeek(now, weekStart)
                 .toLocaleDateString('en-CA');
-              navigateTo(todaySunday, `/weekly/${todayStr}?scrollToday=${Date.now()}`);
+              navigateTo(todayWeekStart, `/weekly/${todayStr}?scrollToday=${Date.now()}`);
             }}
             className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
           >
