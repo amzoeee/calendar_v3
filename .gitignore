@@ -29,6 +29,16 @@ build/
 .env.test.local
 .env.production.local
 
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+
 # ---- Misc ----
 .DS_Store
 Thumbs.db
