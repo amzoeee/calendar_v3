@@ -54,12 +54,13 @@ function isLogLine(line) {
  *
  * Returns the lines chronologically, plus whether a marker was actually found:
  * without one the caller knows it hit the end of its search rather than a
- * real boundary.
+ * real boundary. `latest` is the newest line and the message it came from.
  */
 function collectLogLines(messages, userId) {
   const lines = [];
   let markerFound = false;
   let oldestAt = null;
+  let latest = null;
 
   outer: for (const message of messages) {
     const messageLines = message.content.split(/\r?\n/).reverse();
@@ -73,11 +74,17 @@ function collectLogLines(messages, userId) {
       if (isLogLine(raw)) {
         lines.push(raw.trim());
         oldestAt = message.createdAt;
+        latest ??= { line: raw.trim(), message };
       }
     }
   }
 
-  return { lines: lines.reverse(), markerFound, oldestAt };
+  return { lines: lines.reverse(), markerFound, oldestAt, latest };
 }
 
-module.exports = { collectLogLines, isLogLine, isMarker, isValidShorthandTime };
+function activityOf(line) {
+  const match = line.trim().match(LOG_LINE);
+  return match ? match[3].trim().toLowerCase() : null;
+}
+
+module.exports = { activityOf, collectLogLines, isLogLine, isMarker, isValidShorthandTime };
