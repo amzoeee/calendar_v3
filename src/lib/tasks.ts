@@ -105,6 +105,7 @@ export interface TaskRow {
   description: string | null;
   dueDatetime: string | null;
   dueHasTime: number;
+  dueAsap: number;
   remindAt: string | null;
   remindOffsetMinutes: number | null;
   remindOffsetDays: number | null;
@@ -154,6 +155,9 @@ function compare(a: TaskNode, b: TaskNode, mode: SortMode): number {
       // Newest first, matching where the composer puts new tasks.
       return (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || b.id - a.id;
     case 'deadline':
+      // ASAP outranks any date, so it sits on top.
+      if (a.dueAsap !== b.dueAsap) return b.dueAsap - a.dueAsap;
+    // falls through
     case 'remind': {
       // Undated tasks sink to the bottom rather than sorting as "earliest".
       const key = mode === 'deadline' ? 'dueDatetime' : 'remindAt';
@@ -206,6 +210,7 @@ function groupKey(node: TaskNode, mode: SortMode): string | null {
   switch (mode) {
     // Same day, whatever the time: due 9am and due 5pm on Friday is one job.
     case 'deadline':
+      if (node.dueAsap) return 'asap';
       return node.dueDatetime?.slice(0, 10) ?? 'undated';
     case 'remind':
       return node.remindAt?.slice(0, 10) ?? 'unset';
