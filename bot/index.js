@@ -38,15 +38,6 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-function dateStrInZone(date, timeZone) {
-  // en-CA formats as YYYY-MM-DD, which is the shape the calendar wants.
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
-}
 
 /**
  * Pulls channel history newest-first, a page at a time, stopping as soon as
@@ -153,8 +144,9 @@ async function handleFetch(interaction) {
     channelId: interaction.channelId,
     text: lines.join('\n'),
     dateOverride: interaction.options.getString('date') || null,
-    fallbackDate: oldestAt ? dateStrInZone(oldestAt, config.timeZone) : null,
-    timeZone: config.timeZone,
+    // An instant. Which day it falls on is the app's call, using the timezone
+    // recorded on the link — the bot serves several people and has no one zone.
+    fallbackAt: oldestAt ? oldestAt.toISOString() : null,
   });
 
   if (!result.ok) {
@@ -171,7 +163,8 @@ async function handleFetch(interaction) {
   const elided = lines.length > 10 ? `\n… and ${lines.length - 10} more` : '';
 
   await interaction.editReply(
-    `Staged **${result.count}** pending events on **${result.dateUsed}** for **${result.username}**, ${boundary}.\n` +
+    `Staged **${result.count}** pending events on **${result.dateUsed}** (${result.timeZone}) ` +
+      `for **${result.username}**, ${boundary}.\n` +
       `Approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
       (config.postMarker ? " — I'll post a `---` here once you do." : '') +
       '\n\n' +

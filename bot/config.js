@@ -20,10 +20,6 @@ module.exports = {
   apiUrl,
   publicUrl: (process.env.CALENDAR_PUBLIC_URL || apiUrl).replace(/\/+$/, ''),
 
-  // The calendar stores wall-clock times in one zone; logs scraped out of
-  // Discord are interpreted in this one.
-  timeZone: process.env.CALENDAR_TIMEZONE || 'America/Los_Angeles',
-
   // How far /fetch will expand its search before giving up on finding a
   // marker. Discord's history endpoint pages 100 messages at a time.
   maxMessages: Number(process.env.FETCH_MAX_MESSAGES || 500),
