@@ -67,16 +67,6 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     (r) => dayStrOfInstant(dbStringToUtcMillis(r.dueDatetime!), viewerTimeZone) <= todayStr
   ).length;
 
-  // ASAP has no date to count against, so it shows as a dot instead.
-  const [asapRow] = await db
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(
-      and(eq(tasks.userId, session.userId), isNull(tasks.completedAt), eq(tasks.dueAsap, 1))
-    )
-    .limit(1);
-  const hasAsap = Boolean(asapRow);
-
   return (
     <div className="flex h-dvh bg-background text-foreground overflow-hidden">
       <TimezoneSync />
@@ -95,7 +85,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
           <MiniCalendar weekStart={weekStart} />
 
           {/* Navigation (preserves the currently-viewed date across views) */}
-          <SidebarNav todayStr={todayStr} dueCount={dueCount} hasAsap={hasAsap} />
+          <SidebarNav todayStr={todayStr} dueCount={dueCount} />
         </div>
 
         {/* User profile & Logout */}
@@ -188,7 +178,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         </main>
       </div>
 
-      <MobileTabBar todayStr={todayStr} dueCount={dueCount} hasAsap={hasAsap} />
+      <MobileTabBar todayStr={todayStr} dueCount={dueCount} />
     </div>
   );
 }
