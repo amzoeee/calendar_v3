@@ -80,4 +80,18 @@ function collectLogLines(messages, userId) {
   return { lines: lines.reverse(), markerFound, oldestAt };
 }
 
-module.exports = { collectLogLines, isLogLine, isMarker, isValidShorthandTime };
+function activityOf(line) {
+  const match = line.trim().match(LOG_LINE);
+  return match ? match[3].trim().toLowerCase() : null;
+}
+
+/**
+ * Collapses runs of the same activity into one line. A line's time is when
+ * that activity *ended*, so the last of the run is kept: `1400 study` then
+ * `1500 study` becomes a single study event ending at 1500.
+ */
+function mergeRepeats(lines) {
+  return lines.filter((line, i) => i === lines.length - 1 || activityOf(line) !== activityOf(lines[i + 1]));
+}
+
+module.exports = { activityOf, collectLogLines, isLogLine, isMarker, isValidShorthandTime, mergeRepeats };
