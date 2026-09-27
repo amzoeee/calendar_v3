@@ -165,7 +165,7 @@ async function handleMarker(interaction) {
   await interaction.editReply(
     enabled
       ? 'ok, a `---` will be posted after you approve a staged log.'
-      : "ok, no more `---` after approving. you'll want to post your own, or `/fetch` will keep re-reading the same lines.",
+      : "ok, no more `---` after approving. you'll want to post your own.",
   );
 }
 
