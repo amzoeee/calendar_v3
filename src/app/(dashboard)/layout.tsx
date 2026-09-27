@@ -134,7 +134,14 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             </div>
             <div className="flex flex-wrap items-center gap-3">
               {/* Approve All */}
-              <form action={approveAllPendingAction}>
+              <form action={approveAllPendingAction} className="flex items-center gap-2">
+                <label
+                  className="flex items-center gap-1.5 text-xs text-amber-200 cursor-pointer select-none"
+                  title="Join back-to-back events with the same name, including the one right before this import"
+                >
+                  <input type="checkbox" name="merge" className="accent-amber-500 cursor-pointer" />
+                  Merge same-name
+                </label>
                 <button
                   type="submit"
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold shadow transition cursor-pointer"
