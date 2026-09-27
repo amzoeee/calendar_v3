@@ -1,0 +1,1 @@
+ALTER TABLE `tasks` ADD `due_asap` integer DEFAULT 0 NOT NULL;
