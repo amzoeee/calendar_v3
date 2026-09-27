@@ -137,13 +137,18 @@ export async function predictTag(userId: number, title: string): Promise<string 
 export async function getLastEventEndTime(
   userId: number,
   targetDateStr: string,
-  continueFromLatest: boolean
+  continueFromLatest: boolean,
+  browserTimeZone: string = SERVER_TIMEZONE
 ): Promise<Date> {
-  // targetDateStr is a plain "YYYY-MM-DD" day, not a full datetime string —
-  // resolve it as Pacific midnight (the DB's storage timezone) explicitly,
-  // rather than `new Date(targetDateStr)`, which the JS spec parses as UTC
-  // midnight for date-only strings (silently wrong by Pacific's UTC offset).
-  const targetMidnight = new Date(dbStringToUtcMillis(`${targetDateStr} 00:00:00`));
+  // targetDateStr is a plain "YYYY-MM-DD" day, not a full datetime string, so
+  // resolve it explicitly rather than with `new Date(targetDateStr)`, which the
+  // JS spec parses as UTC midnight for date-only strings.
+  //
+  // Midnight *in the logger's own zone*: the times on each line are matched as
+  // wall clock in that zone, so anchoring the day anywhere else mixes two
+  // clocks. Anchoring at Pacific midnight put a Tokyo logger's day boundary at
+  // 4pm their afternoon, and `1200` then resolved to the following midnight.
+  const targetMidnight = new Date(instantForWallClock(`${targetDateStr}T00:00`, browserTimeZone));
   const prevMidnight = new Date(targetMidnight.getTime() - 24 * 60 * 60 * 1000);
 
   const limitDateStr = continueFromLatest ? `${targetDateStr} 23:59:59` : `${targetDateStr} 00:00:00`;
@@ -389,9 +394,9 @@ export async function parseLogText(
     warnings.push('Auto-enabled continue mode: existing events found on this day.');
   }
 
-  let currentTime = await getLastEventEndTime(userId, resolvedDate, continueFlag);
+  let currentTime = await getLastEventEndTime(userId, resolvedDate, continueFlag, browserTimeZone);
   if (!continueFlag) {
-    const targetMidnight = new Date(dbStringToUtcMillis(`${resolvedDate} 00:00:00`));
+    const targetMidnight = new Date(instantForWallClock(`${resolvedDate}T00:00`, browserTimeZone));
     if (currentTime.getTime() < targetMidnight.getTime()) {
       currentTime = targetMidnight;
     }
