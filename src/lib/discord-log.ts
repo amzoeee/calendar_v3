@@ -498,3 +498,49 @@ export async function stageLogForUser(
     return { error: e instanceof Error ? e.message : 'Log staging failed' };
   }
 }
+
+const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * Folds pending events into their neighbours when they carry on the same
+ * activity: the first one into the approved event it starts right where, and
+ * each one into the pending event just before it. Only exactly back-to-back
+ * events merge — a gap means the activity really did stop.
+ */
+export async function mergePendingIntoNeighbours(userId: number): Promise<void> {
+  const pending = await db
+    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title })
+    .from(events)
+    .where(and(eq(events.userId, userId), eq(events.isPending, 1)))
+    .orderBy(events.startDatetime);
+
+  if (pending.length === 0) return;
+
+  const [previous] = await db
+    .select({ id: events.id, endDatetime: events.endDatetime, title: events.title })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, userId),
+        eq(events.isPending, 0),
+        eq(events.endDatetime, pending[0].startDatetime),
+        eq(sql`lower(trim(${events.title}))`, pending[0].title.trim().toLowerCase()),
+        isNull(events.recurrenceId),
+        isNull(events.rrule),
+      ),
+    )
+    .limit(1);
+
+  // Whatever each pending event would extend: an approved event or an earlier pending one.
+  let run: { id: number; endDatetime: string; title: string } | null = previous ?? null;
+
+  for (const ev of pending) {
+    if (run && run.endDatetime === ev.startDatetime && sameTitle(run.title, ev.title)) {
+      await db.update(events).set({ endDatetime: ev.endDatetime }).where(eq(events.id, run.id));
+      await db.delete(events).where(eq(events.id, ev.id));
+      run = { ...run, endDatetime: ev.endDatetime };
+    } else {
+      run = ev;
+    }
+  }
+}

@@ -14,7 +14,7 @@ import {
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
-import { stageLogForUser, recalculatePendingEventsDate } from '@/lib/discord-log';
+import { stageLogForUser, recalculatePendingEventsDate, mergePendingIntoNeighbours } from '@/lib/discord-log';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 import { todayForViewer } from '@/lib/server-timezone';
 import { isTagScope, type TagScope } from '@/lib/tags';
@@ -411,8 +411,10 @@ export async function stageLogAction(text: string, dateOverride?: string | null,
   return result;
 }
 
-export async function approveAllPendingAction() {
+export async function approveAllPendingAction(formData: FormData) {
   const session = await requireAuth();
+
+  if (formData.get('merge') === 'on') await mergePendingIntoNeighbours(session.userId);
 
   await db
     .update(events)
