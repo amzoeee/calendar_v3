@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TagSelect from '@/app/components/TagSelect';
+import { selectStateOf } from '@/app/components/Select';
 import { startOfWeek, type WeekStart } from '@/lib/week';
 import {
   ChevronLeft,
@@ -296,10 +297,13 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   // Keyboard zoom (Cmd/Ctrl + '=', '-', '0'), arrow key navigation, and edit overlay shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // An open dropdown owns the keyboard; a closed one is a form field.
+      const select = selectStateOf(e.target);
+      if (select === 'open') return;
       const isInput =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement;
+        select !== null;
 
       // Escape closes the overlay regardless of focus
       if (e.key === 'Escape' && activeOverlayId !== null) {
