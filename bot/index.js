@@ -25,25 +25,25 @@ function dateStrInZone(date, timeZone) {
 const commands = [
   new SlashCommandBuilder()
     .setName('link')
-    .setDescription('Get a code to connect this Discord account to your calendar'),
+    .setDescription('get a code to connect this discord account to your calendar'),
   new SlashCommandBuilder()
     .setName('whoami')
-    .setDescription('Show which calendar account this is linked to'),
+    .setDescription('show which calendar account this is linked to'),
   new SlashCommandBuilder()
     .setName('manual-fetch')
-    .setDescription('Print your log lines since the last --- marker, without staging them')
+    .setDescription('print your log lines since the last --- marker, without staging them')
     .addStringOption((option) =>
       option
         .setName('date')
-        .setDescription('Day to date the output with (YYYY-MM-DD). Defaults to the day you posted it.'),
+        .setDescription('day to date the output with (YYYY-MM-DD). defaults to the day you posted it.'),
     ),
   new SlashCommandBuilder()
     .setName('fetch')
-    .setDescription('Grab your log lines since the last --- marker and stage them in your calendar')
+    .setDescription('grab your log lines since the last --- marker and stage them in your calendar')
     .addStringOption((option) =>
       option
         .setName('date')
-        .setDescription('Day the log belongs to (YYYY-MM-DD). Defaults to the day you posted it.'),
+        .setDescription('day the log belongs to (YYYY-MM-DD). defaults to the day you posted it.'),
     ),
 ].map((command) => command.toJSON());
 
@@ -104,17 +104,17 @@ async function scrapeLogLines(channel, userId) {
 async function handleLink(interaction) {
   const result = await api.createLinkCode(interaction.user.id, interaction.user.tag);
   if (!result.ok) {
-    await interaction.editReply(`Could not reach the calendar :( (error: ${result.error || result.status}).`);
+    await interaction.editReply(`could not reach the calendar :( (error: ${result.error || result.status}).`);
     return;
   }
 
   const relinkNote = result.currentUsername
-    ? `\n\nThis Discord account is currently linked to **${result.currentUsername}**. Redeeming a new code replaces it!`
+    ? `\n\nthis discord account is currently linked to **${result.currentUsername}**. redeeming a new code replaces it!`
     : '';
 
   await interaction.editReply(
-    `Your code is **${result.code}**, good for 15 minutes.\n\n` +
-      `Paste it into the Discord Bot section at ${config.publicUrl}/settings${relinkNote}`,
+    `your code is **${result.code}**, good for 15 minutes.\n\n` +
+      `paste it into the Discord Bot section at ${config.publicUrl}/settings${relinkNote}`,
   );
 }
 
@@ -126,7 +126,7 @@ async function handleWhoami(interaction) {
   }
 
   if (!result.linked) {
-    await interaction.editReply('Not linked yet, run `/link` to hook this up to your calendar.');
+    await interaction.editReply('not linked yet, run `/link` to hook this up to your calendar.');
     return;
   }
 
@@ -134,15 +134,15 @@ async function handleWhoami(interaction) {
   // logs in the calendar's own zone until the link is remade.
   const zone = result.timeZone
     ? `times are read in **${result.timeZone}**.`
-    : 'no timezone on this link, so times fall back to the calendar\'s own. Run `/link` again to set it.';
+    : 'no timezone on this link, so times fall back to the calendar\'s own. run `/link` again to set it.';
 
-  await interaction.editReply(`Linked to **${result.username}**, ${zone}`);
+  await interaction.editReply(`linked to **${result.username}**, ${zone}`);
 }
 
 async function handleFetch(interaction) {
   const status = await api.getLinkStatus(interaction.user.id);
   if (status.ok && !status.linked) {
-    await interaction.editReply('Not linked yet, run `/link` first.');
+    await interaction.editReply('not linked yet, run `/link` first.');
     return;
   }
 
@@ -154,8 +154,8 @@ async function handleFetch(interaction) {
   if (lines.length === 0) {
     await interaction.editReply(
       (markerFound
-        ? 'Nothing new since the last `---`.'
-        : `Couldn't find any log lines in the last ${messagesScanned} messages.`) +
+        ? 'nothing new since the last `---`.'
+        : `couldn't find any log lines in the last ${messagesScanned} messages.`) +
         capWarning(markerFound, hitCap, messagesScanned),
     );
     return;
@@ -174,8 +174,8 @@ async function handleFetch(interaction) {
   if (!result.ok) {
     await interaction.editReply(
       result.error === 'not_linked'
-        ? 'Not linked yet, run `/link` first.'
-        : `Couldn't stage that :( ${result.error || result.status}`,
+        ? 'not linked yet, run `/link` first.'
+        : `couldn't stage that :( ${result.error || result.status}`,
     );
     return;
   }
@@ -185,10 +185,10 @@ async function handleFetch(interaction) {
   const elided = lines.length > 10 ? `\n...and ${lines.length - 10} more` : '';
 
   await interaction.editReply(
-    `Staged **${result.count}** events on **${result.dateUsed}** (${result.timeZone}) ` +
+    `staged **${result.count}** events on **${result.dateUsed}** (${result.timeZone}) ` +
       `for **${result.username}**, ${boundary}.\n` +
-      `Approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
-      (config.postMarker ? ". There will be a `---` posted here once you do." : '') +
+      `approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
+      (config.postMarker ? ". there will be a `---` posted here once you do." : '') +
       '\n\n' +
       '```\n' + `${preview}${elided}` + '\n```' +
       capWarning(markerFound, hitCap, messagesScanned),
@@ -213,8 +213,8 @@ async function handleManualFetch(interaction) {
   if (lines.length === 0) {
     await interaction.editReply(
       (markerFound
-        ? 'Nothing new since the last `---`.'
-        : `Couldn't find any log lines in the last ${messagesScanned} messages.`) + warning,
+        ? 'nothing new since the last `---`.'
+        : `couldn't find any log lines in the last ${messagesScanned} messages.`) + warning,
     );
     return;
   }
@@ -236,7 +236,7 @@ async function handleManualFetch(interaction) {
   await interaction.editReply(
     `**${lines.length}** lines ${boundary}` +
       (dateStr ? `, dated **${dateStr}**` : '') +
-      '. Note: nothing was staged.' +
+      '. note: nothing was staged.' +
       warning,
   );
 
@@ -268,7 +268,7 @@ client.on('interactionCreate', async (interaction) => {
     await handler(interaction);
   } catch (error) {
     console.error(`/${interaction.commandName} failed:`, error);
-    await interaction.editReply('Something broke :( check the bot logs.').catch(() => {});
+    await interaction.editReply('something broke :( check the bot logs.').catch(() => {});
   }
 });
 
