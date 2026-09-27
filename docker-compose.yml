@@ -21,6 +21,22 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
 
+  # The "go fetch" Discord bot (see bot/README.md). Reaches the app over the
+  # internal network, so it needs no published port of its own. Commented out
+  # of the default stack: without a bot token it just crash-loops.
+  # discord-bot:
+  #   image: ghcr.io/amzoeee/calendar_v3/discord-bot:latest
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - CALENDAR_API_URL=http://app:4000
+  #     - CALENDAR_PUBLIC_URL=https://calendar.geodesync.com
+  #   depends_on:
+  #     - app
+  #   labels:
+  #     - "com.centurylinklabs.watchtower.enable=true"
+
   # Terminates HTTPS and auto-manages a Let's Encrypt cert for the
   # app's hostname (see Caddyfile), proxying to it over the internal
   # docker network.
