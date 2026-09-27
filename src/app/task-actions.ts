@@ -991,24 +991,28 @@ export async function setTaskScheduleAction(
     remindOffsetDays: number | null;
     /** "HH:MM", paired with remindOffsetDays. */
     remindTimeOfDay: string | null;
+    /** Due as soon as possible. Replaces any date. */
+    asap?: boolean;
   }
 ): Promise<void> {
   const session = await requireAuth();
 
   const [task] = await db
-    .select({ id: tasks.id })
+    .select({ id: tasks.id, rrule: tasks.rrule })
     .from(tasks)
     .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)))
     .limit(1);
   if (!task) throw new Error('Task not found');
+  if (input.asap && task.rrule) throw new Error('A repeating task needs a date, not ASAP');
 
-  if (!input.dueDate) {
+  if (input.asap || !input.dueDate) {
     // No deadline means no reminder — an offset from nothing has no meaning.
     await db
       .update(tasks)
       .set({
         dueDatetime: null,
         dueHasTime: 0,
+        dueAsap: input.asap ? 1 : 0,
         remindAt: null,
         remindOffsetMinutes: null,
         remindOffsetDays: null,
@@ -1053,6 +1057,7 @@ export async function setTaskScheduleAction(
     .set({
       dueDatetime,
       dueHasTime: hasTime ? 1 : 0,
+      dueAsap: 0,
       remindAt,
       remindOffsetMinutes: input.remindOffsetMinutes,
       remindOffsetDays: input.remindOffsetDays,
