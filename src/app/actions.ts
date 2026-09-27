@@ -447,9 +447,9 @@ export async function overridePendingDateAction(formData: FormData) {
 // Discord Link Actions
 // ==========================================
 
-export async function linkDiscordAction(code: string) {
+export async function linkDiscordAction(code: string, timeZone: string | null) {
   const session = await requireAuth();
-  const result = await redeemLinkCode(code, session.userId);
+  const result = await redeemLinkCode(code, session.userId, timeZone);
   if ('error' in result) return { error: result.error };
 
   revalidatePath('/settings');

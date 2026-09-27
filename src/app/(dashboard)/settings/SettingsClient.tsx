@@ -76,6 +76,7 @@ function formatBuildTime(iso: string): string {
 interface DiscordLinkView {
   discordUserId: string;
   discordUsername: string | null;
+  timeZone: string | null;
 }
 
 interface SettingsClientProps {
@@ -320,7 +321,9 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     }
 
     setIsLinking(true);
-    const res = await linkDiscordAction(linkCode);
+    // The browser is the only place that knows the user's zone; Discord
+    // exposes none, so the link carries it from here.
+    const res = await linkDiscordAction(linkCode, getBrowserTimeZone());
     setIsLinking(false);
     if (res?.error) {
       setLinkError(res.error);
@@ -605,7 +608,9 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
         <p className="text-xs text-muted-foreground">
           Link a Discord account so the bot&apos;s <code className="bg-secondary px-1 rounded text-primary">/fetch</code> can
           stage logs straight into this calendar. Run <code className="bg-secondary px-1 rounded text-primary">/link</code> in
-          Discord to get a code, then paste it here. Codes expire after 15 minutes.
+          Discord to get a code, then paste it here. Codes expire after 15 minutes. The link records this
+          browser&apos;s timezone, which is the one your logged times are read in — re-link from a different
+          machine to change it.
         </p>
 
         {discordLinks.length > 0 && (
@@ -617,6 +622,9 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
               >
                 <span className="text-xs text-foreground font-mono">
                   {link.discordUsername || link.discordUserId}
+                  <span className="ml-2 text-muted-foreground">
+                    {link.timeZone || 'no timezone — re-link to set it'}
+                  </span>
                 </span>
                 <button
                   onClick={() => handleUnlinkDiscord(link.discordUserId)}

@@ -13,6 +13,7 @@ export interface DiscordLink {
   discordUserId: string;
   discordUsername: string | null;
   userId: number;
+  timeZone: string | null;
   createdAt: string | null;
 }
 
@@ -83,6 +84,7 @@ export async function createLinkCode(
 export async function redeemLinkCode(
   code: string,
   userId: number,
+  timeZone: string | null,
 ): Promise<{ discordUsername: string | null } | { error: string }> {
   await deleteExpiredCodes();
 
@@ -102,6 +104,7 @@ export async function redeemLinkCode(
     discordUserId: row.discordUserId,
     discordUsername: row.discordUsername,
     userId,
+    timeZone,
   });
 
   return { discordUsername: row.discordUsername };
@@ -113,6 +116,7 @@ export async function getLinksForUser(userId: number): Promise<DiscordLink[]> {
       discordUserId: discordLinks.discordUserId,
       discordUsername: discordLinks.discordUsername,
       userId: discordLinks.userId,
+      timeZone: discordLinks.timeZone,
       createdAt: discordLinks.createdAt,
     })
     .from(discordLinks)
@@ -129,9 +133,9 @@ export async function unlinkDiscordAccount(userId: number, discordUserId: string
 /** Resolves the calendar account a Discord user has linked, if any. */
 export async function resolveLinkedUser(
   discordUserId: string,
-): Promise<{ userId: number; username: string } | null> {
+): Promise<{ userId: number; username: string; timeZone: string | null } | null> {
   const rows = await db
-    .select({ userId: discordLinks.userId, username: users.username })
+    .select({ userId: discordLinks.userId, username: users.username, timeZone: discordLinks.timeZone })
     .from(discordLinks)
     .innerJoin(users, eq(users.id, discordLinks.userId))
     .where(eq(discordLinks.discordUserId, discordUserId))

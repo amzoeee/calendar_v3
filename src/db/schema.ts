@@ -137,6 +137,11 @@ export const discordLinks = sqliteTable('discord_links', {
   discordUserId: text('discord_user_id').notNull().unique(),
   discordUsername: text('discord_username'),
   userId: integer('user_id').notNull().references(() => users.id),
+  // The zone the bot's logs are read in, captured from the browser that
+  // redeemed the code — Discord exposes no timezone of its own, and a bot
+  // serving several people cannot have one setting for all of them. Null on
+  // links made before this existed; those fall back to the server's zone.
+  timeZone: text('time_zone'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
