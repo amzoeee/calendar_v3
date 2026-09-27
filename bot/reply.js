@@ -8,8 +8,7 @@ function capWarning(markerFound, hitCap, messagesScanned) {
   if (markerFound || !hitCap) return '';
   return (
     `\n\n:warning: Stopped at the ${messagesScanned}-message lookback limit without finding a ` +
-    '`---` marker, so there may be more above. Post a marker where the log starts, or raise ' +
-    '`FETCH_MAX_MESSAGES`.'
+    '`---` marker. Post a marker where the log starts!'
   );
 }
 

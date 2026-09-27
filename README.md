@@ -196,7 +196,11 @@ to copy and paste it. `/fetch` pages back through the channel until it hits a
 as **pending** events — nothing lands in the calendar until you approve it in
 the day view, exactly like a pasted log. Once you approve, the bot posts a
 `---` of its own so the next `/fetch` starts where that one stopped.
-`/manual-fetch` runs the same scan but just prints the lines back for copying.
+`/manual-fetch` runs the same scan but just prints the lines back for copying,
+headed with the date so the block pastes straight into the import form.
+
+Each link records the timezone of the browser that set it up, so several people
+in different zones can share one bot and each have their times read correctly.
 
 `bot/README.md` has the full setup: creating the Discord application, the
 intents and permissions it needs, and every environment variable. The short
@@ -217,7 +221,8 @@ globally, and every log is routed by the Discord user who ran `/fetch`.
 ### Database
 
 The bot adds three tables (`discord_links`, `discord_link_codes`,
-`discord_stages`), in migrations 0004 and 0005. Whether a database picks them
+`discord_stages`) and one column (`discord_links.time_zone`), in migrations
+0004 through 0006. Whether a database picks them
 up by itself depends on whether it has Drizzle's migration history, which
 differs per database — check the one in front of you rather than assuming:
 

@@ -12,6 +12,16 @@ const api = require('./api');
 const { collectLogLines } = require('./log-lines');
 const { capWarning, chunkLines } = require('./reply');
 
+// en-CA formats as YYYY-MM-DD, the shape the calendar wants.
+function dateStrInZone(date, timeZone) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
 const commands = [
   new SlashCommandBuilder()
     .setName('link')
@@ -21,7 +31,12 @@ const commands = [
     .setDescription('Show which calendar account this Discord account is linked to'),
   new SlashCommandBuilder()
     .setName('manual-fetch')
-    .setDescription('Print your log lines since the last --- marker, without staging anything'),
+    .setDescription('Print your log lines since the last --- marker, without staging anything')
+    .addStringOption((option) =>
+      option
+        .setName('date')
+        .setDescription('Day to head the output with (YYYY-MM-DD). Defaults to the day you posted it.'),
+    ),
   new SlashCommandBuilder()
     .setName('fetch')
     .setDescription('Read your log lines since the last --- marker and stage them in your calendar')
@@ -89,16 +104,16 @@ async function scrapeLogLines(channel, userId) {
 async function handleLink(interaction) {
   const result = await api.createLinkCode(interaction.user.id, interaction.user.tag);
   if (!result.ok) {
-    await interaction.editReply(`Could not reach the calendar (${result.error || result.status}).`);
+    await interaction.editReply(`Could not reach the calendar :( (error: ${result.error || result.status}).`);
     return;
   }
 
   const relinkNote = result.currentUsername
-    ? `\n\nThis Discord account is currently linked to **${result.currentUsername}**. Redeeming a new code replaces that.`
+    ? `\n\nThis Discord account is currently linked to **${result.currentUsername}**. Redeeming a new code replaces it!`
     : '';
 
   await interaction.editReply(
-    `Your link code is **${result.code}** — it expires in 15 minutes.\n\n` +
+    `Your link code is **${result.code}**. It expires in 15 minutes.\n\n` +
       `Sign in at ${config.publicUrl}/settings and paste it into the **Discord Bot** section.${relinkNote}`,
   );
 }
@@ -173,8 +188,15 @@ async function handleFetch(interaction) {
   );
 }
 
+// A header the calendar's own paste form understands: it reads the date off
+// the line above the separator, so the printed block carries its day with it.
+function dateHeader(dateStr) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return [`log — ${month}/${day}/${year}`, '---'];
+}
+
 async function handleManualFetch(interaction) {
-  const { lines, markerFound, messagesScanned, hitCap } = await scrapeLogLines(
+  const { lines, markerFound, messagesScanned, hitCap, oldestAt } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
@@ -191,11 +213,23 @@ async function handleManualFetch(interaction) {
   }
 
   const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
+
+  // Same zone /fetch would have used, so the printed day matches what staging
+  // would have picked. Unlinked, there is no zone and no default.
+  const status = await api.getLinkStatus(interaction.user.id);
+  const zone = status.ok ? status.timeZone : null;
+  const dateStr =
+    interaction.options.getString('date') ||
+    (oldestAt && zone ? dateStrInZone(oldestAt, zone) : null);
+
+  const body = dateStr ? [...dateHeader(dateStr), ...lines] : lines;
   // Room for the code fences and the trailing newline inside the 2000 budget.
-  const chunks = chunkLines(lines, 1900);
+  const chunks = chunkLines(body, 1900);
 
   await interaction.editReply(
-    `**${lines.length}** log lines ${boundary}. Nothing was staged — copy them wherever you need.` +
+    `**${lines.length}** log lines ${boundary}` +
+      (dateStr ? `, headed **${dateStr}**` : '') +
+      '. Note: nothing was staged.' +
       warning,
   );
 

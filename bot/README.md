@@ -11,7 +11,7 @@ the web UI. Nothing it does writes to your calendar directly.
 | `/link` | Gives you a one-time code to connect this Discord account to a calendar account. |
 | `/whoami` | Says which calendar account this Discord account is linked to. |
 | `/fetch [date]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
-| `/manual-fetch` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
+| `/manual-fetch [date]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
 
 All replies are ephemeral — only you see them.
 
@@ -36,6 +36,19 @@ for good. Approval happens in a browser, so the bot asks the app every
 
 Dates come from the log itself if it has one, otherwise from the day you posted
 the oldest line it took. `/fetch date:2026-09-19` overrides both.
+
+`/manual-fetch` heads its output with that date and a `---`, which is the shape
+the calendar's own paste form reads, so the block you copy carries its day with
+it. `/manual-fetch date:2026-09-19` sets that header.
+
+## Timezones
+
+Discord exposes no timezone, and one bot serves people in several of them, so
+there is no bot-wide setting. Each link records the timezone of the browser
+that redeemed its code, and that is the zone your logged times and the day they
+fall on are read in. The Settings page shows which zone a link carries;
+re-linking from a machine in another zone changes it. Links made before this
+existed show no zone and fall back to the calendar's own.
 
 ## Setting up the Discord application
 

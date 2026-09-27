@@ -47,5 +47,10 @@ export async function GET(request: NextRequest) {
   }
 
   const link = await resolveLinkedUser(discordUserId);
-  return NextResponse.json({ linked: link !== null, username: link?.username ?? null });
+  return NextResponse.json({
+    linked: link !== null,
+    username: link?.username ?? null,
+    // Lets /manual-fetch date its output in the same zone /fetch would.
+    timeZone: link?.timeZone ?? null,
+  });
 }
