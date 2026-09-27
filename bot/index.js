@@ -125,11 +125,18 @@ async function handleWhoami(interaction) {
     return;
   }
 
-  await interaction.editReply(
-    result.linked
-      ? `Linked to calendar account **${result.username}**.`
-      : 'Not linked yet. Run `/link` to connect your calendar account.',
-  );
+  if (!result.linked) {
+    await interaction.editReply('Not linked yet. Run `/link` to connect your calendar account.');
+    return;
+  }
+
+  // No zone means the link predates them being recorded; the app reads those
+  // logs in the calendar's own zone until the link is remade.
+  const zone = result.timeZone
+    ? `Times are read in **${result.timeZone}**.`
+    : 'No timezone on this link — times fall back to the calendar\'s own. Run `/link` again to set it.';
+
+  await interaction.editReply(`Linked to calendar account **${result.username}**. ${zone}`);
 }
 
 async function handleFetch(interaction) {
@@ -181,7 +188,7 @@ async function handleFetch(interaction) {
     `Staged **${result.count}** pending events on **${result.dateUsed}** (${result.timeZone}) ` +
       `for **${result.username}**, ${boundary}.\n` +
       `Approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
-      (config.postMarker ? " — I'll post a `---` here once you do." : '') +
+      (config.postMarker ? ". There will be a `---` posted here once you do." : '') +
       '\n\n' +
       '```\n' + `${preview}${elided}` + '\n```' +
       capWarning(markerFound, hitCap, messagesScanned),
