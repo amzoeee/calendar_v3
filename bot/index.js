@@ -143,8 +143,8 @@ async function handleWhoami(interaction) {
     : 'no timezone on this link, so times fall back to the calendar\'s own. run `/link` again to set it.';
 
   const marker = result.postMarker
-    ? 'a `---` gets posted after you approve.'
-    : 'no `---` gets posted after you approve.';
+    ? '\na `---` gets posted after you approve.'
+    : '\nno `---` gets posted after you approve.';
 
   await interaction.editReply(`linked to **${result.username}**, ${zone} ${marker}`);
 }
