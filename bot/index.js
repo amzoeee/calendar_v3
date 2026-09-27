@@ -188,7 +188,7 @@ async function handleFetch(interaction) {
     `staged **${result.count}** events on **${result.dateUsed}** (${result.timeZone}) ` +
       `for **${result.username}**, ${boundary}.\n` +
       `approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
-      (config.postMarker ? ". there will be a `---` posted here once you do." : '') +
+      (config.postMarker ? ". \nthere will be a `---` posted here once you do :)" : '') +
       '\n\n' +
       '```\n' + `${preview}${elided}` + '\n```' +
       capWarning(markerFound, hitCap, messagesScanned),
