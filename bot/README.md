@@ -58,13 +58,17 @@ In Docker, alongside the app (see the repo's `docker-compose.yml`):
 docker compose up -d discord-bot
 ```
 
-Standalone, for development:
+Standalone, against a local `npm run dev` calendar:
 
 ```bash
 cd bot
 npm install
-DISCORD_BOT_TOKEN=... DISCORD_BOT_SECRET=... CALENDAR_API_URL=http://localhost:3000 npm start
+npm run dev
 ```
+
+`npm run dev` reads the repo's own `.env`, so put `DISCORD_BOT_TOKEN`,
+`DISCORD_BOT_SECRET` and `CALENDAR_API_URL=http://localhost:3000` there
+alongside `SECRET_KEY`.
 
 ## Environment
 

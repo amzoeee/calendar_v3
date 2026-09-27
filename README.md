@@ -214,13 +214,21 @@ version:
 One bot can serve several servers and several people: commands are registered
 globally, and every log is routed by the Discord user who ran `/fetch`.
 
-### If your database was built with `drizzle-kit push`
+### Database
 
 The bot adds three tables (`discord_links`, `discord_link_codes`,
-`discord_stages`). A database
-with no Drizzle migration history — which is what the calendar_v2 import above
-produces — skips migrations on startup, so run `npx drizzle-kit push` against
-it once to pick them up.
+`discord_stages`), in migrations 0004 and 0005. Whether a database picks them
+up by itself depends on whether it has Drizzle's migration history, which
+differs per database — check the one in front of you rather than assuming:
+
+```bash
+sqlite3 <path-to-calendar.db> "select count(*) from __drizzle_migrations;"
+```
+
+A number means the app applies new migrations on startup and there is nothing
+to do. `no such table` means it was built by `drizzle-kit push` — the
+calendar_v2 import above produces one of those — so run `npx drizzle-kit push`
+against it once instead.
 
 ---
 

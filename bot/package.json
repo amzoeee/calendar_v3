@@ -5,7 +5,8 @@
   "description": "Discord bot that scrapes shorthand logs out of a channel and stages them in the calendar app.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node --env-file=../.env index.js"
   },
   "dependencies": {
     "discord.js": "^14.16.3"
