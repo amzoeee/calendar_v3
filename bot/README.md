@@ -10,9 +10,9 @@ the web UI. Nothing it does writes to your calendar directly.
 | --- | --- |
 | `/link` | Gives you a one-time code to connect this Discord account to a calendar account. |
 | `/whoami` | Says which calendar account this Discord account is linked to. |
-| `/fetch [date]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
+| `/fetch [date] [merge]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
 | `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
-| `/manual-fetch [date]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
+| `/manual-fetch [date] [merge]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
 
 All replies are ephemeral — only you see them.
 
@@ -40,6 +40,11 @@ for good. Approval happens in a browser, so the bot asks the app every
 
 Dates come from the log itself if it has one, otherwise from the day you posted
 the oldest line it took. `/fetch date:2026-09-19` overrides both.
+
+`merge:true` collapses back-to-back lines with the same name into one event.
+A line's time is when that activity ended, so the last of the run is kept:
+`1400 study` then `1500 study` becomes one study event ending at 1500. Names
+match ignoring case.
 
 `/manual-fetch` heads its output with that date and a `---`, which is the shape
 the calendar's own paste form reads, so the block you copy carries its day with
