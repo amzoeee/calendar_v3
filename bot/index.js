@@ -109,7 +109,7 @@ async function handleLink(interaction) {
   }
 
   const relinkNote = result.currentUsername
-    ? `\n\nheads up, this account is already linked to **${result.currentUsername}**. a new code swaps it over.`
+    ? `\n\nThis Discord account is currently linked to **${result.currentUsername}**. Redeeming a new code replaces it!`
     : '';
 
   await interaction.editReply(
@@ -188,7 +188,7 @@ async function handleFetch(interaction) {
     `staged **${result.count}** events on **${result.dateUsed}** (${result.timeZone}) ` +
       `for **${result.username}**, ${boundary}.\n` +
       `approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
-      (config.postMarker ? ', and i\'ll drop a `---` here once you do.' : '') +
+      (config.postMarker ? ". There will be a `---` posted here once you do." : '') +
       '\n\n' +
       '```\n' + `${preview}${elided}` + '\n```' +
       capWarning(markerFound, hitCap, messagesScanned),
@@ -236,7 +236,7 @@ async function handleManualFetch(interaction) {
   await interaction.editReply(
     `**${lines.length}** lines ${boundary}` +
       (dateStr ? `, dated **${dateStr}**` : '') +
-      '. nothing staged, copy away.' +
+      '. Note: nothing was staged.' +
       warning,
   );
 
