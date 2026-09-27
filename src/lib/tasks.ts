@@ -54,6 +54,8 @@ export interface NewTaskDetails {
   dueDate?: string | null;
   /** "HH:MM", or absent for a deadline that names only a day. */
   dueTime?: string | null;
+  /** Due as soon as possible; ignored when a date is given. */
+  asap?: boolean;
   tagIds?: number[];
 }
 

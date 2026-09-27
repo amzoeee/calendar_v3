@@ -517,6 +517,7 @@ export async function createTaskAction(
       title: trimmed,
       dueDatetime,
       dueHasTime: dueDatetime && details.dueTime ? 1 : 0,
+      dueAsap: !dueDatetime && details.asap ? 1 : 0,
     })
     .returning({ id: tasks.id });
 

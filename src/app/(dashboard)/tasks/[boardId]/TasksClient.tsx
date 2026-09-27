@@ -969,6 +969,7 @@ function BoardColumn({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [draftDate, setDraftDate] = useState('');
   const [draftTime, setDraftTime] = useState('');
+  const [draftAsap, setDraftAsap] = useState(false);
   const [draftTagIds, setDraftTagIds] = useState<number[]>([]);
   const [subtaskValue, setSubtaskValue] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
@@ -1381,6 +1382,7 @@ function BoardColumn({
   const composerDetails: NewTaskDetails = {
     dueDate: draftDate || null,
     dueTime: draftTime || null,
+    asap: draftAsap,
     tagIds: draftTagIds,
   };
 
@@ -1389,6 +1391,7 @@ function BoardColumn({
   const clearDetails = () => {
     setDraftDate('');
     setDraftTime('');
+    setDraftAsap(false);
     setDraftTagIds([]);
   };
 
@@ -1777,21 +1780,46 @@ function BoardColumn({
               offset is a decision about a deadline you already have. */}
           {detailsOpen && (
             <div className="px-2 pb-2 space-y-2">
-              <div className="flex gap-1.5">
-                <DateInput
-                  value={draftDate}
-                  onChange={(e) => setDraftDate(e.target.value)}
-                  aria-label="Deadline for the new task"
-                  className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
-                />
-                <input
-                  type="time"
-                  value={draftTime}
-                  disabled={!draftDate}
-                  onChange={(e) => setDraftTime(e.target.value)}
-                  aria-label="Time of day for the new task"
-                  className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
-                />
+              <div className="flex gap-1.5 items-center">
+                {draftAsap ? (
+                  <p className="flex-1 min-w-0 text-[10px] text-muted-foreground">
+                    Due as soon as possible.
+                  </p>
+                ) : (
+                  <>
+                    <DateInput
+                      value={draftDate}
+                      onChange={(e) => setDraftDate(e.target.value)}
+                      aria-label="Deadline for the new task"
+                      className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
+                    />
+                    <input
+                      type="time"
+                      value={draftTime}
+                      disabled={!draftDate}
+                      onChange={(e) => setDraftTime(e.target.value)}
+                      aria-label="Time of day for the new task"
+                      className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftAsap((a) => !a);
+                    setDraftDate('');
+                    setDraftTime('');
+                  }}
+                  aria-pressed={draftAsap}
+                  title="Due as soon as possible"
+                  className={`shrink-0 text-[10px] font-semibold px-1.5 py-1 rounded border transition-colors cursor-pointer ${
+                    draftAsap
+                      ? 'bg-amber-400/15 text-amber-400 border-amber-400/40'
+                      : 'text-muted-foreground border-border hover:text-foreground'
+                  }`}
+                >
+                  ASAP
+                </button>
               </div>
               <TagPicker all={availableTags} selected={draftTagIds} onChange={setDraftTagIds} />
             </div>
