@@ -29,8 +29,18 @@ const getLinkStatus = (discordUserId) =>
 
 const stageLog = (payload) => call('/api/discord/stage', { method: 'POST', body: payload });
 
+const setMarkerPreference = (discordUserId, enabled) =>
+  call('/api/discord/marker-pref', { method: 'POST', body: { discordUserId, enabled } });
+
 const listApprovedMarkers = () => call('/api/discord/markers');
 
 const acknowledgeMarkers = (ids) => call('/api/discord/markers', { method: 'POST', body: { ids } });
 
-module.exports = { acknowledgeMarkers, createLinkCode, getLinkStatus, listApprovedMarkers, stageLog };
+module.exports = {
+  acknowledgeMarkers,
+  createLinkCode,
+  getLinkStatus,
+  listApprovedMarkers,
+  setMarkerPreference,
+  stageLog,
+};

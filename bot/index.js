@@ -30,6 +30,12 @@ const commands = [
     .setName('whoami')
     .setDescription('show which calendar account this is linked to'),
   new SlashCommandBuilder()
+    .setName('marker')
+    .setDescription('choose whether a --- gets posted here after you approve a staged log')
+    .addBooleanOption((option) =>
+      option.setName('on').setDescription('true to post the marker, false to leave the channel alone').setRequired(true),
+    ),
+  new SlashCommandBuilder()
     .setName('manual-fetch')
     .setDescription('print your log lines since the last --- marker, without staging them')
     .addStringOption((option) =>
@@ -136,7 +142,31 @@ async function handleWhoami(interaction) {
     ? `times are read in **${result.timeZone}**.`
     : 'no timezone on this link, so times fall back to the calendar\'s own. run `/link` again to set it.';
 
-  await interaction.editReply(`linked to **${result.username}**, ${zone}`);
+  const marker = result.postMarker
+    ? 'a `---` gets posted after you approve.'
+    : 'no `---` gets posted after you approve.';
+
+  await interaction.editReply(`linked to **${result.username}**, ${zone} ${marker}`);
+}
+
+async function handleMarker(interaction) {
+  const enabled = interaction.options.getBoolean('on');
+  const result = await api.setMarkerPreference(interaction.user.id, enabled);
+
+  if (!result.ok) {
+    await interaction.editReply(
+      result.error === 'not_linked'
+        ? 'not linked yet, run `/link` first.'
+        : `could not reach the calendar :( (error: ${result.error || result.status}).`,
+    );
+    return;
+  }
+
+  await interaction.editReply(
+    enabled
+      ? 'ok, a `---` will be posted after you approve a staged log.'
+      : "ok, no more `---` after approving. you'll want to post your own, or `/fetch` will keep re-reading the same lines.",
+  );
 }
 
 async function handleFetch(interaction) {
@@ -252,6 +282,7 @@ const handlers = {
   link: handleLink,
   whoami: handleWhoami,
   fetch: handleFetch,
+  marker: handleMarker,
   'manual-fetch': handleManualFetch,
 };
 

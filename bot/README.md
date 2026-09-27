@@ -11,6 +11,7 @@ the web UI. Nothing it does writes to your calendar directly.
 | `/link` | Gives you a one-time code to connect this Discord account to a calendar account. |
 | `/whoami` | Says which calendar account this Discord account is linked to. |
 | `/fetch [date]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
+| `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
 | `/manual-fetch [date]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
 
 All replies are ephemeral — only you see them.
@@ -28,7 +29,10 @@ channel works fine.
 
 Once you **approve** the staged batch in the calendar, the bot posts a `---` of
 its own in the channel it took the lines from, so the next `/fetch` picks up
-exactly where this one stopped. Discarding the batch posts nothing: a marker
+exactly where this one stopped. `/marker on:false` turns that off for your
+account alone — everyone else sharing the bot keeps their own setting, and
+`/whoami` shows yours. With it off you need to post markers yourself, or
+`/fetch` will keep re-reading the same lines. Discarding the batch posts nothing: a marker
 drawn under a log you threw away would hide those lines from the next `/fetch`
 for good. Approval happens in a browser, so the bot asks the app every
 `MARKER_POLL_SECONDS` whether anything it staged has been approved since. Set
@@ -93,5 +97,5 @@ alongside `SECRET_KEY`.
 | `CALENDAR_PUBLIC_URL` | no | `CALENDAR_API_URL` | URL used in links shown to people. |
 | `CALENDAR_TIMEZONE` | no | `America/Los_Angeles` | Zone the scraped times are read in. |
 | `FETCH_MAX_MESSAGES` | no | `500` | How far back `/fetch` will look for a marker. |
-| `FETCH_POST_MARKER` | no | `true` | Whether the bot posts `---` once a batch is approved. |
+| `FETCH_POST_MARKER` | no | `true` | Kill switch for markers across the whole bot. Individual accounts opt out with `/marker`. |
 | `MARKER_POLL_SECONDS` | no | `15` | How often it checks for newly approved batches. |
