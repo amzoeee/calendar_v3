@@ -1,0 +1,1 @@
+ALTER TABLE `discord_links` ADD `post_marker` integer DEFAULT 1 NOT NULL;

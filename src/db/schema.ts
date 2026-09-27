@@ -142,6 +142,10 @@ export const discordLinks = sqliteTable('discord_links', {
   // serving several people cannot have one setting for all of them. Null on
   // links made before this existed; those fall back to the server's zone.
   timeZone: text('time_zone'),
+  // Whether the bot closes off a channel with `---` once this person approves
+  // a batch. Per link rather than per bot: one person wanting the watermark
+  // shouldn't impose it on everyone else sharing the bot.
+  postMarker: integer('post_marker').notNull().default(1),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 

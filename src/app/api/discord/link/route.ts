@@ -52,5 +52,6 @@ export async function GET(request: NextRequest) {
     username: link?.username ?? null,
     // Lets /manual-fetch date its output in the same zone /fetch would.
     timeZone: link?.timeZone ?? null,
+    postMarker: link ? link.postMarker === 1 : null,
   });
 }

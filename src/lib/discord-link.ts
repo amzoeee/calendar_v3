@@ -14,6 +14,7 @@ export interface DiscordLink {
   discordUsername: string | null;
   userId: number;
   timeZone: string | null;
+  postMarker: number;
   createdAt: string | null;
 }
 
@@ -117,6 +118,7 @@ export async function getLinksForUser(userId: number): Promise<DiscordLink[]> {
       discordUsername: discordLinks.discordUsername,
       userId: discordLinks.userId,
       timeZone: discordLinks.timeZone,
+      postMarker: discordLinks.postMarker,
       createdAt: discordLinks.createdAt,
     })
     .from(discordLinks)
@@ -130,12 +132,38 @@ export async function unlinkDiscordAccount(userId: number, discordUserId: string
     .where(and(eq(discordLinks.userId, userId), eq(discordLinks.discordUserId, discordUserId)));
 }
 
+/**
+ * Turns the `---` watermark on or off for one Discord account. Returns false
+ * when there is no link to set it on.
+ */
+export async function setMarkerPreference(
+  discordUserId: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const result = await db
+    .update(discordLinks)
+    .set({ postMarker: enabled ? 1 : 0 })
+    .where(eq(discordLinks.discordUserId, discordUserId));
+
+  return result.changes > 0;
+}
+
 /** Resolves the calendar account a Discord user has linked, if any. */
 export async function resolveLinkedUser(
   discordUserId: string,
-): Promise<{ userId: number; username: string; timeZone: string | null } | null> {
+): Promise<{
+  userId: number;
+  username: string;
+  timeZone: string | null;
+  postMarker: number;
+} | null> {
   const rows = await db
-    .select({ userId: discordLinks.userId, username: users.username, timeZone: discordLinks.timeZone })
+    .select({
+      userId: discordLinks.userId,
+      username: users.username,
+      timeZone: discordLinks.timeZone,
+      postMarker: discordLinks.postMarker,
+    })
     .from(discordLinks)
     .innerJoin(users, eq(users.id, discordLinks.userId))
     .where(eq(discordLinks.discordUserId, discordUserId))

@@ -57,13 +57,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 422 });
   }
 
-  // Only once the user approves does this channel get its marker.
-  if (channelId) await recordStage(link.userId, channelId);
+  // Only once the user approves does this channel get its marker, and only
+  // for someone who asked for one.
+  const wantsMarker = link.postMarker === 1;
+  if (channelId && wantsMarker) await recordStage(link.userId, channelId);
 
   revalidatePath('/calendar', 'layout');
   return NextResponse.json({
     username: link.username,
     timeZone,
+    postMarker: wantsMarker,
     count: result.count,
     dateUsed: result.dateUsed,
     warnings: result.warnings,
