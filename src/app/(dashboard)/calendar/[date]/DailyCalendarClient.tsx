@@ -1058,7 +1058,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               tags={tags}
               value={editTag}
               onChange={setEditTag}
-              className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              className="w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
             />
           </div>
 
@@ -1252,7 +1252,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                 tags={tags}
                 value={editTag}
                 onChange={setEditTag}
-                className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                className="w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               />
             </div>
 

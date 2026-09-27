@@ -545,7 +545,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart }: Se
                 value={importTag}
                 onChange={setImportTag}
                 name="import_tag"
-                className="mt-1 block w-full bg-secondary border border-border rounded px-3 py-2 text-xs text-foreground cursor-pointer"
+                className="mt-1 w-full bg-secondary border border-border rounded px-3 py-2 text-xs text-foreground cursor-pointer"
               />
             </div>
           </div>

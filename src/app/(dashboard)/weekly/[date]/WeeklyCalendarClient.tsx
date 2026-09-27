@@ -1254,7 +1254,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               tags={tags}
               value={editTag}
               onChange={setEditTag}
-              className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              className="w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
             />
           </div>
 
@@ -1422,7 +1422,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                 tags={tags}
                 value={editTag}
                 onChange={setEditTag}
-                className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                className="w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               />
             </div>
 
@@ -1607,7 +1607,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase">Tag</label>
-                <TagSelect tags={tags} value={addTag} onChange={setAddTag} className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground" />
+                <TagSelect tags={tags} value={addTag} onChange={setAddTag} className="mt-1 w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground" />
               </div>
 
               <div>
