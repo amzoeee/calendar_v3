@@ -126,4 +126,6 @@ export const taskCompletions = sqliteTable('task_completions', {
   // against it would call every recurring task late. Null on rows written
   // before this existed, and on tasks that never had a deadline.
   dueSnapshot: text('due_snapshot'),
+  // Whether it was ASAP when ticked. Always counts as on time.
+  asapSnapshot: integer('asap_snapshot').notNull().default(0),
 });

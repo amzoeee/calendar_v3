@@ -174,6 +174,7 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
       taskId: taskCompletions.taskId,
       completedAt: taskCompletions.completedAt,
       dueSnapshot: taskCompletions.dueSnapshot,
+      asapSnapshot: taskCompletions.asapSnapshot,
     })
     .from(taskCompletions)
     .where(
@@ -224,7 +225,8 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
       bucket['Untagged'] = (bucket['Untagged'] ?? 0) + 1;
     }
 
-    if (!c.dueSnapshot) undated += 1;
+    if (c.asapSnapshot) onTime += 1;
+    else if (!c.dueSnapshot) undated += 1;
     else if (c.completedAt <= c.dueSnapshot) onTime += 1;
     else late += 1;
   }

@@ -663,6 +663,7 @@ export async function toggleTaskCompletionAction(
       counterValue: tasks.counterValue,
       completedAt: tasks.completedAt,
       dueDatetime: tasks.dueDatetime,
+      dueAsap: tasks.dueAsap,
     })
     .from(tasks)
     .where(and(inArray(tasks.id, candidateIds), eq(tasks.userId, session.userId)));
@@ -679,6 +680,7 @@ export async function toggleTaskCompletionAction(
       id: r.id,
       title: displayTitle(r.title, r.counterValue),
       dueDatetime: r.dueDatetime,
+      dueAsap: r.dueAsap,
     })),
     completed
   );
@@ -743,6 +745,7 @@ export async function setTaskCompletionAction(
       title: tasks.title,
       counterValue: tasks.counterValue,
       dueDatetime: tasks.dueDatetime,
+      dueAsap: tasks.dueAsap,
     })
     .from(tasks)
     .where(and(inArray(tasks.id, ids), eq(tasks.userId, session.userId)));
@@ -754,6 +757,7 @@ export async function setTaskCompletionAction(
       id: r.id,
       title: displayTitle(r.title, r.counterValue),
       dueDatetime: r.dueDatetime,
+      dueAsap: r.dueAsap,
     })),
     completed
   );
@@ -769,7 +773,7 @@ export async function setTaskCompletionAction(
  */
 async function applyCompletion(
   userId: number,
-  rows: { id: number; title: string; dueDatetime: string | null }[],
+  rows: { id: number; title: string; dueDatetime: string | null; dueAsap: number }[],
   completed: boolean
 ): Promise<void> {
   const ids = rows.map((r) => r.id);
@@ -788,6 +792,7 @@ async function applyCompletion(
         completedAt: stamp as string,
         titleSnapshot: r.title,
         dueSnapshot: r.dueDatetime,
+        asapSnapshot: r.dueAsap,
       }))
     );
   } else {
