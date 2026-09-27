@@ -29,9 +29,11 @@ const ICONS: Record<string, typeof CalendarIcon> = {
 export default function SidebarNav({
   todayStr,
   dueCount = 0,
+  hasAsap = false,
 }: {
   todayStr: string;
   dueCount?: number;
+  hasAsap?: boolean;
 }) {
   const pathname = usePathname();
   const { links, activeKey } = getNavLinks(pathname, todayStr);
@@ -61,6 +63,9 @@ export default function SidebarNav({
               >
                 {dueCount}
               </span>
+            )}
+            {key === 'tasks' && dueCount === 0 && hasAsap && (
+              <span aria-label="ASAP tasks" className="h-2 w-2 rounded-full bg-amber-400" />
             )}
           </Link>
         );

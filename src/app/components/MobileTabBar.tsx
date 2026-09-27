@@ -32,9 +32,11 @@ const SHORT_LABELS: Record<string, string> = {
 export default function MobileTabBar({
   todayStr,
   dueCount = 0,
+  hasAsap = false,
 }: {
   todayStr: string;
   dueCount?: number;
+  hasAsap?: boolean;
 }) {
   const pathname = usePathname();
   const { links, activeKey } = getNavLinks(pathname, todayStr);
@@ -64,6 +66,12 @@ export default function MobileTabBar({
                   >
                     {dueCount}
                   </span>
+                )}
+                {key === 'tasks' && dueCount === 0 && hasAsap && (
+                  <span
+                    aria-label="ASAP tasks"
+                    className="absolute -top-0.5 -right-1 h-2 w-2 rounded-full bg-amber-500"
+                  />
                 )}
               </span>
               {SHORT_LABELS[key]}
