@@ -40,6 +40,9 @@ export function parseShorthandTime(
   timeStr: string,
   ampm?: string
 ): { hour: number; minute: number; exact24h: number | null } | null {
+  // 10:30 and 21:00 read the same as 1030 and 2100.
+  timeStr = timeStr.replace(':', '');
+
   let hour = 0;
   let minute = 0;
 
@@ -373,7 +376,7 @@ export async function parseLogText(
     const trimmed = line.trim();
     if (!trimmed || parseDiscordDate(trimmed, browserTimeZone)) continue;
 
-    const match = trimmed.match(/^(\d{1,4})\s*(am|pm)?\s+(.+)$/i);
+    const match = trimmed.match(/^(\d{1,2}:\d{2}|\d{1,4})\s*(am|pm)?\s+(.+)$/i);
     if (match) {
       const timeStr = match[1];
       const ampm = match[2];
