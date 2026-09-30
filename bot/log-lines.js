@@ -5,20 +5,22 @@
 // open with a digit, so nothing legitimate is swallowed.
 const MARKER = /^\s*[-—─]{3,}/;
 
-// A log line: a shorthand time, an optional am/pm, then the activity.
+// A log line: a shorthand or colon time, an optional am/pm, then the activity.
 // Deliberately the same shape the calendar's own parser accepts, so the bot
 // never sends a line the app will silently drop.
-const LOG_LINE = /^(\d{1,4})\s*(am|pm)?\s+(.+)$/i;
+const LOG_LINE = /^(\d{1,2}:\d{2}|\d{1,4})\s*(am|pm)?\s+(.+)$/i;
 
 function isMarker(line) {
   return MARKER.test(line);
 }
 
 /**
- * Whether `timeStr` is a time the calendar can read: 9, 930, 0930, 1430.
+ * Whether `timeStr` is a time the calendar can read: 9, 930, 0930, 1430, 10:30.
  * Mirrors parseShorthandTime in src/lib/discord-log.ts.
  */
 function isValidShorthandTime(timeStr) {
+  timeStr = timeStr.replace(':', '');
+
   let hour;
   let minute;
 

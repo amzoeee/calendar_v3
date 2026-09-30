@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import {
+  Bell,
   Check,
   ChevronDown,
   ChevronRight,
@@ -44,6 +45,7 @@ import {
   SORT_LABELS,
   MAX_TASK_DEPTH,
   MAX_VISIBLE_BOARDS,
+  REMINDERS_ONLY_COOKIE,
   VISIBLE_BOARDS_COOKIE,
   VIRTUAL_LISTS,
   VIRTUAL_LIST_NAMES,
@@ -102,6 +104,8 @@ import {
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
 import DateInput from '@/app/components/DateInput';
+import Select from '@/app/components/Select';
+import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 
 // Every small control in the editor and the composer shares one look. Kept in
 // one place so the three pickers can't drift apart.
@@ -137,6 +141,7 @@ interface TasksClientProps {
   rows: TaskRow[];
   availableTags: TaskTag[];
   tagsByTask: Record<number, number[]>;
+  remindersOnly: boolean;
 }
 
 // The Undo toast carries the action that reverses whatever just happened, so
@@ -168,6 +173,8 @@ interface ColumnHandlers {
   draggingId: number | null;
   run: (fn: () => Promise<unknown>) => void;
   setVirtualSort: (list: VirtualList, mode: SortMode) => void;
+  remindersOnly: boolean;
+  setRemindersOnly: (on: boolean) => void;
   tagsFor: (taskId: number) => TaskTag[];
   editingId: number | null;
   setEditingId: (id: number | null) => void;
@@ -182,9 +189,11 @@ export default function TasksClient({
   rows,
   availableTags,
   tagsByTask,
+  remindersOnly: initialRemindersOnly,
 }: TasksClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const { confirm } = useConfirm();
 
   // Server rows are the source of truth; this mirror exists so ticking a box
   // strikes it through immediately instead of after a server round trip. The
@@ -273,6 +282,13 @@ export default function TasksClient({
     document.cookie = `${VIRTUAL_SORT_COOKIE_PREFIX}${list}=${mode}; path=/; max-age=31536000; SameSite=Lax`;
   };
 
+  // Applies to every list, so it lives here and in a cookie rather than per column.
+  const [remindersOnly, setRemindersOnlyState] = useState(initialRemindersOnly);
+  const setRemindersOnly = (on: boolean) => {
+    setRemindersOnlyState(on);
+    document.cookie = `${REMINDERS_ONLY_COOKIE}=${on ? 1 : 0}; path=/; max-age=31536000; SameSite=Lax`;
+  };
+
   useEffect(() => {
     document.cookie = `${VISIBLE_BOARDS_COOKIE}=${visibleKey}; path=/; max-age=31536000; SameSite=Lax`;
   }, [visibleKey]);
@@ -334,6 +350,7 @@ export default function TasksClient({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isInsideModal(e.target)) return;
       if (e.key === 'Escape') {
         setSelectedId(null);
         return;
@@ -567,6 +584,8 @@ export default function TasksClient({
     draggingId: drag.activeId,
     run,
     setVirtualSort,
+    remindersOnly,
+    setRemindersOnly,
     editingId,
     setEditingId,
     subtaskParent,
@@ -676,6 +695,24 @@ export default function TasksClient({
           >
             <Plus className="h-4 w-4" />
             New list
+          </button>
+          <button
+            onClick={() => setRemindersOnly(!remindersOnly)}
+            role="switch"
+            aria-checked={remindersOnly}
+            title="Show only open tasks whose reminder has gone off, or that are due ASAP, in every list"
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-secondary/50 transition-colors cursor-pointer ${
+              remindersOnly ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <span
+              className={`h-4 w-4 shrink-0 rounded border flex items-center justify-center ${
+                remindersOnly ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'
+              }`}
+            >
+              {remindersOnly && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+            </span>
+            <span className="text-left leading-tight">Active reminders only</span>
           </button>
         </div>
       </aside>
@@ -793,21 +830,15 @@ export default function TasksClient({
 
           <label className="block space-y-1">
             <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">List</span>
-            <select
+            <Select
               value={selected.boardId}
-              onChange={(e) => {
-                const target = Number(e.target.value);
+              onChange={(target) => {
                 setSelectedId(null);
                 run(() => moveTaskToBoardAction(selected.id, target));
               }}
               className="w-full rounded bg-secondary border border-border px-2.5 py-2 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
-            >
-              {boards.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              options={boards.map((b) => ({ value: b.id, label: b.name }))}
+            />
           </label>
 
           {selected.depth < MAX_TASK_DEPTH && (
@@ -836,12 +867,17 @@ export default function TasksClient({
 
           <div className="pt-2 border-t border-border">
             <button
-              onClick={() => {
+              onClick={async () => {
                 const subs = localRows.filter((r) => r.parentId === selected.id).length;
-                const message = subs
-                  ? `Delete “${selected.title}” and its ${subs} subtask${subs === 1 ? '' : 's'}?`
-                  : `Delete “${selected.title}”?`;
-                if (window.confirm(message)) removeTask(selected.id);
+                const ok = await confirm({
+                  title: `Delete “${selected.title}”?`,
+                  message: subs
+                    ? `Its ${subs} subtask${subs === 1 ? '' : 's'} will be deleted too.`
+                    : undefined,
+                  confirmLabel: 'Delete',
+                  destructive: true,
+                });
+                if (ok) removeTask(selected.id);
               }}
               className="flex items-center gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs font-medium text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
             >
@@ -932,6 +968,20 @@ export default function TasksClient({
   );
 }
 
+// Still open and already reminded.
+function reminderFired(r: TaskRow): boolean {
+  return (
+    !r.completedAt &&
+    r.remindAt != null &&
+    pacificDbStringToDate(r.remindAt).getTime() <= Date.now()
+  );
+}
+
+// ASAP tasks can't carry a reminder but always count.
+function hasActiveReminder(r: TaskRow): boolean {
+  return reminderFired(r) || (!r.completedAt && r.dueAsap === 1);
+}
+
 /**
  * One board's column: its own header, composer, list and Completed section.
  * Everything that can only be true of one task at a time (which row is being
@@ -969,6 +1019,7 @@ function BoardColumn({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [draftDate, setDraftDate] = useState('');
   const [draftTime, setDraftTime] = useState('');
+  const [draftAsap, setDraftAsap] = useState(false);
   const [draftTagIds, setDraftTagIds] = useState<number[]>([]);
   const [subtaskValue, setSubtaskValue] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
@@ -976,6 +1027,7 @@ function BoardColumn({
   const [filterOpen, setFilterOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [pasting, setPasting] = useState(false);
+  const { confirm, choose } = useConfirm();
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
 
@@ -1021,8 +1073,10 @@ function BoardColumn({
 
   // The badge counts filters *you* applied; the Starred list's own filter is
   // the list, not something to clear.
+  const { remindersOnly, setRemindersOnly } = handlers;
   const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0);
-  const filtering = filterTagIds.length > 0 || starredFilter;
+  const filtering = filterTagIds.length > 0 || starredFilter || remindersOnly;
+  const filteredOut = activeFilters > 0 || remindersOnly;
 
   /**
    * Filtering keeps a matching task's family with it, in both directions:
@@ -1034,12 +1088,17 @@ function BoardColumn({
    *
    * A task is therefore shown when it matches, when anything in its subtree
    * matches, or when any of its ancestors match.
+   *
+   * Active reminders only is the exception on the ancestor side: a parent
+   * without one of its own stays out, and its subtask shows flush with the
+   * parent's name above it.
    */
   const visibleRows = useMemo(() => {
     if (!filtering) return rows;
 
     const matches = (r: TaskRow) => {
       if (starredFilter && !r.isStarred) return false;
+      if (remindersOnly && !hasActiveReminder(r)) return false;
       if (filterTagIds.length === 0) return true;
       // OR across selected tags: a task matches if it carries any of them.
       return handlers.tagsFor(r.id).some((t) => filterTagIds.includes(t.id));
@@ -1053,6 +1112,7 @@ function BoardColumn({
       keep.add(row.id);
       for (let p = row.parentId; p != null; p = byId.get(p)?.parentId ?? null) {
         if (keep.has(p) || !byId.has(p)) break;
+        if (remindersOnly && !hasActiveReminder(byId.get(p)!)) break;
         keep.add(p);
       }
     }
@@ -1073,7 +1133,7 @@ function BoardColumn({
 
     return rows.filter((r) => keep.has(r.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, filterTagIds, starredFilter, filtering]);
+  }, [rows, filterTagIds, starredFilter, remindersOnly, filtering]);
 
   const { openTree, completedTree } = useMemo(() => {
     const open = visibleRows.filter((r) => !r.completedAt);
@@ -1272,7 +1332,7 @@ function BoardColumn({
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
-            {(board.virtual || node.dueDatetime || node.rrule || rowTags.length > 0) && (
+            {(board.virtual || node.dueDatetime || node.dueAsap === 1 || node.rrule || rowTags.length > 0) && (
               /* gap-x/gap-y separately: a single `gap` on a wrapping flex
                  applies to both axes, so the deadline wrapping above the tags
                  opened a full row-gap between them. The top margin lives here
@@ -1284,7 +1344,17 @@ function BoardColumn({
                     {boardNames.get(node.boardId)}
                   </span>
                 )}
-                <DueChip due={node.dueDatetime} hasTime={node.dueHasTime === 1} done={done} />
+                <DueChip
+                  due={node.dueDatetime}
+                  hasTime={node.dueHasTime === 1}
+                  asap={node.dueAsap === 1}
+                  done={done}
+                />
+                {reminderFired(node) && (
+                  <span title="Reminder has gone off" className="shrink-0 text-amber-400">
+                    <Bell className="h-2.5 w-2.5" />
+                  </span>
+                )}
                 {node.rrule && (
                   <span
                     title={repeatLabel(node.rrule) ?? undefined}
@@ -1376,6 +1446,7 @@ function BoardColumn({
   const composerDetails: NewTaskDetails = {
     dueDate: draftDate || null,
     dueTime: draftTime || null,
+    asap: draftAsap,
     tagIds: draftTagIds,
   };
 
@@ -1384,6 +1455,7 @@ function BoardColumn({
   const clearDetails = () => {
     setDraftDate('');
     setDraftTime('');
+    setDraftAsap(false);
     setDraftTagIds([]);
   };
 
@@ -1430,6 +1502,16 @@ function BoardColumn({
         Starred
       </button>
       )}
+
+      {/* The rail's toggle, for mobile where there is no rail. */}
+      <button
+        onClick={() => setRemindersOnly(!remindersOnly)}
+        className="md:hidden w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+      >
+        {checkbox(remindersOnly)}
+        <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+        Active reminders only
+      </button>
 
       {tagsInUse.map((t) => {
         const on = filterTagIds.includes(t.id);
@@ -1500,29 +1582,21 @@ function BoardColumn({
       <div className="shrink-0 border-b border-border px-3 md:px-4 py-3 flex items-center gap-2">
         {/* Mobile shows one list at a time, chosen here. */}
         <div className="md:hidden flex-1 min-w-0">
-          <select
+          <Select<string | number>
             value={board.virtual ?? board.id}
-            onChange={(e) => {
-              const value = e.target.value;
+            onChange={(value) => {
               if (value === 'new') onNewBoard();
-              else if (isVirtualList(value)) onPickList(value);
+              else if (typeof value === 'string' && isVirtualList(value)) onPickList(value);
               else onPickBoard(Number(value));
             }}
             aria-label="Choose a list"
             className="w-full bg-transparent text-lg font-bold text-foreground focus:outline-none cursor-pointer"
-          >
-            {VIRTUAL_LISTS.map((kind) => (
-              <option key={kind} value={kind}>
-                {VIRTUAL_LIST_NAMES[kind]}
-              </option>
-            ))}
-            {boards.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-            <option value="new">+ New list…</option>
-          </select>
+            options={[
+              ...VIRTUAL_LISTS.map((kind) => ({ value: kind, label: VIRTUAL_LIST_NAMES[kind] })),
+              ...boards.map((b) => ({ value: b.id, label: b.name })),
+              { value: 'new', label: '+ New list…' },
+            ]}
+          />
         </div>
 
         <h2 className="hidden md:block flex-1 min-w-0 truncate text-base font-bold text-foreground">
@@ -1532,8 +1606,8 @@ function BoardColumn({
           )}
         </h2>
 
-        {!collapsed && hasFilterables && (
-          <div className="relative shrink-0">
+        {!collapsed && (
+          <div className={`relative shrink-0 ${hasFilterables ? '' : 'md:hidden'}`}>
             <button
               onClick={() => setFilterOpen((o) => !o)}
               aria-expanded={filterOpen}
@@ -1546,6 +1620,8 @@ function BoardColumn({
             >
               <TagIcon className="h-3 w-3" />
               {activeFilters > 0 ? activeFilters : 'Filter'}
+              {/* Mobile has no rail to show the toggle is on. */}
+              {remindersOnly && <Bell className="h-3 w-3 md:hidden" />}
             </button>
             {filterOpen && (
               <>
@@ -1559,18 +1635,13 @@ function BoardColumn({
         )}
 
         {!collapsed && (
-          <select
+          <Select
             value={board.sortMode}
-            onChange={(e) => changeSort(e.target.value as SortMode)}
+            onChange={changeSort}
             aria-label={`Sort ${board.name}`}
             className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
-          >
-            {sortModes.map((mode) => (
-              <option key={mode} value={mode}>
-                {SORT_LABELS[mode]}
-              </option>
-            ))}
-          </select>
+            options={sortModes.map((mode) => ({ value: mode, label: SORT_LABELS[mode] }))}
+          />
         )}
 
         {/* Everything in this menu acts on a board — renaming it, pasting into
@@ -1602,13 +1673,11 @@ function BoardColumn({
                   <>
                     {sectionLabel('Sort')}
                     {sortOptions}
-                    {hasFilterables && (
-                      <>
-                        <div className="my-1 border-t border-border" />
-                        {sectionLabel('Filter')}
-                        {filterOptions}
-                      </>
-                    )}
+                    <div className={hasFilterables ? '' : 'md:hidden'}>
+                      <div className="my-1 border-t border-border" />
+                      {sectionLabel('Filter')}
+                      {filterOptions}
+                    </div>
                     <div className="my-1 border-t border-border" />
                   </>
                 )}
@@ -1642,16 +1711,16 @@ function BoardColumn({
                   {isDefaultBoard ? 'Default list' : 'Make default list'}
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setMenuOpen(false);
                     if (completedCount === 0) return;
-                    if (
-                      window.confirm(
-                        `Delete ${completedCount} completed task${completedCount === 1 ? '' : 's'} from “${board.name}”? Your stats keep the history.`
-                      )
-                    ) {
-                      handlers.run(() => deleteCompletedTasksAction(board.id));
-                    }
+                    const ok = await confirm({
+                      title: `Delete ${completedCount} completed task${completedCount === 1 ? '' : 's'}?`,
+                      message: `They’ll be removed from “${board.name}”. Your stats keep the history.`,
+                      confirmLabel: 'Delete',
+                      destructive: true,
+                    });
+                    if (ok) handlers.run(() => deleteCompletedTasksAction(board.id));
                   }}
                   disabled={completedCount === 0}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1659,24 +1728,33 @@ function BoardColumn({
                   Delete completed
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setMenuOpen(false);
-                    if (boards.length <= 1) {
-                      window.alert('This is your only list, so it can’t be deleted.');
-                      return;
-                    }
                     const others = boards.filter((b) => b.id !== board.id);
-                    const keep =
-                      rows.length === 0 ||
-                      window.confirm(
-                        `“${board.name}” has ${rows.length} task${rows.length === 1 ? '' : 's'}.\n\nOK: move them to “${others[0].name}”.\nCancel: delete them with the list.`
-                      );
+                    const n = rows.length;
+                    const choice =
+                      n === 0
+                        ? await choose({
+                            title: `Delete “${board.name}”?`,
+                            choices: [{ label: 'Delete list', value: 'delete' as const, tone: 'danger' }],
+                          })
+                        : await choose({
+                            title: `Delete “${board.name}”?`,
+                            message: `It has ${n} task${n === 1 ? '' : 's'}. Move ${n === 1 ? 'it' : 'them'} to “${others[0].name}”, or delete ${n === 1 ? 'it' : 'them'} with the list?`,
+                            choices: [
+                              { label: `Delete ${n === 1 ? 'task' : 'tasks'}`, value: 'delete' as const, tone: 'danger' },
+                              { label: `Move ${n === 1 ? 'task' : 'tasks'}`, value: 'move' as const, tone: 'primary' },
+                            ],
+                          });
+                    if (!choice) return;
                     handlers.run(async () => {
-                      await deleteBoardAction(board.id, keep ? others[0].id : null);
+                      await deleteBoardAction(board.id, choice === 'move' ? others[0].id : null);
                     });
                     onPickBoard(others[0].id);
                   }}
-                  className="w-full text-left px-3 py-2 text-sm rounded text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
+                  disabled={boards.length <= 1}
+                  title={boards.length <= 1 ? 'Your only list can’t be deleted' : undefined}
+                  className="w-full text-left px-3 py-2 text-sm rounded text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-red-400"
                 >
                   Delete list
                 </button>
@@ -1772,21 +1850,46 @@ function BoardColumn({
               offset is a decision about a deadline you already have. */}
           {detailsOpen && (
             <div className="px-2 pb-2 space-y-2">
-              <div className="flex gap-1.5">
-                <DateInput
-                  value={draftDate}
-                  onChange={(e) => setDraftDate(e.target.value)}
-                  aria-label="Deadline for the new task"
-                  className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
-                />
-                <input
-                  type="time"
-                  value={draftTime}
-                  disabled={!draftDate}
-                  onChange={(e) => setDraftTime(e.target.value)}
-                  aria-label="Time of day for the new task"
-                  className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
-                />
+              <div className="flex gap-1.5 items-center">
+                {draftAsap ? (
+                  <p className="flex-1 min-w-0 text-[10px] text-muted-foreground">
+                    Due as soon as possible.
+                  </p>
+                ) : (
+                  <>
+                    <DateInput
+                      value={draftDate}
+                      onChange={(e) => setDraftDate(e.target.value)}
+                      aria-label="Deadline for the new task"
+                      className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
+                    />
+                    <input
+                      type="time"
+                      value={draftTime}
+                      disabled={!draftDate}
+                      onChange={(e) => setDraftTime(e.target.value)}
+                      aria-label="Time of day for the new task"
+                      className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftAsap((a) => !a);
+                    setDraftDate('');
+                    setDraftTime('');
+                  }}
+                  aria-pressed={draftAsap}
+                  title="Due as soon as possible"
+                  className={`shrink-0 text-[10px] font-semibold px-1.5 py-1 rounded border transition-colors cursor-pointer ${
+                    draftAsap
+                      ? 'bg-amber-400/15 text-amber-400 border-amber-400/40'
+                      : 'text-muted-foreground border-border hover:text-foreground'
+                  }`}
+                >
+                  ASAP
+                </button>
               </div>
               <TagPicker all={availableTags} selected={draftTagIds} onChange={setDraftTagIds} />
             </div>
@@ -1797,18 +1900,18 @@ function BoardColumn({
           <div className="py-12 text-center px-3">
             <ListChecks className="h-7 w-7 mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-xs text-muted-foreground">
-              {activeFilters > 0
+              {filteredOut
                 ? 'No tasks match the filter.'
                 : starredList
                   ? 'Nothing starred yet. Star a task and it shows up here'
                   : 'Nothing here yet. Add a task above'}
-              {activeFilters === 0 && isPrimary && (
+              {!filteredOut && isPrimary && (
                 <>
                   , or press{' '}
                   <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary">n</kbd>
                 </>
               )}
-              {activeFilters === 0 && '.'}
+              {!filteredOut && '.'}
             </p>
           </div>
         )}
@@ -2007,12 +2110,26 @@ function EditTaskDialog({
 function DueChip({
   due,
   hasTime,
+  asap,
   done,
 }: {
   due: string | null;
   hasTime: boolean;
+  asap: boolean;
   done: boolean;
 }) {
+  if (asap) {
+    return (
+      <span
+        className={`flex items-center gap-1 text-[10px] leading-none shrink-0 ${
+          done ? 'text-muted-foreground' : 'text-amber-400'
+        }`}
+      >
+        <CalendarClock className="h-2.5 w-2.5" />
+        ASAP
+      </span>
+    );
+  }
   if (!due) return null;
 
   const now = new Date();
@@ -2059,8 +2176,10 @@ function SchedulePicker({
     remindOffsetMinutes: number | null;
     remindOffsetDays: number | null;
     remindTimeOfDay: string | null;
+    asap?: boolean;
   }) => void;
 }) {
+  const [asap, setAsap] = useState(task.dueAsap === 1);
   const initialDue = task.dueDatetime ? pacificDbStringToDate(task.dueDatetime) : null;
   const [dueDate, setDueDate] = useState(initialDue ? formatDateInputValue(initialDue) : '');
   const [dueTime, setDueTime] = useState(
@@ -2117,34 +2236,69 @@ function SchedulePicker({
     });
   }
 
+  const toggleAsap = () => {
+    const next = !asap;
+    setAsap(next);
+    setDueDate('');
+    setDueTime('');
+    onSave({
+      dueDate: null,
+      dueTime: null,
+      remindOffsetMinutes: null,
+      remindOffsetDays: null,
+      remindTimeOfDay: null,
+      asap: next,
+    });
+  };
+
   const field = FIELD_CLASS;
 
   return (
     <div className="space-y-2">
       <div className="space-y-1">
-        <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Deadline
-        </span>
-        <div className="flex gap-1.5">
-          <DateInput
-            value={dueDate}
-            onChange={(e) => {
-              setDueDate(e.target.value);
-              commit({ dueDate: e.target.value });
-            }}
-            className={`${field} flex-1 min-w-0 cursor-pointer`}
-          />
-          <input
-            type="time"
-            value={dueTime}
-            disabled={!dueDate}
-            onChange={(e) => {
-              setDueTime(e.target.value);
-              commit({ dueTime: e.target.value });
-            }}
-            className={`${field} w-[6.25rem] cursor-pointer disabled:opacity-40`}
-          />
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Deadline
+          </span>
+          <button
+            type="button"
+            onClick={toggleAsap}
+            aria-pressed={asap}
+            disabled={Boolean(task.rrule)}
+            title={task.rrule ? 'A repeating task needs a date' : 'Due as soon as possible'}
+            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+              asap
+                ? 'bg-amber-400/15 text-amber-400 border-amber-400/40'
+                : 'text-muted-foreground border-border hover:text-foreground'
+            }`}
+          >
+            ASAP
+          </button>
         </div>
+        {asap ? (
+          <p className="text-[10px] text-muted-foreground">Due as soon as possible.</p>
+        ) : (
+          <div className="flex gap-1.5">
+            <DateInput
+              value={dueDate}
+              onChange={(e) => {
+                setDueDate(e.target.value);
+                commit({ dueDate: e.target.value });
+              }}
+              className={`${field} flex-1 min-w-0 cursor-pointer`}
+            />
+            <input
+              type="time"
+              value={dueTime}
+              disabled={!dueDate}
+              onChange={(e) => {
+                setDueTime(e.target.value);
+                commit({ dueTime: e.target.value });
+              }}
+              className={`${field} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+            />
+          </div>
+        )}
         {dueDate && !dueTime && (
           <p className="text-[10px] text-muted-foreground">Due any time that day.</p>
         )}
@@ -2156,10 +2310,10 @@ function SchedulePicker({
             Reminder
           </span>
           <div className="flex gap-1.5">
-            <select
+            <Select<number | ''>
               value={dueTime ? (minutes ?? '') : (days ?? '')}
-              onChange={(e) => {
-                const v = e.target.value === '' ? null : Number(e.target.value);
+              onChange={(value) => {
+                const v = value === '' ? null : value;
                 if (dueTime) {
                   setMinutes(v);
                   commit({ minutes: v });
@@ -2169,14 +2323,14 @@ function SchedulePicker({
                 }
               }}
               className={`${field} flex-1 min-w-0 cursor-pointer`}
-            >
-              <option value="">No reminder</option>
-              {(dueTime ? TIMED_PRESETS : DATED_PRESETS).map((p) => (
-                <option key={p.label} value={dueTime ? p.minutes : p.days}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'No reminder' },
+                ...(dueTime ? TIMED_PRESETS : DATED_PRESETS).map((p) => ({
+                  value: (dueTime ? p.minutes : p.days) ?? ('' as const),
+                  label: p.label,
+                })),
+              ]}
+            />
             {!dueTime && days != null && (
               <input
                 type="time"
@@ -2240,22 +2394,17 @@ function RepeatPicker({
       <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Repeat
       </span>
-      <select
+      <Select
         value={rrule ?? ''}
         disabled={!hasDeadline}
-        onChange={(e) => {
-          const v = e.target.value || null;
+        onChange={(value) => {
+          const v = value || null;
           setRrule(v);
           commit({ rrule: v });
         }}
         className={`${field} w-full cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
-      >
-        {REPEAT_OPTIONS.map((o) => (
-          <option key={o.label} value={o.rrule ?? ''}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        options={REPEAT_OPTIONS.map((o) => ({ value: o.rrule ?? '', label: o.label }))}
+      />
 
       {!hasDeadline && (
         <p className="text-[10px] text-muted-foreground">Set a deadline first.</p>
@@ -2504,15 +2653,16 @@ function PasteListDialog({
             Deadlines
           </span>
           <div className="flex flex-wrap items-center gap-1.5">
-            <select
+            <Select
               value={mode}
-              onChange={(e) => setMode(e.target.value as typeof mode)}
+              onChange={setMode}
               className={`${field} cursor-pointer`}
-            >
-              <option value="none">No deadlines</option>
-              <option value="same">Same date for all</option>
-              <option value="series">Spread out, starting…</option>
-            </select>
+              options={[
+                { value: 'none', label: 'No deadlines' },
+                { value: 'same', label: 'Same date for all' },
+                { value: 'series', label: 'Spread out, starting…' },
+              ]}
+            />
             {mode !== 'none' && (
               <DateInput
                 value={startDate}

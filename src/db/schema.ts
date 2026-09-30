@@ -79,6 +79,9 @@ export const tasks = sqliteTable('tasks', {
   // Pacific wall-clock strings, same convention as events.
   dueDatetime: text('due_datetime'),
   dueHasTime: integer('due_has_time').notNull().default(0),
+  // "As soon as possible": no date, sorts ahead of every dated deadline.
+  // Exclusive with dueDatetime.
+  dueAsap: integer('due_asap').notNull().default(0),
 
   // Materialised from the offset below whenever the deadline changes, so the
   // reminder scheduler stays a plain indexed comparison.
@@ -123,6 +126,8 @@ export const taskCompletions = sqliteTable('task_completions', {
   // against it would call every recurring task late. Null on rows written
   // before this existed, and on tasks that never had a deadline.
   dueSnapshot: text('due_snapshot'),
+  // Whether it was ASAP when ticked. Always counts as on time.
+  asapSnapshot: integer('asap_snapshot').notNull().default(0),
 });
 
 // ==========================================
