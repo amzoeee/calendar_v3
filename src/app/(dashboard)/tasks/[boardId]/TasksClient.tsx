@@ -94,6 +94,10 @@ import {
   TIMED_PRESETS,
   DATED_PRESETS,
   DEFAULT_REMIND_TIME,
+  TIMED_UNITS,
+  DATED_UNITS,
+  splitOffset,
+  type RemindUnit,
   dueState,
   formatDue,
   displayTitle,
@@ -2152,6 +2156,66 @@ function DueChip({
   );
 }
 
+const CUSTOM = 'custom';
+
+/** "[n] [unit] before", for a reminder none of the presets cover. */
+function CustomOffset({
+  offset,
+  units,
+  onChange,
+}: {
+  offset: number;
+  units: RemindUnit[];
+  onChange: (offset: number) => void;
+}) {
+  const initial = splitOffset(offset, units);
+  // Kept as text so the field can be emptied mid-edit without saving.
+  const [amount, setAmount] = useState(String(initial.amount));
+  const [unit, setUnit] = useState(initial.unit);
+
+  const save = (text: string, u: RemindUnit) => {
+    const n = Number(text);
+    if (text !== '' && Number.isInteger(n) && n >= 0) onChange(n * u.size);
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        step={1}
+        value={amount}
+        aria-label="Reminder amount"
+        onChange={(e) => {
+          setAmount(e.target.value);
+          save(e.target.value, unit);
+        }}
+        onBlur={() => {
+          if (amount === '' || !Number.isInteger(Number(amount)) || Number(amount) < 0) {
+            const saved = splitOffset(offset, units);
+            setAmount(String(saved.amount));
+            setUnit(saved.unit);
+          }
+        }}
+        className={`${FIELD_CLASS} w-16`}
+      />
+      <Select<number>
+        value={unit.size}
+        aria-label="Reminder unit"
+        onChange={(size) => {
+          const u = units.find((x) => x.size === size)!;
+          setUnit(u);
+          save(amount, u);
+        }}
+        className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
+        options={units.map((u) => ({ value: u.size, label: amount === '1' ? u.label : `${u.label}s` }))}
+      />
+      <span className="text-xs text-muted-foreground">before</span>
+    </div>
+  );
+}
+
 /**
  * Deadline and reminder for one task.
  *
@@ -2188,6 +2252,7 @@ function SchedulePicker({
   const [minutes, setMinutes] = useState<number | null>(task.remindOffsetMinutes ?? null);
   const [days, setDays] = useState<number | null>(task.remindOffsetDays ?? null);
   const [remindTime, setRemindTime] = useState(task.remindTimeOfDay ?? DEFAULT_REMIND_TIME);
+  const [customOpen, setCustomOpen] = useState(false);
 
   const commit = (next: Partial<{
     dueDate: string;
@@ -2235,6 +2300,22 @@ function SchedulePicker({
       minute: '2-digit',
     });
   }
+
+  // The reminder in whichever shape the deadline currently takes.
+  const presets = dueTime ? TIMED_PRESETS : DATED_PRESETS;
+  const offset = dueTime ? minutes : days;
+  const setOffset = (v: number | null) => {
+    if (dueTime) {
+      setMinutes(v);
+      commit({ minutes: v });
+    } else {
+      setDays(v);
+      commit({ days: v });
+    }
+  };
+  const showCustom =
+    offset != null &&
+    (customOpen || !presets.some((p) => (dueTime ? p.minutes : p.days) === offset));
 
   const toggleAsap = () => {
     const next = !asap;
@@ -2310,25 +2391,25 @@ function SchedulePicker({
             Reminder
           </span>
           <div className="flex gap-1.5">
-            <Select<number | ''>
-              value={dueTime ? (minutes ?? '') : (days ?? '')}
+            <Select<number | '' | typeof CUSTOM>
+              value={showCustom ? CUSTOM : (offset ?? '')}
               onChange={(value) => {
-                const v = value === '' ? null : value;
-                if (dueTime) {
-                  setMinutes(v);
-                  commit({ minutes: v });
-                } else {
-                  setDays(v);
-                  commit({ days: v });
+                if (value === CUSTOM) {
+                  setCustomOpen(true);
+                  if (offset == null) setOffset(dueTime ? 60 : 1);
+                  return;
                 }
+                setCustomOpen(false);
+                setOffset(value === '' ? null : value);
               }}
               className={`${field} flex-1 min-w-0 cursor-pointer`}
               options={[
                 { value: '', label: 'No reminder' },
-                ...(dueTime ? TIMED_PRESETS : DATED_PRESETS).map((p) => ({
+                ...presets.map((p) => ({
                   value: (dueTime ? p.minutes : p.days) ?? ('' as const),
                   label: p.label,
                 })),
+                { value: CUSTOM, label: 'Custom…' },
               ]}
             />
             {!dueTime && days != null && (
@@ -2343,6 +2424,15 @@ function SchedulePicker({
               />
             )}
           </div>
+          {showCustom && offset != null && (
+            <CustomOffset
+              // Remount when the deadline changes shape, so the units re-derive.
+              key={dueTime ? 'timed' : 'dated'}
+              offset={offset}
+              units={dueTime ? TIMED_UNITS : DATED_UNITS}
+              onChange={setOffset}
+            />
+          )}
           {preview && <p className="text-[10px] text-muted-foreground">Reminds {preview}</p>}
         </div>
       )}
