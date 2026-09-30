@@ -188,6 +188,55 @@ with `docker volume ls` first if the stack wasn't started from a folder called
 
 ---
 
+## Discord bot
+
+A bot that reads your shorthand log out of a Discord channel so you don't have
+to copy and paste it. `/fetch` pages back through the channel until it hits a
+`---` marker, takes your lines that start with a valid time, and stages them
+as **pending** events — nothing lands in the calendar until you approve it in
+the day view, exactly like a pasted log. Once you approve, the bot posts a
+`---` of its own so the next `/fetch` starts where that one stopped.
+`/manual-fetch` runs the same scan but just prints the lines back for copying,
+headed with the date so the block pastes straight into the import form.
+
+Each link records the timezone of the browser that set it up, so several people
+in different zones can share one bot and each have their times read correctly.
+
+`bot/README.md` has the full setup: creating the Discord application, the
+intents and permissions it needs, and every environment variable. The short
+version:
+
+1. Create a Discord application, copy its bot token into `DISCORD_BOT_TOKEN`
+   in `.env`, and turn on the **Message Content Intent**.
+2. Put a shared secret in `DISCORD_BOT_SECRET` in the same `.env`. The app
+   and the bot both read it; with it unset the app's bot endpoints stay off.
+3. Uncomment the `discord-bot` service in `docker-compose.yml` and run
+   `docker compose up -d discord-bot`.
+4. In Discord, run `/link`, then paste the code it gives you into the
+   **Discord Bot** section of the calendar's Settings page.
+
+One bot can serve several servers and several people: commands are registered
+globally, and every log is routed by the Discord user who ran `/fetch`.
+
+### Database
+
+The bot adds three tables (`discord_links`, `discord_link_codes`,
+`discord_stages`) and one column (`discord_links.time_zone`), in migrations
+0004 through 0006. Whether a database picks them
+up by itself depends on whether it has Drizzle's migration history, which
+differs per database — check the one in front of you rather than assuming:
+
+```bash
+sqlite3 <path-to-calendar.db> "select count(*) from __drizzle_migrations;"
+```
+
+A number means the app applies new migrations on startup and there is nothing
+to do. `no such table` means it was built by `drizzle-kit push` — the
+calendar_v2 import above produces one of those — so run `npx drizzle-kit push`
+against it once instead.
+
+---
+
 ## Features
 
 | Feature | Description |
@@ -198,6 +247,7 @@ with `docker volume ls` first if the stack wasn't started from a folder called
 | Event search | Search for events from the view header and jump straight to them |
 | Tags | Color-coded labels; drag to reorder; archive old ones |
 | Discord log import | Paste a Discord message export to bulk-create events |
+| Discord bot | `/fetch` in Discord pulls your log lines out of a channel and stages them for approval (see below) |
 | ICS import/export | Standard calendar format for sharing with other apps (Google Calendar, Apple Calendar, etc.) |
 | Mini month calendar | Jump to any day from a small month view, available on the main calendar and Settings page |
 

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0011745c-44df-472f-a53c-d8662d60c42d",
-  "prevId": "09b711da-97d4-41d3-925f-a3d579f6f0ce",
+  "id": "f0cff6bd-e4d1-4af3-98fe-e22c945b605d",
+  "prevId": "76d3173f-8339-4403-a97d-2a1a8825f4b7",
   "tables": {
     "discord_link_codes": {
       "name": "discord_link_codes",
@@ -81,6 +81,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "time_zone": {
+          "name": "time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -103,6 +110,66 @@
         "discord_links_user_id_users_id_fk": {
           "name": "discord_links_user_id_users_id_fk",
           "tableFrom": "discord_links",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "discord_stages": {
+      "name": "discord_stages",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "discord_channel_id": {
+          "name": "discord_channel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "discord_stages_user_id_users_id_fk": {
+          "name": "discord_stages_user_id_users_id_fk",
+          "tableFrom": "discord_stages",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"

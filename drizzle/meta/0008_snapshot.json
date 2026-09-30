@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0011745c-44df-472f-a53c-d8662d60c42d",
-  "prevId": "09b711da-97d4-41d3-925f-a3d579f6f0ce",
+  "id": "8010181f-fe30-49b9-a02f-c8a392e52720",
+  "prevId": "e43d55e2-9917-45b5-a981-0b3d0c403fe7",
   "tables": {
     "discord_link_codes": {
       "name": "discord_link_codes",
@@ -81,6 +81,21 @@
           "notNull": true,
           "autoincrement": false
         },
+        "time_zone": {
+          "name": "time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "post_marker": {
+          "name": "post_marker",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -103,6 +118,66 @@
         "discord_links_user_id_users_id_fk": {
           "name": "discord_links_user_id_users_id_fk",
           "tableFrom": "discord_links",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "discord_stages": {
+      "name": "discord_stages",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "discord_channel_id": {
+          "name": "discord_channel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "discord_stages_user_id_users_id_fk": {
+          "name": "discord_stages_user_id_users_id_fk",
+          "tableFrom": "discord_stages",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
@@ -440,6 +515,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "asap_snapshot": {
+          "name": "asap_snapshot",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         }
       },
       "indexes": {},
@@ -603,6 +686,14 @@
         },
         "due_has_time": {
           "name": "due_has_time",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "due_asap": {
+          "name": "due_asap",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

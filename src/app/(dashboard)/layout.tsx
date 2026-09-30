@@ -8,6 +8,7 @@ import SidebarNav from '@/app/components/SidebarNav';
 import MobileTabBar from '@/app/components/MobileTabBar';
 import MobileProfileMenu from '@/app/components/MobileProfileMenu';
 import TimezoneSync from '@/app/components/TimezoneSync';
+import PendingSync from '@/app/components/PendingSync';
 import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
 import { dbStringToUtcMillis, dayStrOfInstant, shiftDateStr } from '@/lib/timezone';
@@ -79,6 +80,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   return (
     <div className="flex h-dvh bg-background text-foreground overflow-hidden">
       <TimezoneSync />
+      <PendingSync count={pendingCount} />
       {/* Sidebar (desktop only — MobileTabBar covers navigation on small screens) */}
       <aside className="hidden md:flex w-52 bg-card border-r border-border flex-col justify-between shrink-0">
         <div>
