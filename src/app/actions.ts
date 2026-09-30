@@ -14,12 +14,12 @@ import {
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
-import { stageLogForUser, recalculatePendingEventsDate } from '@/lib/discord-log';
+import { stageLogForUser, recalculatePendingEventsDate, discardPendingForUser } from '@/lib/discord-log';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 import { todayForViewer } from '@/lib/server-timezone';
 import { isTagScope, type TagScope } from '@/lib/tags';
 import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
-import { dropUnapprovedStages, markStagesApproved } from '@/lib/discord-markers';
+import { markStagesApproved } from '@/lib/discord-markers';
 
 // ==========================================
 // Authentication Actions
@@ -428,8 +428,7 @@ export async function approveAllPendingAction() {
 export async function discardAllPendingAction() {
   const session = await requireAuth();
 
-  await db.delete(events).where(and(eq(events.userId, session.userId), eq(events.isPending, 1)));
-  await dropUnapprovedStages(session.userId);
+  await discardPendingForUser(session.userId);
 
   revalidatePath('/calendar', 'layout');
 }
