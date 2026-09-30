@@ -933,17 +933,17 @@ export default function TasksClient({
   );
 }
 
+// Reminders aren't delivered yet, so "active" means one still ahead of us.
+function hasActiveReminder(r: TaskRow): boolean {
+  return r.remindAt != null && pacificDbStringToDate(r.remindAt).getTime() > Date.now();
+}
+
 /**
  * One board's column: its own header, composer, list and Completed section.
  * Everything that can only be true of one task at a time (which row is being
  * renamed, which has the subtask composer open) lives in the parent; state
  * that is genuinely per-column lives here.
  */
-// Reminders aren't delivered yet, so "active" means one still ahead of us.
-function hasActiveReminder(r: TaskRow): boolean {
-  return r.remindAt != null && pacificDbStringToDate(r.remindAt).getTime() > Date.now();
-}
-
 function BoardColumn({
   board,
   boards,
