@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import {
+  Bell,
   Check,
   ChevronDown,
   ChevronRight,
@@ -44,6 +45,7 @@ import {
   SORT_LABELS,
   MAX_TASK_DEPTH,
   MAX_VISIBLE_BOARDS,
+  REMINDERS_ONLY_COOKIE,
   VISIBLE_BOARDS_COOKIE,
   VIRTUAL_LISTS,
   VIRTUAL_LIST_NAMES,
@@ -139,6 +141,7 @@ interface TasksClientProps {
   rows: TaskRow[];
   availableTags: TaskTag[];
   tagsByTask: Record<number, number[]>;
+  remindersOnly: boolean;
 }
 
 // The Undo toast carries the action that reverses whatever just happened, so
@@ -170,6 +173,8 @@ interface ColumnHandlers {
   draggingId: number | null;
   run: (fn: () => Promise<unknown>) => void;
   setVirtualSort: (list: VirtualList, mode: SortMode) => void;
+  remindersOnly: boolean;
+  setRemindersOnly: (on: boolean) => void;
   tagsFor: (taskId: number) => TaskTag[];
   editingId: number | null;
   setEditingId: (id: number | null) => void;
@@ -184,6 +189,7 @@ export default function TasksClient({
   rows,
   availableTags,
   tagsByTask,
+  remindersOnly: initialRemindersOnly,
 }: TasksClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -274,6 +280,13 @@ export default function TasksClient({
   const setVirtualSort = (list: VirtualList, mode: SortMode) => {
     setVirtualSortState(mode);
     document.cookie = `${VIRTUAL_SORT_COOKIE_PREFIX}${list}=${mode}; path=/; max-age=31536000; SameSite=Lax`;
+  };
+
+  // Applies to every list, so it lives here and in a cookie rather than per column.
+  const [remindersOnly, setRemindersOnlyState] = useState(initialRemindersOnly);
+  const setRemindersOnly = (on: boolean) => {
+    setRemindersOnlyState(on);
+    document.cookie = `${REMINDERS_ONLY_COOKIE}=${on ? 1 : 0}; path=/; max-age=31536000; SameSite=Lax`;
   };
 
   useEffect(() => {
@@ -571,6 +584,8 @@ export default function TasksClient({
     draggingId: drag.activeId,
     run,
     setVirtualSort,
+    remindersOnly,
+    setRemindersOnly,
     editingId,
     setEditingId,
     subtaskParent,
@@ -680,6 +695,24 @@ export default function TasksClient({
           >
             <Plus className="h-4 w-4" />
             New list
+          </button>
+          <button
+            onClick={() => setRemindersOnly(!remindersOnly)}
+            role="switch"
+            aria-checked={remindersOnly}
+            title="Show only open tasks whose reminder has gone off, or that are due ASAP, in every list"
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-secondary/50 transition-colors cursor-pointer ${
+              remindersOnly ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <span
+              className={`h-4 w-4 shrink-0 rounded border flex items-center justify-center ${
+                remindersOnly ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'
+              }`}
+            >
+              {remindersOnly && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+            </span>
+            <span className="text-left leading-tight">Active reminders only</span>
           </button>
         </div>
       </aside>
@@ -935,6 +968,20 @@ export default function TasksClient({
   );
 }
 
+// Still open and already reminded.
+function reminderFired(r: TaskRow): boolean {
+  return (
+    !r.completedAt &&
+    r.remindAt != null &&
+    pacificDbStringToDate(r.remindAt).getTime() <= Date.now()
+  );
+}
+
+// ASAP tasks can't carry a reminder but always count.
+function hasActiveReminder(r: TaskRow): boolean {
+  return reminderFired(r) || (!r.completedAt && r.dueAsap === 1);
+}
+
 /**
  * One board's column: its own header, composer, list and Completed section.
  * Everything that can only be true of one task at a time (which row is being
@@ -1026,8 +1073,10 @@ function BoardColumn({
 
   // The badge counts filters *you* applied; the Starred list's own filter is
   // the list, not something to clear.
+  const { remindersOnly, setRemindersOnly } = handlers;
   const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0);
-  const filtering = filterTagIds.length > 0 || starredFilter;
+  const filtering = filterTagIds.length > 0 || starredFilter || remindersOnly;
+  const filteredOut = activeFilters > 0 || remindersOnly;
 
   /**
    * Filtering keeps a matching task's family with it, in both directions:
@@ -1039,12 +1088,17 @@ function BoardColumn({
    *
    * A task is therefore shown when it matches, when anything in its subtree
    * matches, or when any of its ancestors match.
+   *
+   * Active reminders only is the exception on the ancestor side: a parent
+   * without one of its own stays out, and its subtask shows flush with the
+   * parent's name above it.
    */
   const visibleRows = useMemo(() => {
     if (!filtering) return rows;
 
     const matches = (r: TaskRow) => {
       if (starredFilter && !r.isStarred) return false;
+      if (remindersOnly && !hasActiveReminder(r)) return false;
       if (filterTagIds.length === 0) return true;
       // OR across selected tags: a task matches if it carries any of them.
       return handlers.tagsFor(r.id).some((t) => filterTagIds.includes(t.id));
@@ -1058,6 +1112,7 @@ function BoardColumn({
       keep.add(row.id);
       for (let p = row.parentId; p != null; p = byId.get(p)?.parentId ?? null) {
         if (keep.has(p) || !byId.has(p)) break;
+        if (remindersOnly && !hasActiveReminder(byId.get(p)!)) break;
         keep.add(p);
       }
     }
@@ -1078,7 +1133,7 @@ function BoardColumn({
 
     return rows.filter((r) => keep.has(r.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, filterTagIds, starredFilter, filtering]);
+  }, [rows, filterTagIds, starredFilter, remindersOnly, filtering]);
 
   const { openTree, completedTree } = useMemo(() => {
     const open = visibleRows.filter((r) => !r.completedAt);
@@ -1295,6 +1350,11 @@ function BoardColumn({
                   asap={node.dueAsap === 1}
                   done={done}
                 />
+                {reminderFired(node) && (
+                  <span title="Reminder has gone off" className="shrink-0 text-amber-400">
+                    <Bell className="h-2.5 w-2.5" />
+                  </span>
+                )}
                 {node.rrule && (
                   <span
                     title={repeatLabel(node.rrule) ?? undefined}
@@ -1443,6 +1503,16 @@ function BoardColumn({
       </button>
       )}
 
+      {/* The rail's toggle, for mobile where there is no rail. */}
+      <button
+        onClick={() => setRemindersOnly(!remindersOnly)}
+        className="md:hidden w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+      >
+        {checkbox(remindersOnly)}
+        <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+        Active reminders only
+      </button>
+
       {tagsInUse.map((t) => {
         const on = filterTagIds.includes(t.id);
         return (
@@ -1536,8 +1606,8 @@ function BoardColumn({
           )}
         </h2>
 
-        {!collapsed && hasFilterables && (
-          <div className="relative shrink-0">
+        {!collapsed && (
+          <div className={`relative shrink-0 ${hasFilterables ? '' : 'md:hidden'}`}>
             <button
               onClick={() => setFilterOpen((o) => !o)}
               aria-expanded={filterOpen}
@@ -1550,6 +1620,8 @@ function BoardColumn({
             >
               <TagIcon className="h-3 w-3" />
               {activeFilters > 0 ? activeFilters : 'Filter'}
+              {/* Mobile has no rail to show the toggle is on. */}
+              {remindersOnly && <Bell className="h-3 w-3 md:hidden" />}
             </button>
             {filterOpen && (
               <>
@@ -1601,13 +1673,11 @@ function BoardColumn({
                   <>
                     {sectionLabel('Sort')}
                     {sortOptions}
-                    {hasFilterables && (
-                      <>
-                        <div className="my-1 border-t border-border" />
-                        {sectionLabel('Filter')}
-                        {filterOptions}
-                      </>
-                    )}
+                    <div className={hasFilterables ? '' : 'md:hidden'}>
+                      <div className="my-1 border-t border-border" />
+                      {sectionLabel('Filter')}
+                      {filterOptions}
+                    </div>
                     <div className="my-1 border-t border-border" />
                   </>
                 )}
@@ -1830,18 +1900,18 @@ function BoardColumn({
           <div className="py-12 text-center px-3">
             <ListChecks className="h-7 w-7 mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-xs text-muted-foreground">
-              {activeFilters > 0
+              {filteredOut
                 ? 'No tasks match the filter.'
                 : starredList
                   ? 'Nothing starred yet. Star a task and it shows up here'
                   : 'Nothing here yet. Add a task above'}
-              {activeFilters === 0 && isPrimary && (
+              {!filteredOut && isPrimary && (
                 <>
                   , or press{' '}
                   <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary">n</kbd>
                 </>
               )}
-              {activeFilters === 0 && '.'}
+              {!filteredOut && '.'}
             </p>
           </div>
         )}

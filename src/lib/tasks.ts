@@ -26,6 +26,9 @@ export const MAX_VISIBLE_BOARDS = 3;
  */
 export const VISIBLE_BOARDS_COOKIE = 'taskBoards';
 
+/** The rail's "Reminders only" toggle, read on the server so it holds from first paint. */
+export const REMINDERS_ONLY_COOKIE = 'taskRemindersOnly';
+
 export type SortMode = 'manual' | 'alpha' | 'created' | 'remind' | 'deadline';
 
 export const ACTIVE_SORT_MODES: SortMode[] = [
