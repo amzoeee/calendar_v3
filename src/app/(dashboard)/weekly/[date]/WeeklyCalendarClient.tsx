@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TagSelect from '@/app/components/TagSelect';
+import { selectStateOf } from '@/app/components/Select';
 import { startOfWeek, type WeekStart } from '@/lib/week';
 import {
   ChevronLeft,
@@ -20,6 +21,7 @@ import {
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
+import { usePinchZoom } from '@/lib/usePinchZoom';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import EventSearch from '@/app/components/EventSearch';
 import {
@@ -38,6 +40,7 @@ import {
   formatEventTimeRange,
 } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
+import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 
 interface Tag {
   id: number;
@@ -79,6 +82,7 @@ interface WeeklyCalendarClientProps {
 }
 
 export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags }: WeeklyCalendarClientProps) {
+  const { confirm } = useConfirm();
 
   // --- Zoom & Scroll ---
   const [zoomLevel, setZoomLevel] = useState<number>(60);
@@ -202,6 +206,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   // Click outside overlay listener to close the popover
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (isInsideModal(event.target)) return;
       if (
         activeOverlayId !== null &&
         overlayRef.current &&
@@ -278,6 +283,9 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     localStorage.setItem('calendarZoomLevel', String(zoomLevel));
   }, [zoomLevel]);
 
+  // --- Pinch-to-zoom (desktop timeline) ---
+  usePinchZoom(timelineContainerRef, zoomLevel, setZoomLevel);
+
   // Same first-run skip as above, so the defaults can't overwrite what the
   // load effect is about to restore.
   const mobilePrefsHydratedRef = useRef(false);
@@ -296,10 +304,14 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   // Keyboard zoom (Cmd/Ctrl + '=', '-', '0'), arrow key navigation, and edit overlay shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isInsideModal(e.target)) return;
+      // An open dropdown owns the keyboard; a closed one is a form field.
+      const select = selectStateOf(e.target);
+      if (select === 'open') return;
       const isInput =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement;
+        select !== null;
 
       // Escape closes the overlay regardless of focus
       if (e.key === 'Escape' && activeOverlayId !== null) {
@@ -621,7 +633,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   };
 
   const handleDeleteInstance = async (eventId: number) => {
-    if (confirm('Delete this event?')) {
+    if (await confirm({ title: 'Delete this event?', confirmLabel: 'Delete', destructive: true })) {
       saveScroll();
       await deleteEventAction(eventId);
       setActiveOverlayId(null);
@@ -1254,7 +1266,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               tags={tags}
               value={editTag}
               onChange={setEditTag}
-              className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              className="w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
             />
           </div>
 
@@ -1422,7 +1434,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                 tags={tags}
                 value={editTag}
                 onChange={setEditTag}
-                className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                className="w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               />
             </div>
 
@@ -1607,7 +1619,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase">Tag</label>
-                <TagSelect tags={tags} value={addTag} onChange={setAddTag} className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground" />
+                <TagSelect tags={tags} value={addTag} onChange={setAddTag} className="mt-1 w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground" />
               </div>
 
               <div>

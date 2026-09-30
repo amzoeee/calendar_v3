@@ -26,6 +26,9 @@ export const MAX_VISIBLE_BOARDS = 3;
  */
 export const VISIBLE_BOARDS_COOKIE = 'taskBoards';
 
+/** The rail's "Reminders only" toggle, read on the server so it holds from first paint. */
+export const REMINDERS_ONLY_COOKIE = 'taskRemindersOnly';
+
 export type SortMode = 'manual' | 'alpha' | 'created' | 'remind' | 'deadline';
 
 export const ACTIVE_SORT_MODES: SortMode[] = [
@@ -54,6 +57,8 @@ export interface NewTaskDetails {
   dueDate?: string | null;
   /** "HH:MM", or absent for a deadline that names only a day. */
   dueTime?: string | null;
+  /** Due as soon as possible; ignored when a date is given. */
+  asap?: boolean;
   tagIds?: number[];
 }
 
@@ -105,6 +110,7 @@ export interface TaskRow {
   description: string | null;
   dueDatetime: string | null;
   dueHasTime: number;
+  dueAsap: number;
   remindAt: string | null;
   remindOffsetMinutes: number | null;
   remindOffsetDays: number | null;
@@ -154,6 +160,9 @@ function compare(a: TaskNode, b: TaskNode, mode: SortMode): number {
       // Newest first, matching where the composer puts new tasks.
       return (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || b.id - a.id;
     case 'deadline':
+      // ASAP outranks any date, so it sits on top.
+      if (a.dueAsap !== b.dueAsap) return b.dueAsap - a.dueAsap;
+    // falls through
     case 'remind': {
       // Undated tasks sink to the bottom rather than sorting as "earliest".
       const key = mode === 'deadline' ? 'dueDatetime' : 'remindAt';
@@ -206,6 +215,7 @@ function groupKey(node: TaskNode, mode: SortMode): string | null {
   switch (mode) {
     // Same day, whatever the time: due 9am and due 5pm on Friday is one job.
     case 'deadline':
+      if (node.dueAsap) return 'asap';
       return node.dueDatetime?.slice(0, 10) ?? 'undated';
     case 'remind':
       return node.remindAt?.slice(0, 10) ?? 'unset';

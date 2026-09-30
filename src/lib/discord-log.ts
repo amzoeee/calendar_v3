@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { events, tags } from '../db/schema';
 import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
+import { dropUnapprovedStages } from './discord-markers';
 import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, pacificDbStringToDate, SERVER_TIMEZONE } from './timezone';
 
 export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
@@ -40,6 +41,9 @@ export function parseShorthandTime(
   timeStr: string,
   ampm?: string
 ): { hour: number; minute: number; exact24h: number | null } | null {
+  // 10:30 and 21:00 read the same as 1030 and 2100.
+  timeStr = timeStr.replace(':', '');
+
   let hour = 0;
   let minute = 0;
 
@@ -373,7 +377,7 @@ export async function parseLogText(
     const trimmed = line.trim();
     if (!trimmed || parseDiscordDate(trimmed, browserTimeZone)) continue;
 
-    const match = trimmed.match(/^(\d{1,4})\s*(am|pm)?\s+(.+)$/i);
+    const match = trimmed.match(/^(\d{1,2}:\d{2}|\d{1,4})\s*(am|pm)?\s+(.+)$/i);
     if (match) {
       const timeStr = match[1];
       const ampm = match[2];
@@ -443,6 +447,8 @@ export async function parseLogText(
 export interface StageLogResult {
   success?: true;
   error?: string;
+  // Lets the bot tell "already staged" apart from a parse failure.
+  code?: 'pending_exists';
   count?: number;
   dateUsed?: string;
   warnings?: string[];
@@ -469,7 +475,10 @@ export async function stageLogForUser(
       .where(and(eq(events.userId, userId), eq(events.isPending, 1)));
 
     if (hasPendingResult[0]?.count > 0) {
-      return { error: 'You already have pending events. Please approve or clear them first.' };
+      return {
+        error: 'You already have pending events. Please approve or clear them first.',
+        code: 'pending_exists',
+      };
     }
 
     const { events: parsedEvents, dateUsed, warnings } = await parseLogText(
@@ -497,4 +506,14 @@ export async function stageLogForUser(
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Log staging failed' };
   }
+}
+
+/** Deletes a user's pending events and their unposted markers. Returns how many events went. */
+export async function discardPendingForUser(userId: number): Promise<number> {
+  const deleted = await db
+    .delete(events)
+    .where(and(eq(events.userId, userId), eq(events.isPending, 1)))
+    .returning({ id: events.id });
+  await dropUnapprovedStages(userId);
+  return deleted.length;
 }
