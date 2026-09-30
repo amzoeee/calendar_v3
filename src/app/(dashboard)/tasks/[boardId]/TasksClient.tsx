@@ -975,6 +975,7 @@ function BoardColumn({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [draftDate, setDraftDate] = useState('');
   const [draftTime, setDraftTime] = useState('');
+  const [draftAsap, setDraftAsap] = useState(false);
   const [draftTagIds, setDraftTagIds] = useState<number[]>([]);
   const [subtaskValue, setSubtaskValue] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
@@ -1280,7 +1281,7 @@ function BoardColumn({
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
-            {(board.virtual || node.dueDatetime || node.rrule || rowTags.length > 0) && (
+            {(board.virtual || node.dueDatetime || node.dueAsap === 1 || node.rrule || rowTags.length > 0) && (
               /* gap-x/gap-y separately: a single `gap` on a wrapping flex
                  applies to both axes, so the deadline wrapping above the tags
                  opened a full row-gap between them. The top margin lives here
@@ -1292,7 +1293,12 @@ function BoardColumn({
                     {boardNames.get(node.boardId)}
                   </span>
                 )}
-                <DueChip due={node.dueDatetime} hasTime={node.dueHasTime === 1} done={done} />
+                <DueChip
+                  due={node.dueDatetime}
+                  hasTime={node.dueHasTime === 1}
+                  asap={node.dueAsap === 1}
+                  done={done}
+                />
                 {node.rrule && (
                   <span
                     title={repeatLabel(node.rrule) ?? undefined}
@@ -1384,6 +1390,7 @@ function BoardColumn({
   const composerDetails: NewTaskDetails = {
     dueDate: draftDate || null,
     dueTime: draftTime || null,
+    asap: draftAsap,
     tagIds: draftTagIds,
   };
 
@@ -1392,6 +1399,7 @@ function BoardColumn({
   const clearDetails = () => {
     setDraftDate('');
     setDraftTime('');
+    setDraftAsap(false);
     setDraftTagIds([]);
   };
 
@@ -1794,21 +1802,46 @@ function BoardColumn({
               offset is a decision about a deadline you already have. */}
           {detailsOpen && (
             <div className="px-2 pb-2 space-y-2">
-              <div className="flex gap-1.5">
-                <DateInput
-                  value={draftDate}
-                  onChange={(e) => setDraftDate(e.target.value)}
-                  aria-label="Deadline for the new task"
-                  className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
-                />
-                <input
-                  type="time"
-                  value={draftTime}
-                  disabled={!draftDate}
-                  onChange={(e) => setDraftTime(e.target.value)}
-                  aria-label="Time of day for the new task"
-                  className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
-                />
+              <div className="flex gap-1.5 items-center">
+                {draftAsap ? (
+                  <p className="flex-1 min-w-0 text-[10px] text-muted-foreground">
+                    Due as soon as possible.
+                  </p>
+                ) : (
+                  <>
+                    <DateInput
+                      value={draftDate}
+                      onChange={(e) => setDraftDate(e.target.value)}
+                      aria-label="Deadline for the new task"
+                      className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
+                    />
+                    <input
+                      type="time"
+                      value={draftTime}
+                      disabled={!draftDate}
+                      onChange={(e) => setDraftTime(e.target.value)}
+                      aria-label="Time of day for the new task"
+                      className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftAsap((a) => !a);
+                    setDraftDate('');
+                    setDraftTime('');
+                  }}
+                  aria-pressed={draftAsap}
+                  title="Due as soon as possible"
+                  className={`shrink-0 text-[10px] font-semibold px-1.5 py-1 rounded border transition-colors cursor-pointer ${
+                    draftAsap
+                      ? 'bg-amber-400/15 text-amber-400 border-amber-400/40'
+                      : 'text-muted-foreground border-border hover:text-foreground'
+                  }`}
+                >
+                  ASAP
+                </button>
               </div>
               <TagPicker all={availableTags} selected={draftTagIds} onChange={setDraftTagIds} />
             </div>
@@ -2029,12 +2062,26 @@ function EditTaskDialog({
 function DueChip({
   due,
   hasTime,
+  asap,
   done,
 }: {
   due: string | null;
   hasTime: boolean;
+  asap: boolean;
   done: boolean;
 }) {
+  if (asap) {
+    return (
+      <span
+        className={`flex items-center gap-1 text-[10px] leading-none shrink-0 ${
+          done ? 'text-muted-foreground' : 'text-amber-400'
+        }`}
+      >
+        <CalendarClock className="h-2.5 w-2.5" />
+        ASAP
+      </span>
+    );
+  }
   if (!due) return null;
 
   const now = new Date();
@@ -2081,8 +2128,10 @@ function SchedulePicker({
     remindOffsetMinutes: number | null;
     remindOffsetDays: number | null;
     remindTimeOfDay: string | null;
+    asap?: boolean;
   }) => void;
 }) {
+  const [asap, setAsap] = useState(task.dueAsap === 1);
   const initialDue = task.dueDatetime ? pacificDbStringToDate(task.dueDatetime) : null;
   const [dueDate, setDueDate] = useState(initialDue ? formatDateInputValue(initialDue) : '');
   const [dueTime, setDueTime] = useState(
@@ -2139,34 +2188,69 @@ function SchedulePicker({
     });
   }
 
+  const toggleAsap = () => {
+    const next = !asap;
+    setAsap(next);
+    setDueDate('');
+    setDueTime('');
+    onSave({
+      dueDate: null,
+      dueTime: null,
+      remindOffsetMinutes: null,
+      remindOffsetDays: null,
+      remindTimeOfDay: null,
+      asap: next,
+    });
+  };
+
   const field = FIELD_CLASS;
 
   return (
     <div className="space-y-2">
       <div className="space-y-1">
-        <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Deadline
-        </span>
-        <div className="flex gap-1.5">
-          <DateInput
-            value={dueDate}
-            onChange={(e) => {
-              setDueDate(e.target.value);
-              commit({ dueDate: e.target.value });
-            }}
-            className={`${field} flex-1 min-w-0 cursor-pointer`}
-          />
-          <input
-            type="time"
-            value={dueTime}
-            disabled={!dueDate}
-            onChange={(e) => {
-              setDueTime(e.target.value);
-              commit({ dueTime: e.target.value });
-            }}
-            className={`${field} w-[6.25rem] cursor-pointer disabled:opacity-40`}
-          />
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Deadline
+          </span>
+          <button
+            type="button"
+            onClick={toggleAsap}
+            aria-pressed={asap}
+            disabled={Boolean(task.rrule)}
+            title={task.rrule ? 'A repeating task needs a date' : 'Due as soon as possible'}
+            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+              asap
+                ? 'bg-amber-400/15 text-amber-400 border-amber-400/40'
+                : 'text-muted-foreground border-border hover:text-foreground'
+            }`}
+          >
+            ASAP
+          </button>
         </div>
+        {asap ? (
+          <p className="text-[10px] text-muted-foreground">Due as soon as possible.</p>
+        ) : (
+          <div className="flex gap-1.5">
+            <DateInput
+              value={dueDate}
+              onChange={(e) => {
+                setDueDate(e.target.value);
+                commit({ dueDate: e.target.value });
+              }}
+              className={`${field} flex-1 min-w-0 cursor-pointer`}
+            />
+            <input
+              type="time"
+              value={dueTime}
+              disabled={!dueDate}
+              onChange={(e) => {
+                setDueTime(e.target.value);
+                commit({ dueTime: e.target.value });
+              }}
+              className={`${field} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+            />
+          </div>
+        )}
         {dueDate && !dueTime && (
           <p className="text-[10px] text-muted-foreground">Due any time that day.</p>
         )}

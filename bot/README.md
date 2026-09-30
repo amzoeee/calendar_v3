@@ -13,6 +13,7 @@ the web UI. Nothing it does writes to your calendar directly.
 | `/fetch [date]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
 | `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
 | `/manual-fetch [date]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
+| `/clear` | Throws away every event you have staged but not approved yet, same as discarding in the web UI. The reply to a `/fetch` also has a button that does this. |
 
 All replies are ephemeral — only you see them.
 
@@ -32,11 +33,14 @@ its own in the channel it took the lines from, so the next `/fetch` picks up
 exactly where this one stopped. `/marker on:false` turns that off for your
 account alone — everyone else sharing the bot keeps their own setting, and
 `/whoami` shows yours. With it off you need to post markers yourself, or
-`/fetch` will keep re-reading the same lines. Discarding the batch posts nothing: a marker
+`/fetch` will keep re-reading the same lines. Discarding the batch (in the web UI or with `/clear`) posts nothing: a marker
 drawn under a log you threw away would hide those lines from the next `/fetch`
 for good. Approval happens in a browser, so the bot asks the app every
 `MARKER_POLL_SECONDS` whether anything it staged has been approved since. Set
 `FETCH_POST_MARKER=false` if you would rather post markers yourself.
+
+`/fetch` won't stage anything while an earlier batch is still waiting;
+approve it, or `/clear` it and fetch again.
 
 Dates come from the log itself if it has one, otherwise from the day you posted
 the oldest line it took. `/fetch date:2026-09-19` overrides both.

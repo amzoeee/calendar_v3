@@ -29,6 +29,9 @@ const getLinkStatus = (discordUserId) =>
 
 const stageLog = (payload) => call('/api/discord/stage', { method: 'POST', body: payload });
 
+const clearStaged = (discordUserId) =>
+  call('/api/discord/clear', { method: 'POST', body: { discordUserId } });
+
 const setMarkerPreference = (discordUserId, enabled) =>
   call('/api/discord/marker-pref', { method: 'POST', body: { discordUserId, enabled } });
 
@@ -38,6 +41,7 @@ const acknowledgeMarkers = (ids) => call('/api/discord/markers', { method: 'POST
 
 module.exports = {
   acknowledgeMarkers,
+  clearStaged,
   createLinkCode,
   getLinkStatus,
   listApprovedMarkers,

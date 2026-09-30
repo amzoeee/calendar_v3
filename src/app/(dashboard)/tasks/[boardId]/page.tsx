@@ -106,6 +106,7 @@ export default async function TasksBoardPage({ params }: PageProps) {
       description: tasksTable.description,
       dueDatetime: tasksTable.dueDatetime,
       dueHasTime: tasksTable.dueHasTime,
+      dueAsap: tasksTable.dueAsap,
       remindAt: tasksTable.remindAt,
       remindOffsetMinutes: tasksTable.remindOffsetMinutes,
       remindOffsetDays: tasksTable.remindOffsetDays,
