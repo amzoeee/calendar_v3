@@ -708,7 +708,7 @@ export default function TasksClient({
             >
               {remindersOnly && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
             </span>
-            <span className="truncate">Active reminders only</span>
+            <span className="text-left leading-tight">Active reminders only</span>
           </button>
         </div>
       </aside>
