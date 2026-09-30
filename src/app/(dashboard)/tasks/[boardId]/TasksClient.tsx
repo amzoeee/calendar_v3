@@ -102,6 +102,7 @@ import {
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
 import DateInput from '@/app/components/DateInput';
+import Select from '@/app/components/Select';
 import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 
 // Every small control in the editor and the composer shares one look. Kept in
@@ -796,21 +797,15 @@ export default function TasksClient({
 
           <label className="block space-y-1">
             <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">List</span>
-            <select
+            <Select
               value={selected.boardId}
-              onChange={(e) => {
-                const target = Number(e.target.value);
+              onChange={(target) => {
                 setSelectedId(null);
                 run(() => moveTaskToBoardAction(selected.id, target));
               }}
               className="w-full rounded bg-secondary border border-border px-2.5 py-2 md:py-1 text-sm md:text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
-            >
-              {boards.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              options={boards.map((b) => ({ value: b.id, label: b.name }))}
+            />
           </label>
 
           {selected.depth < MAX_TASK_DEPTH && (
@@ -1517,29 +1512,21 @@ function BoardColumn({
       <div className="shrink-0 border-b border-border px-3 md:px-4 py-3 flex items-center gap-2">
         {/* Mobile shows one list at a time, chosen here. */}
         <div className="md:hidden flex-1 min-w-0">
-          <select
+          <Select<string | number>
             value={board.virtual ?? board.id}
-            onChange={(e) => {
-              const value = e.target.value;
+            onChange={(value) => {
               if (value === 'new') onNewBoard();
-              else if (isVirtualList(value)) onPickList(value);
+              else if (typeof value === 'string' && isVirtualList(value)) onPickList(value);
               else onPickBoard(Number(value));
             }}
             aria-label="Choose a list"
             className="w-full bg-transparent text-lg font-bold text-foreground focus:outline-none cursor-pointer"
-          >
-            {VIRTUAL_LISTS.map((kind) => (
-              <option key={kind} value={kind}>
-                {VIRTUAL_LIST_NAMES[kind]}
-              </option>
-            ))}
-            {boards.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-            <option value="new">+ New list…</option>
-          </select>
+            options={[
+              ...VIRTUAL_LISTS.map((kind) => ({ value: kind, label: VIRTUAL_LIST_NAMES[kind] })),
+              ...boards.map((b) => ({ value: b.id, label: b.name })),
+              { value: 'new', label: '+ New list…' },
+            ]}
+          />
         </div>
 
         <h2 className="hidden md:block flex-1 min-w-0 truncate text-base font-bold text-foreground">
@@ -1576,18 +1563,13 @@ function BoardColumn({
         )}
 
         {!collapsed && (
-          <select
+          <Select
             value={board.sortMode}
-            onChange={(e) => changeSort(e.target.value as SortMode)}
+            onChange={changeSort}
             aria-label={`Sort ${board.name}`}
             className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
-          >
-            {sortModes.map((mode) => (
-              <option key={mode} value={mode}>
-                {SORT_LABELS[mode]}
-              </option>
-            ))}
-          </select>
+            options={sortModes.map((mode) => ({ value: mode, label: SORT_LABELS[mode] }))}
+          />
         )}
 
         {/* Everything in this menu acts on a board — renaming it, pasting into
@@ -2258,10 +2240,10 @@ function SchedulePicker({
             Reminder
           </span>
           <div className="flex gap-1.5">
-            <select
+            <Select<number | ''>
               value={dueTime ? (minutes ?? '') : (days ?? '')}
-              onChange={(e) => {
-                const v = e.target.value === '' ? null : Number(e.target.value);
+              onChange={(value) => {
+                const v = value === '' ? null : value;
                 if (dueTime) {
                   setMinutes(v);
                   commit({ minutes: v });
@@ -2271,14 +2253,14 @@ function SchedulePicker({
                 }
               }}
               className={`${field} flex-1 min-w-0 cursor-pointer`}
-            >
-              <option value="">No reminder</option>
-              {(dueTime ? TIMED_PRESETS : DATED_PRESETS).map((p) => (
-                <option key={p.label} value={dueTime ? p.minutes : p.days}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'No reminder' },
+                ...(dueTime ? TIMED_PRESETS : DATED_PRESETS).map((p) => ({
+                  value: (dueTime ? p.minutes : p.days) ?? ('' as const),
+                  label: p.label,
+                })),
+              ]}
+            />
             {!dueTime && days != null && (
               <input
                 type="time"
@@ -2342,22 +2324,17 @@ function RepeatPicker({
       <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Repeat
       </span>
-      <select
+      <Select
         value={rrule ?? ''}
         disabled={!hasDeadline}
-        onChange={(e) => {
-          const v = e.target.value || null;
+        onChange={(value) => {
+          const v = value || null;
           setRrule(v);
           commit({ rrule: v });
         }}
         className={`${field} w-full cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
-      >
-        {REPEAT_OPTIONS.map((o) => (
-          <option key={o.label} value={o.rrule ?? ''}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        options={REPEAT_OPTIONS.map((o) => ({ value: o.rrule ?? '', label: o.label }))}
+      />
 
       {!hasDeadline && (
         <p className="text-[10px] text-muted-foreground">Set a deadline first.</p>
@@ -2606,15 +2583,16 @@ function PasteListDialog({
             Deadlines
           </span>
           <div className="flex flex-wrap items-center gap-1.5">
-            <select
+            <Select
               value={mode}
-              onChange={(e) => setMode(e.target.value as typeof mode)}
+              onChange={setMode}
               className={`${field} cursor-pointer`}
-            >
-              <option value="none">No deadlines</option>
-              <option value="same">Same date for all</option>
-              <option value="series">Spread out, starting…</option>
-            </select>
+              options={[
+                { value: 'none', label: 'No deadlines' },
+                { value: 'same', label: 'Same date for all' },
+                { value: 'series', label: 'Spread out, starting…' },
+              ]}
+            />
             {mode !== 'none' && (
               <DateInput
                 value={startDate}

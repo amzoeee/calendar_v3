@@ -30,6 +30,7 @@ import {
   unlinkDiscordAction,
 } from '@/app/actions';
 import TagSelect from '@/app/components/TagSelect';
+import Select from '@/app/components/Select';
 import {
   TAG_SCOPES,
   TAG_SCOPE_BADGES,
@@ -507,18 +508,13 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                 <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="new-tag-scope">
                   Use for
                 </label>
-                <select
+                <Select
                   id="new-tag-scope"
                   value={newTagScope}
-                  onChange={(e) => setNewTagScope(e.target.value as TagScope)}
-                  className="mt-1 block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-                >
-                  {TAG_SCOPES.map((scope) => (
-                    <option key={scope} value={scope}>
-                      {TAG_SCOPE_LABELS[scope]}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setNewTagScope}
+                  className="mt-1 w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  options={TAG_SCOPES.map((scope) => ({ value: scope, label: TAG_SCOPE_LABELS[scope] }))}
+                />
               </div>
               <div className="shrink-0 w-24">
                 <label className="block text-xs font-semibold text-muted-foreground uppercase">Color</label>
@@ -594,7 +590,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                 value={importTag}
                 onChange={setImportTag}
                 name="import_tag"
-                className="mt-1 block w-full bg-secondary border border-border rounded px-3 py-2 text-xs text-foreground cursor-pointer"
+                className="mt-1 w-full bg-secondary border border-border rounded px-3 py-2 text-xs text-foreground cursor-pointer"
               />
             </div>
           </div>
@@ -665,18 +661,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase">Filter by Tag</label>
-            <select
+            <Select
               value={exportTagId}
-              onChange={(e) => setExportTagId(e.target.value)}
-              className="mt-1 block w-full bg-secondary border border-border rounded px-3 py-2 text-xs text-foreground cursor-pointer"
-            >
-              <option value="">All Events (ZIP)</option>
-              {tagsList.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+              onChange={setExportTagId}
+              className="mt-1 w-full bg-secondary border border-border rounded px-3 py-2 text-xs text-foreground cursor-pointer"
+              options={[
+                { value: '', label: 'All Events (ZIP)' },
+                ...tagsList.map((t) => ({ value: String(t.id), label: t.name })),
+              ]}
+            />
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase">Start Date <span className="font-normal text-muted-foreground">(optional)</span></label>
@@ -715,18 +708,13 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
           <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="week-start">
             Week starts on
           </label>
-          <select
+          <Select<WeekStart>
             id="week-start"
             value={weekStart}
-            onChange={(e) => handleWeekStartChange(Number(e.target.value) as WeekStart)}
+            onChange={handleWeekStartChange}
             className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-          >
-            {WEEK_START_OPTIONS.map((day) => (
-              <option key={day} value={day}>
-                {WEEK_START_LABELS[day]}
-              </option>
-            ))}
-          </select>
+            options={WEEK_START_OPTIONS.map((day) => ({ value: day, label: WEEK_START_LABELS[day] }))}
+          />
         </div>
       </section>
 
@@ -848,18 +836,13 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                 <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="edit-tag-scope">
                   Use for
                 </label>
-                <select
+                <Select
                   id="edit-tag-scope"
                   value={editTagScope}
-                  onChange={(e) => setEditTagScope(e.target.value as TagScope)}
-                  className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none cursor-pointer"
-                >
-                  {TAG_SCOPES.map((scope) => (
-                    <option key={scope} value={scope}>
-                      {TAG_SCOPE_LABELS[scope]}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setEditTagScope}
+                  className="mt-1 w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none cursor-pointer"
+                  options={TAG_SCOPES.map((scope) => ({ value: scope, label: TAG_SCOPE_LABELS[scope] }))}
+                />
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   Keeps the tag out of the other picker. Anything already tagged with it stays
                   tagged.

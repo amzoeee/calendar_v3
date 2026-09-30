@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import TagSelect from '@/app/components/TagSelect';
+import Select, { selectStateOf } from '@/app/components/Select';
 import { useSearchParams } from 'next/navigation';
 import {
   ChevronLeft,
@@ -252,10 +253,13 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isInsideModal(e.target)) return;
+      // An open dropdown owns the keyboard; a closed one is a form field.
+      const select = selectStateOf(e.target);
+      if (select === 'open') return;
       const isInput =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement;
+        select !== null;
 
       // Escape closes the overlay regardless of focus
       if (e.key === 'Escape' && activeOverlayId !== null) {
@@ -729,16 +733,17 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       {/* Repeat / Recurrence */}
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repeat</label>
-        <select
+        <Select
           value={formRecur}
-          onChange={(e) => setFormRecur(e.target.value)}
-          className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent cursor-pointer"
-        >
-          <option value="">Does not repeat</option>
-          <option value="DAILY">Daily</option>
-          <option value="WEEKLY">Weekly</option>
-          <option value="MONTHLY">Monthly</option>
-        </select>
+          onChange={setFormRecur}
+          className="mt-1 w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent cursor-pointer"
+          options={[
+            { value: '', label: 'Does not repeat' },
+            { value: 'DAILY', label: 'Daily' },
+            { value: 'WEEKLY', label: 'Weekly' },
+            { value: 'MONTHLY', label: 'Monthly' },
+          ]}
+        />
       </div>
 
       {/* Recurrence End Date */}
@@ -1062,7 +1067,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               tags={tags}
               value={editTag}
               onChange={setEditTag}
-              className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              className="w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
             />
           </div>
 
@@ -1256,7 +1261,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                 tags={tags}
                 value={editTag}
                 onChange={setEditTag}
-                className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                className="w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               />
             </div>
 
