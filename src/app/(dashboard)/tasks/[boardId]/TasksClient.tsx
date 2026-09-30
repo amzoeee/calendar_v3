@@ -696,7 +696,7 @@ export default function TasksClient({
             onClick={() => setRemindersOnly(!remindersOnly)}
             role="switch"
             aria-checked={remindersOnly}
-            title="Show only tasks with an upcoming reminder, or due ASAP, in every list"
+            title="Show only open tasks whose reminder has gone off, or that are due ASAP, in every list"
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-secondary/50 transition-colors cursor-pointer ${
               remindersOnly ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -965,11 +965,12 @@ export default function TasksClient({
   );
 }
 
-// Reminders aren't delivered yet, so "active" means one still ahead of us.
-// ASAP tasks can't carry a reminder but always count.
+// Active: still open and already reminded. ASAP tasks can't carry a reminder
+// but always count.
 function hasActiveReminder(r: TaskRow): boolean {
+  if (r.completedAt) return false;
   if (r.dueAsap === 1) return true;
-  return r.remindAt != null && pacificDbStringToDate(r.remindAt).getTime() > Date.now();
+  return r.remindAt != null && pacificDbStringToDate(r.remindAt).getTime() <= Date.now();
 }
 
 /**
