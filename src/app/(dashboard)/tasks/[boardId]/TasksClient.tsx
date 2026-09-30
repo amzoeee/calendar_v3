@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import {
+  Bell,
   Check,
   ChevronDown,
   ChevronRight,
@@ -938,6 +939,11 @@ export default function TasksClient({
  * renamed, which has the subtask composer open) lives in the parent; state
  * that is genuinely per-column lives here.
  */
+// Reminders aren't delivered yet, so "active" means one still ahead of us.
+function hasActiveReminder(r: TaskRow): boolean {
+  return r.remindAt != null && pacificDbStringToDate(r.remindAt).getTime() > Date.now();
+}
+
 function BoardColumn({
   board,
   boards,
@@ -978,6 +984,7 @@ function BoardColumn({
   const [pasting, setPasting] = useState(false);
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
+  const [remindOnly, setRemindOnly] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
@@ -1021,8 +1028,8 @@ function BoardColumn({
 
   // The badge counts filters *you* applied; the Starred list's own filter is
   // the list, not something to clear.
-  const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0);
-  const filtering = filterTagIds.length > 0 || starredFilter;
+  const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0) + (remindOnly ? 1 : 0);
+  const filtering = filterTagIds.length > 0 || starredFilter || remindOnly;
 
   /**
    * Filtering keeps a matching task's family with it, in both directions:
@@ -1040,6 +1047,7 @@ function BoardColumn({
 
     const matches = (r: TaskRow) => {
       if (starredFilter && !r.isStarred) return false;
+      if (remindOnly && !hasActiveReminder(r)) return false;
       if (filterTagIds.length === 0) return true;
       // OR across selected tags: a task matches if it carries any of them.
       return handlers.tagsFor(r.id).some((t) => filterTagIds.includes(t.id));
@@ -1073,7 +1081,7 @@ function BoardColumn({
 
     return rows.filter((r) => keep.has(r.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, filterTagIds, starredFilter, filtering]);
+  }, [rows, filterTagIds, starredFilter, remindOnly, filtering]);
 
   const { openTree, completedTree } = useMemo(() => {
     const open = visibleRows.filter((r) => !r.completedAt);
@@ -1394,7 +1402,9 @@ function BoardColumn({
 
   const hasFilterables =
     tagsInUse.length > 0 ||
-    (!starredList && (starredOnly || rows.some((r) => r.isStarred)));
+    (!starredList && (starredOnly || rows.some((r) => r.isStarred))) ||
+    remindOnly ||
+    rows.some(hasActiveReminder);
 
   // Sort and filter are rendered either as their own header controls or as
   // sections of the overflow menu, depending on how much room the column has.
@@ -1431,6 +1441,17 @@ function BoardColumn({
       </button>
       )}
 
+      {(remindOnly || rows.some(hasActiveReminder)) && (
+        <button
+          onClick={() => setRemindOnly((v) => !v)}
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+        >
+          {checkbox(remindOnly)}
+          <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+          Has reminder
+        </button>
+      )}
+
       {tagsInUse.map((t) => {
         const on = filterTagIds.includes(t.id);
         return (
@@ -1456,6 +1477,7 @@ function BoardColumn({
           onClick={() => {
             setFilterTagIds([]);
             setStarredOnly(false);
+            setRemindOnly(false);
           }}
           className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
         >
