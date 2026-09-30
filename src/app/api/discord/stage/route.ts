@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
   const result = await stageLogForUser(link.userId, text, dateOverride, timeZone, fallbackDate);
   if (result.error) {
-    return NextResponse.json({ error: result.error }, { status: 422 });
+    return NextResponse.json({ error: result.code || result.error }, { status: result.code ? 409 : 422 });
   }
 
   // Only once the user approves does this channel get its marker, and only

@@ -47,7 +47,10 @@ export default function MiniCalendar({ weekStart = DEFAULT_WEEK_START }: { weekS
     new Date(selected.getFullYear(), selected.getMonth(), 1)
   );
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The year the picker is browsing, independent of the grid until a month is picked.
+  const [pickerYear, setPickerYear] = useState(viewDate.getFullYear());
   const pickerRef = useRef<HTMLDivElement>(null);
+  const pickerButtonRef = useRef<HTMLButtonElement>(null);
 
   // Follow the selected date's month when navigation changes it elsewhere.
   // (Adjust-state-during-render pattern — no effect, no extra commit.)
@@ -69,6 +72,16 @@ export default function MiniCalendar({ weekStart = DEFAULT_WEEK_START }: { weekS
     return () => document.removeEventListener('mousedown', onDown);
   }, [pickerOpen]);
 
+  // Start keyboard users on the month being shown.
+  useEffect(() => {
+    if (!pickerOpen) return;
+    pickerRef.current
+      ?.querySelector<HTMLButtonElement>(`[data-month="${viewDate.getMonth()}"]`)
+      ?.focus();
+    // Only on open: moving between years shouldn't pull focus around.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickerOpen]);
+
   // Don't render on pages without a date, unless explicitly opted in.
   if (!isDateView && !DATELESS_VIEWS.includes(segments[0])) return null;
 
@@ -78,11 +91,6 @@ export default function MiniCalendar({ weekStart = DEFAULT_WEEK_START }: { weekS
     month: 'long',
     year: 'numeric',
   });
-
-  // Year range for the picker, centered generously around the shown year.
-  // Wide enough that the native dropdown scrolls and any reasonable year is
-  // reachable; the shown year sits in the middle so it opens scrolled to it.
-  const years = Array.from({ length: 121 }, (_, i) => year - 60 + i);
 
   // 6-week grid (42 cells) starting on the week's first day on/before the 1st.
   const firstWeekday = (new Date(year, month, 1).getDay() - weekStart + 7) % 7;
@@ -94,6 +102,43 @@ export default function MiniCalendar({ weekStart = DEFAULT_WEEK_START }: { weekS
   );
 
   const goMonth = (delta: number) => setViewDate(new Date(year, month + delta, 1));
+
+  const togglePicker = () => {
+    if (!pickerOpen) setPickerYear(year);
+    setPickerOpen(!pickerOpen);
+  };
+
+  const pickMonth = (m: number) => {
+    setViewDate(new Date(pickerYear, m, 1));
+    setPickerOpen(false);
+    pickerButtonRef.current?.focus();
+  };
+
+  // Arrows walk the month grid, PageUp/PageDown flip the year, Escape backs out.
+  const handlePickerKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setPickerOpen(false);
+      pickerButtonRef.current?.focus();
+      return;
+    }
+    if (e.key === 'PageUp' || e.key === 'PageDown') {
+      e.preventDefault();
+      setPickerYear((y) => y + (e.key === 'PageUp' ? -1 : 1));
+      return;
+    }
+    const moves: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -4, ArrowDown: 4 };
+    const current = (document.activeElement as HTMLElement | null)?.dataset.month;
+    if (!(e.key in moves) || current === undefined) return;
+    e.preventDefault();
+    let next = Number(current) + moves[e.key];
+    // Stepping off either end of the year carries into the next one.
+    if (next < 0 || next > 11) {
+      setPickerYear((y) => y + (next < 0 ? -1 : 1));
+      next = (next + 12) % 12;
+    }
+    pickerRef.current?.querySelector<HTMLButtonElement>(`[data-month="${next}"]`)?.focus();
+  };
   const handleDayClick = (d: Date) => router.push(`/${view}/${toDateStr(d)}`);
 
   return (
@@ -109,7 +154,8 @@ export default function MiniCalendar({ weekStart = DEFAULT_WEEK_START }: { weekS
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
-            onClick={() => setPickerOpen((o) => !o)}
+            ref={pickerButtonRef}
+            onClick={togglePicker}
             aria-label="Choose month and year"
             aria-expanded={pickerOpen}
             className="text-xs font-bold text-foreground select-none rounded px-1.5 py-0.5 hover:bg-muted transition cursor-pointer"
@@ -128,32 +174,51 @@ export default function MiniCalendar({ weekStart = DEFAULT_WEEK_START }: { weekS
           {pickerOpen && (
             <div
               ref={pickerRef}
-              className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-20 bg-card border border-border rounded-lg shadow-lg p-2 flex gap-2"
+              onKeyDown={handlePickerKey}
+              className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-20 w-48 bg-card border border-border rounded-lg shadow-lg p-2"
             >
-              <select
-                aria-label="Month"
-                value={month}
-                onChange={(e) => setViewDate(new Date(year, Number(e.target.value), 1))}
-                className="bg-secondary border border-border rounded text-xs text-foreground px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-              >
-                {MONTHS.map((m, i) => (
-                  <option key={m} value={i}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Year"
-                value={year}
-                onChange={(e) => setViewDate(new Date(Number(e.target.value), month, 1))}
-                className="bg-secondary border border-border rounded text-xs text-foreground px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-              >
-                {years.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1.5">
+                <button
+                  onClick={() => setPickerYear((y) => y - 1)}
+                  aria-label="Previous year"
+                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition cursor-pointer"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-xs font-bold text-foreground select-none">{pickerYear}</span>
+                <button
+                  onClick={() => setPickerYear((y) => y + 1)}
+                  aria-label="Next year"
+                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition cursor-pointer"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                {MONTHS.map((m, i) => {
+                  const isShown = pickerYear === year && i === month;
+                  const isThisMonth =
+                    pickerYear === new Date().getFullYear() && i === new Date().getMonth();
+                  return (
+                    <button
+                      key={m}
+                      data-month={i}
+                      onClick={() => pickMonth(i)}
+                      aria-label={`${m} ${pickerYear}`}
+                      aria-current={isShown ? 'date' : undefined}
+                      className={`py-1.5 rounded text-[11px] font-medium transition cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                        isShown
+                          ? 'bg-primary text-primary-foreground'
+                          : isThisMonth
+                            ? 'text-foreground bg-secondary hover:bg-muted'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
+                    >
+                      {m.slice(0, 3)}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

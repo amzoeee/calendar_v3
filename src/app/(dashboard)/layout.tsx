@@ -8,6 +8,7 @@ import SidebarNav from '@/app/components/SidebarNav';
 import MobileTabBar from '@/app/components/MobileTabBar';
 import MobileProfileMenu from '@/app/components/MobileProfileMenu';
 import TimezoneSync from '@/app/components/TimezoneSync';
+import { ConfirmProvider } from '@/app/components/ConfirmDialog';
 import PendingSync from '@/app/components/PendingSync';
 import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
@@ -47,7 +48,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const todayStr = await todayForViewer();
   const weekStart = await getWeekStart();
 
-  // Tasks due today or already overdue, for the badge on the Tasks tab.
+  // Tasks due today, overdue or ASAP, for the badge on the Tasks tab.
   // Deadlines are Pacific strings but "today" is the viewer's day, so the
   // query casts a wide net by one day on each side and the exact comparison
   // happens per row in the viewer's own timezone — the same shape the stats
@@ -64,9 +65,18 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         lte(tasks.dueDatetime, `${shiftDateStr(todayStr, 1)} 23:59:59`)
       )
     );
-  const dueCount = dueRows.filter(
-    (r) => dayStrOfInstant(dbStringToUtcMillis(r.dueDatetime!), viewerTimeZone) <= todayStr
-  ).length;
+  // ASAP counts as due now.
+  const [{ asapCount }] = await db
+    .select({ asapCount: sql<number>`count(*)` })
+    .from(tasks)
+    .where(
+      and(eq(tasks.userId, session.userId), isNull(tasks.completedAt), eq(tasks.dueAsap, 1))
+    );
+  const dueCount =
+    asapCount +
+    dueRows.filter(
+      (r) => dayStrOfInstant(dbStringToUtcMillis(r.dueDatetime!), viewerTimeZone) <= todayStr
+    ).length;
 
   return (
     <div className="flex h-dvh bg-background text-foreground overflow-hidden">
@@ -183,7 +193,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto relative flex flex-col min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
-          {children}
+          <ConfirmProvider>{children}</ConfirmProvider>
         </main>
       </div>
 

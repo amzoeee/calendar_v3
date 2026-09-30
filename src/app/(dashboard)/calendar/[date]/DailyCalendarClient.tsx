@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import TagSelect from '@/app/components/TagSelect';
+import Select, { selectStateOf } from '@/app/components/Select';
 import { useSearchParams } from 'next/navigation';
 import {
   ChevronLeft,
@@ -20,6 +21,7 @@ import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { useDateNavigation } from '@/lib/useDateNavigation';
+import { usePinchZoom } from '@/lib/usePinchZoom';
 import EventSearch from '@/app/components/EventSearch';
 import {
   addEventAction,
@@ -31,6 +33,7 @@ import {
 } from '@/app/actions';
 import { getBrowserTimeZone, pacificDbStringToDate, formatDateInputValue, formatTimeInputValue } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
+import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 
 interface Tag {
   id: number;
@@ -47,6 +50,7 @@ interface DailyCalendarClientProps {
 }
 
 export default function DailyCalendarClient({ date, initialEvents, tags }: DailyCalendarClientProps) {
+  const { confirm } = useConfirm();
   // --- Zoom level ---
   const [zoomLevel, setZoomLevel] = useState<number>(60); // px per hour
 
@@ -172,87 +176,20 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
     localStorage.setItem('calendarZoomLevel', String(zoomLevel));
   }, [zoomLevel]);
 
-  // --- Pinch-to-zoom (mobile) ---
-  // Desktop has the Zoom In/Out buttons in the side panel, which is hidden on
-  // mobile, so this is the only way to change zoom level on a phone.
-  const zoomLevelRef = useRef(zoomLevel);
-  useEffect(() => {
-    zoomLevelRef.current = zoomLevel;
-  }, [zoomLevel]);
-
-  // Anchor set at the start of a pinch and updated as fingers move; consumed by
-  // the layout effect below once the DOM has actually resized for the new
-  // zoomLevel, so the timeline content under the fingers doesn't jump.
-  const pinchAnchorRef = useRef<{ anchorMin: number; centerClientY: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const anchor = pinchAnchorRef.current;
-    const container = timelineContainerRef.current;
-    if (!anchor || !container) return;
-    const rect = container.getBoundingClientRect();
-    container.scrollTop = (anchor.anchorMin / 60) * zoomLevel - (anchor.centerClientY - rect.top);
-  }, [zoomLevel]);
-
-  useEffect(() => {
-    const container = timelineContainerRef.current;
-    if (!container) return;
-
-    const touchDist = (touches: TouchList) => {
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      return Math.hypot(dx, dy);
-    };
-
-    let startDist = 0;
-    let startZoom = 0;
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return;
-      const rect = container.getBoundingClientRect();
-      const centerClientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      const zoom = zoomLevelRef.current;
-      const anchorMin = ((centerClientY - rect.top + container.scrollTop) / zoom) * 60;
-      startDist = touchDist(e.touches);
-      startZoom = zoom;
-      pinchAnchorRef.current = { anchorMin, centerClientY };
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 2 || !pinchAnchorRef.current || startDist === 0) return;
-      e.preventDefault(); // stop the page itself from pinch-zooming
-      const scale = touchDist(e.touches) / startDist;
-      const newZoom = Math.max(30, Math.min(300, Math.round(startZoom * scale)));
-      pinchAnchorRef.current.centerClientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      setZoomLevel(newZoom);
-    };
-
-    const onTouchEnd = (e: TouchEvent) => {
-      if (e.touches.length < 2 && pinchAnchorRef.current) {
-        // Persistence is handled by the zoomLevel effect above.
-        pinchAnchorRef.current = null;
-        startDist = 0;
-      }
-    };
-
-    container.addEventListener('touchstart', onTouchStart, { passive: true });
-    container.addEventListener('touchmove', onTouchMove, { passive: false });
-    container.addEventListener('touchend', onTouchEnd);
-    container.addEventListener('touchcancel', onTouchEnd);
-    return () => {
-      container.removeEventListener('touchstart', onTouchStart);
-      container.removeEventListener('touchmove', onTouchMove);
-      container.removeEventListener('touchend', onTouchEnd);
-      container.removeEventListener('touchcancel', onTouchEnd);
-    };
-  }, []);
+  // --- Pinch-to-zoom ---
+  usePinchZoom(timelineContainerRef, zoomLevel, setZoomLevel);
 
   // Keyboard zoom listener (Cmd/Ctrl + '=', Cmd/Ctrl + '-', Cmd/Ctrl + '0') and arrow keys navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isInsideModal(e.target)) return;
+      // An open dropdown owns the keyboard; a closed one is a form field.
+      const select = selectStateOf(e.target);
+      if (select === 'open') return;
       const isInput =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
-        e.target instanceof HTMLSelectElement;
+        select !== null;
 
       // Escape closes the overlay regardless of focus
       if (e.key === 'Escape' && activeOverlayId !== null) {
@@ -327,6 +264,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   // Click outside overlay listener to close the popover
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (isInsideModal(event.target)) return;
       if (
         activeOverlayId !== null &&
         overlayRef.current &&
@@ -611,7 +549,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   };
 
   const handleDeleteInstance = async (eventId: number) => {
-    if (confirm('Delete this event?')) {
+    if (await confirm({ title: 'Delete this event?', confirmLabel: 'Delete', destructive: true })) {
       saveScroll();
       await deleteEventAction(eventId);
       setActiveOverlayId(null);
@@ -725,16 +663,17 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       {/* Repeat / Recurrence */}
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repeat</label>
-        <select
+        <Select
           value={formRecur}
-          onChange={(e) => setFormRecur(e.target.value)}
-          className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent cursor-pointer"
-        >
-          <option value="">Does not repeat</option>
-          <option value="DAILY">Daily</option>
-          <option value="WEEKLY">Weekly</option>
-          <option value="MONTHLY">Monthly</option>
-        </select>
+          onChange={setFormRecur}
+          className="mt-1 w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent cursor-pointer"
+          options={[
+            { value: '', label: 'Does not repeat' },
+            { value: 'DAILY', label: 'Daily' },
+            { value: 'WEEKLY', label: 'Weekly' },
+            { value: 'MONTHLY', label: 'Monthly' },
+          ]}
+        />
       </div>
 
       {/* Recurrence End Date */}
@@ -1058,7 +997,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               tags={tags}
               value={editTag}
               onChange={setEditTag}
-              className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              className="w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
             />
           </div>
 
@@ -1252,7 +1191,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                 tags={tags}
                 value={editTag}
                 onChange={setEditTag}
-                className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                className="w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               />
             </div>
 
