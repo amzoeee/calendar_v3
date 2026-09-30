@@ -708,7 +708,7 @@ export default function TasksClient({
             >
               {remindersOnly && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
             </span>
-            <span className="truncate">Reminders only</span>
+            <span className="truncate">Active reminders only</span>
           </button>
         </div>
       </aside>
@@ -1490,7 +1490,7 @@ function BoardColumn({
       >
         {checkbox(remindersOnly)}
         <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-        Reminders only
+        Active reminders only
       </button>
 
       {tagsInUse.map((t) => {
