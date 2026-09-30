@@ -965,12 +965,18 @@ export default function TasksClient({
   );
 }
 
-// Active: still open and already reminded. ASAP tasks can't carry a reminder
-// but always count.
+// Still open and already reminded.
+function reminderFired(r: TaskRow): boolean {
+  return (
+    !r.completedAt &&
+    r.remindAt != null &&
+    pacificDbStringToDate(r.remindAt).getTime() <= Date.now()
+  );
+}
+
+// ASAP tasks can't carry a reminder but always count.
 function hasActiveReminder(r: TaskRow): boolean {
-  if (r.completedAt) return false;
-  if (r.dueAsap === 1) return true;
-  return r.remindAt != null && pacificDbStringToDate(r.remindAt).getTime() <= Date.now();
+  return reminderFired(r) || (!r.completedAt && r.dueAsap === 1);
 }
 
 /**
@@ -1340,6 +1346,11 @@ function BoardColumn({
                   asap={node.dueAsap === 1}
                   done={done}
                 />
+                {reminderFired(node) && (
+                  <span title="Reminder has gone off" className="shrink-0 text-amber-400">
+                    <Bell className="h-2.5 w-2.5" />
+                  </span>
+                )}
                 {node.rrule && (
                   <span
                     title={repeatLabel(node.rrule) ?? undefined}
