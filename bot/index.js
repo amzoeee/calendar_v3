@@ -215,6 +215,13 @@ async function handleFetch(interaction) {
   });
 
   if (!result.ok) {
+    if (result.error === 'pending_exists') {
+      await interaction.editReply(
+        'you already have staged events waiting. approve them at ' +
+          `${config.publicUrl}, or run \`/clear\` to throw them away and then \`/fetch\` again.`,
+      );
+      return;
+    }
     await interaction.editReply(
       result.error === 'not_linked'
         ? 'not linked yet, run `/link` first.'
