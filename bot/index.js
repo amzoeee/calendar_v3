@@ -1,4 +1,7 @@
 const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   Client,
   GatewayIntentBits,
   MessageFlags,
@@ -55,6 +58,13 @@ const commands = [
     .setName('clear')
     .setDescription('throw away the events you have staged but not approved yet'),
 ].map((command) => command.toJSON());
+
+const CLEAR_BUTTON_ID = 'clear-staged';
+
+const clearButtonRow = () =>
+  new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(CLEAR_BUTTON_ID).setLabel('clear staged events').setStyle(ButtonStyle.Danger),
+  );
 
 const client = new Client({
   // MessageContent is privileged: enable it on the bot's page in the Discord
@@ -217,15 +227,17 @@ async function handleFetch(interaction) {
   const preview = lines.slice(0, 10).join('\n');
   const elided = lines.length > 10 ? `\n...and ${lines.length - 10} more` : '';
 
-  await interaction.editReply(
-    `staged **${result.count}** events on **${result.dateUsed}** (${result.timeZone}) ` +
-      `for **${result.username}**, ${boundary}.\n` +
-      `approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
-      (config.postMarker ? ". \nthere will be a `---` posted here once you do :)" : '') +
-      '\n\n' +
-      '```\n' + `${preview}${elided}` + '\n```' +
-      capWarning(markerFound, hitCap, messagesScanned),
-  );
+  await interaction.editReply({
+    content:
+      `staged **${result.count}** events on **${result.dateUsed}** (${result.timeZone}) ` +
+        `for **${result.username}**, ${boundary}.\n` +
+        `approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
+        (config.postMarker ? ". \nthere will be a `---` posted here once you do :)" : '') +
+        '\n\n' +
+        '```\n' + `${preview}${elided}` + '\n```' +
+        capWarning(markerFound, hitCap, messagesScanned),
+    components: [clearButtonRow()],
+  });
 }
 
 async function clearStaged(discordUserId) {
@@ -306,7 +318,27 @@ const handlers = {
   clear: handleClear,
 };
 
+// The button under a /fetch reply. Ephemeral, so only the person who fetched
+// can press it; the reply loses the button once used.
+async function handleClearButton(interaction) {
+  await interaction.deferUpdate();
+  try {
+    const message = await clearStaged(interaction.user.id);
+    await interaction.editReply({ components: [] });
+    await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
+  } catch (error) {
+    console.error('clear button failed:', error);
+    await interaction
+      .followUp({ content: 'something broke :( check the bot logs.', flags: MessageFlags.Ephemeral })
+      .catch(() => {});
+  }
+}
+
 client.on('interactionCreate', async (interaction) => {
+  if (interaction.isButton() && interaction.customId === CLEAR_BUTTON_ID) {
+    await handleClearButton(interaction);
+    return;
+  }
   if (!interaction.isChatInputCommand()) return;
   const handler = handlers[interaction.commandName];
   if (!handler) return;
