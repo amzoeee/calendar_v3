@@ -8,6 +8,7 @@ import TasksClient from './TasksClient';
 import { ensureDefaultBoard } from '@/app/task-actions';
 import {
   MAX_VISIBLE_BOARDS,
+  REMINDERS_ONLY_COOKIE,
   DEFAULT_VIRTUAL_SORT,
   VIRTUAL_LIST_NAMES,
   VIRTUAL_SORT_COOKIE_PREFIX,
@@ -91,6 +92,8 @@ export default async function TasksBoardPage({ params }: PageProps) {
       virtualSort = stored as SortMode;
     }
   }
+
+  const remindersOnly = (await cookies()).get(REMINDERS_ONLY_COOKIE)?.value === '1';
 
   // A flat list across every visible board, ordered by sibling position. The
   // client assembles the tree — see buildTaskTree in lib/tasks.ts for why the
@@ -182,6 +185,7 @@ export default async function TasksBoardPage({ params }: PageProps) {
             }))
       }
       rows={rows}
+      remindersOnly={remindersOnly}
     />
   );
 }

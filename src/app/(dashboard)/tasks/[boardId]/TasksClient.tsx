@@ -45,6 +45,7 @@ import {
   SORT_LABELS,
   MAX_TASK_DEPTH,
   MAX_VISIBLE_BOARDS,
+  REMINDERS_ONLY_COOKIE,
   VISIBLE_BOARDS_COOKIE,
   VIRTUAL_LISTS,
   VIRTUAL_LIST_NAMES,
@@ -138,6 +139,7 @@ interface TasksClientProps {
   rows: TaskRow[];
   availableTags: TaskTag[];
   tagsByTask: Record<number, number[]>;
+  remindersOnly: boolean;
 }
 
 // The Undo toast carries the action that reverses whatever just happened, so
@@ -169,6 +171,8 @@ interface ColumnHandlers {
   draggingId: number | null;
   run: (fn: () => Promise<unknown>) => void;
   setVirtualSort: (list: VirtualList, mode: SortMode) => void;
+  remindersOnly: boolean;
+  setRemindersOnly: (on: boolean) => void;
   tagsFor: (taskId: number) => TaskTag[];
   editingId: number | null;
   setEditingId: (id: number | null) => void;
@@ -183,6 +187,7 @@ export default function TasksClient({
   rows,
   availableTags,
   tagsByTask,
+  remindersOnly: initialRemindersOnly,
 }: TasksClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -272,6 +277,13 @@ export default function TasksClient({
   const setVirtualSort = (list: VirtualList, mode: SortMode) => {
     setVirtualSortState(mode);
     document.cookie = `${VIRTUAL_SORT_COOKIE_PREFIX}${list}=${mode}; path=/; max-age=31536000; SameSite=Lax`;
+  };
+
+  // Applies to every list, so it lives here and in a cookie rather than per column.
+  const [remindersOnly, setRemindersOnlyState] = useState(initialRemindersOnly);
+  const setRemindersOnly = (on: boolean) => {
+    setRemindersOnlyState(on);
+    document.cookie = `${REMINDERS_ONLY_COOKIE}=${on ? 1 : 0}; path=/; max-age=31536000; SameSite=Lax`;
   };
 
   useEffect(() => {
@@ -568,6 +580,8 @@ export default function TasksClient({
     draggingId: drag.activeId,
     run,
     setVirtualSort,
+    remindersOnly,
+    setRemindersOnly,
     editingId,
     setEditingId,
     subtaskParent,
@@ -677,6 +691,24 @@ export default function TasksClient({
           >
             <Plus className="h-4 w-4" />
             New list
+          </button>
+          <button
+            onClick={() => setRemindersOnly(!remindersOnly)}
+            role="switch"
+            aria-checked={remindersOnly}
+            title="Show only tasks with an upcoming reminder, or due ASAP, in every list"
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium hover:bg-secondary/50 transition-colors cursor-pointer ${
+              remindersOnly ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <span
+              className={`h-4 w-4 shrink-0 rounded border flex items-center justify-center ${
+                remindersOnly ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'
+              }`}
+            >
+              {remindersOnly && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+            </span>
+            <span className="truncate">Reminders only</span>
           </button>
         </div>
       </aside>
@@ -987,7 +1019,6 @@ function BoardColumn({
   const [pasting, setPasting] = useState(false);
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
-  const [remindOnly, setRemindOnly] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
@@ -1031,8 +1062,10 @@ function BoardColumn({
 
   // The badge counts filters *you* applied; the Starred list's own filter is
   // the list, not something to clear.
-  const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0) + (remindOnly ? 1 : 0);
-  const filtering = filterTagIds.length > 0 || starredFilter || remindOnly;
+  const { remindersOnly, setRemindersOnly } = handlers;
+  const activeFilters = filterTagIds.length + (starredOnly ? 1 : 0);
+  const filtering = filterTagIds.length > 0 || starredFilter || remindersOnly;
+  const filteredOut = activeFilters > 0 || remindersOnly;
 
   /**
    * Filtering keeps a matching task's family with it, in both directions:
@@ -1050,7 +1083,7 @@ function BoardColumn({
 
     const matches = (r: TaskRow) => {
       if (starredFilter && !r.isStarred) return false;
-      if (remindOnly && !hasActiveReminder(r)) return false;
+      if (remindersOnly && !hasActiveReminder(r)) return false;
       if (filterTagIds.length === 0) return true;
       // OR across selected tags: a task matches if it carries any of them.
       return handlers.tagsFor(r.id).some((t) => filterTagIds.includes(t.id));
@@ -1084,7 +1117,7 @@ function BoardColumn({
 
     return rows.filter((r) => keep.has(r.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, filterTagIds, starredFilter, remindOnly, filtering]);
+  }, [rows, filterTagIds, starredFilter, remindersOnly, filtering]);
 
   const { openTree, completedTree } = useMemo(() => {
     const open = visibleRows.filter((r) => !r.completedAt);
@@ -1412,9 +1445,7 @@ function BoardColumn({
 
   const hasFilterables =
     tagsInUse.length > 0 ||
-    (!starredList && (starredOnly || rows.some((r) => r.isStarred))) ||
-    remindOnly ||
-    rows.some(hasActiveReminder);
+    (!starredList && (starredOnly || rows.some((r) => r.isStarred)));
 
   // Sort and filter are rendered either as their own header controls or as
   // sections of the overflow menu, depending on how much room the column has.
@@ -1451,16 +1482,15 @@ function BoardColumn({
       </button>
       )}
 
-      {(remindOnly || rows.some(hasActiveReminder)) && (
-        <button
-          onClick={() => setRemindOnly((v) => !v)}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-        >
-          {checkbox(remindOnly)}
-          <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-          Has reminder
-        </button>
-      )}
+      {/* The rail's toggle, for mobile where there is no rail. */}
+      <button
+        onClick={() => setRemindersOnly(!remindersOnly)}
+        className="md:hidden w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+      >
+        {checkbox(remindersOnly)}
+        <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+        Reminders only
+      </button>
 
       {tagsInUse.map((t) => {
         const on = filterTagIds.includes(t.id);
@@ -1487,7 +1517,6 @@ function BoardColumn({
           onClick={() => {
             setFilterTagIds([]);
             setStarredOnly(false);
-            setRemindOnly(false);
           }}
           className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
         >
@@ -1564,8 +1593,8 @@ function BoardColumn({
           )}
         </h2>
 
-        {!collapsed && hasFilterables && (
-          <div className="relative shrink-0">
+        {!collapsed && (
+          <div className={`relative shrink-0 ${hasFilterables ? '' : 'md:hidden'}`}>
             <button
               onClick={() => setFilterOpen((o) => !o)}
               aria-expanded={filterOpen}
@@ -1578,6 +1607,8 @@ function BoardColumn({
             >
               <TagIcon className="h-3 w-3" />
               {activeFilters > 0 ? activeFilters : 'Filter'}
+              {/* Mobile has no rail to show the toggle is on. */}
+              {remindersOnly && <Bell className="h-3 w-3 md:hidden" />}
             </button>
             {filterOpen && (
               <>
@@ -1634,13 +1665,11 @@ function BoardColumn({
                   <>
                     {sectionLabel('Sort')}
                     {sortOptions}
-                    {hasFilterables && (
-                      <>
-                        <div className="my-1 border-t border-border" />
-                        {sectionLabel('Filter')}
-                        {filterOptions}
-                      </>
-                    )}
+                    <div className={hasFilterables ? '' : 'md:hidden'}>
+                      <div className="my-1 border-t border-border" />
+                      {sectionLabel('Filter')}
+                      {filterOptions}
+                    </div>
                     <div className="my-1 border-t border-border" />
                   </>
                 )}
@@ -1854,18 +1883,18 @@ function BoardColumn({
           <div className="py-12 text-center px-3">
             <ListChecks className="h-7 w-7 mx-auto text-muted-foreground/40 mb-3" />
             <p className="text-xs text-muted-foreground">
-              {activeFilters > 0
+              {filteredOut
                 ? 'No tasks match the filter.'
                 : starredList
                   ? 'Nothing starred yet. Star a task and it shows up here'
                   : 'Nothing here yet. Add a task above'}
-              {activeFilters === 0 && isPrimary && (
+              {!filteredOut && isPrimary && (
                 <>
                   , or press{' '}
                   <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary">n</kbd>
                 </>
               )}
-              {activeFilters === 0 && '.'}
+              {!filteredOut && '.'}
             </p>
           </div>
         )}
