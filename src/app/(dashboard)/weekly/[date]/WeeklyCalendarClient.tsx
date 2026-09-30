@@ -20,6 +20,7 @@ import {
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
+import { usePinchZoom } from '@/lib/usePinchZoom';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import EventSearch from '@/app/components/EventSearch';
 import {
@@ -277,6 +278,9 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     }
     localStorage.setItem('calendarZoomLevel', String(zoomLevel));
   }, [zoomLevel]);
+
+  // --- Pinch-to-zoom (desktop timeline) ---
+  usePinchZoom(timelineContainerRef, zoomLevel, setZoomLevel);
 
   // Same first-run skip as above, so the defaults can't overwrite what the
   // load effect is about to restore.
