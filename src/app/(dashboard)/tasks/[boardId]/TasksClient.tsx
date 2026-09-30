@@ -1078,6 +1078,10 @@ function BoardColumn({
    *
    * A task is therefore shown when it matches, when anything in its subtree
    * matches, or when any of its ancestors match.
+   *
+   * Active reminders only is the exception on the ancestor side: a parent
+   * without one of its own stays out, and its subtask shows flush with the
+   * parent's name above it.
    */
   const visibleRows = useMemo(() => {
     if (!filtering) return rows;
@@ -1098,6 +1102,7 @@ function BoardColumn({
       keep.add(row.id);
       for (let p = row.parentId; p != null; p = byId.get(p)?.parentId ?? null) {
         if (keep.has(p) || !byId.has(p)) break;
+        if (remindersOnly && !hasActiveReminder(byId.get(p)!)) break;
         keep.add(p);
       }
     }
