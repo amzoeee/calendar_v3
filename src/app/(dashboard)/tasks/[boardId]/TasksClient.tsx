@@ -934,7 +934,9 @@ export default function TasksClient({
 }
 
 // Reminders aren't delivered yet, so "active" means one still ahead of us.
+// ASAP tasks can't carry a reminder but always count.
 function hasActiveReminder(r: TaskRow): boolean {
+  if (r.dueAsap === 1) return true;
   return r.remindAt != null && pacificDbStringToDate(r.remindAt).getTime() > Date.now();
 }
 
