@@ -103,6 +103,7 @@ import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
 import DateInput from '@/app/components/DateInput';
 import Select from '@/app/components/Select';
+import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 
 // Every small control in the editor and the composer shares one look. Kept in
 // one place so the three pickers can't drift apart.
@@ -186,6 +187,7 @@ export default function TasksClient({
 }: TasksClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const { confirm } = useConfirm();
 
   // Server rows are the source of truth; this mirror exists so ticking a box
   // strikes it through immediately instead of after a server round trip. The
@@ -335,6 +337,7 @@ export default function TasksClient({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isInsideModal(e.target)) return;
       if (e.key === 'Escape') {
         setSelectedId(null);
         return;
@@ -831,12 +834,17 @@ export default function TasksClient({
 
           <div className="pt-2 border-t border-border">
             <button
-              onClick={() => {
+              onClick={async () => {
                 const subs = localRows.filter((r) => r.parentId === selected.id).length;
-                const message = subs
-                  ? `Delete “${selected.title}” and its ${subs} subtask${subs === 1 ? '' : 's'}?`
-                  : `Delete “${selected.title}”?`;
-                if (window.confirm(message)) removeTask(selected.id);
+                const ok = await confirm({
+                  title: `Delete “${selected.title}”?`,
+                  message: subs
+                    ? `Its ${subs} subtask${subs === 1 ? '' : 's'} will be deleted too.`
+                    : undefined,
+                  confirmLabel: 'Delete',
+                  destructive: true,
+                });
+                if (ok) removeTask(selected.id);
               }}
               className="flex items-center gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs font-medium text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
             >
@@ -964,6 +972,7 @@ function BoardColumn({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [draftDate, setDraftDate] = useState('');
   const [draftTime, setDraftTime] = useState('');
+  const [draftAsap, setDraftAsap] = useState(false);
   const [draftTagIds, setDraftTagIds] = useState<number[]>([]);
   const [subtaskValue, setSubtaskValue] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
@@ -971,6 +980,7 @@ function BoardColumn({
   const [filterOpen, setFilterOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [pasting, setPasting] = useState(false);
+  const { confirm, choose } = useConfirm();
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
 
@@ -1267,7 +1277,7 @@ function BoardColumn({
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
-            {(board.virtual || node.dueDatetime || node.rrule || rowTags.length > 0) && (
+            {(board.virtual || node.dueDatetime || node.dueAsap === 1 || node.rrule || rowTags.length > 0) && (
               /* gap-x/gap-y separately: a single `gap` on a wrapping flex
                  applies to both axes, so the deadline wrapping above the tags
                  opened a full row-gap between them. The top margin lives here
@@ -1279,7 +1289,12 @@ function BoardColumn({
                     {boardNames.get(node.boardId)}
                   </span>
                 )}
-                <DueChip due={node.dueDatetime} hasTime={node.dueHasTime === 1} done={done} />
+                <DueChip
+                  due={node.dueDatetime}
+                  hasTime={node.dueHasTime === 1}
+                  asap={node.dueAsap === 1}
+                  done={done}
+                />
                 {node.rrule && (
                   <span
                     title={repeatLabel(node.rrule) ?? undefined}
@@ -1371,6 +1386,7 @@ function BoardColumn({
   const composerDetails: NewTaskDetails = {
     dueDate: draftDate || null,
     dueTime: draftTime || null,
+    asap: draftAsap,
     tagIds: draftTagIds,
   };
 
@@ -1379,6 +1395,7 @@ function BoardColumn({
   const clearDetails = () => {
     setDraftDate('');
     setDraftTime('');
+    setDraftAsap(false);
     setDraftTagIds([]);
   };
 
@@ -1624,16 +1641,16 @@ function BoardColumn({
                   {isDefaultBoard ? 'Default list' : 'Make default list'}
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setMenuOpen(false);
                     if (completedCount === 0) return;
-                    if (
-                      window.confirm(
-                        `Delete ${completedCount} completed task${completedCount === 1 ? '' : 's'} from “${board.name}”? Your stats keep the history.`
-                      )
-                    ) {
-                      handlers.run(() => deleteCompletedTasksAction(board.id));
-                    }
+                    const ok = await confirm({
+                      title: `Delete ${completedCount} completed task${completedCount === 1 ? '' : 's'}?`,
+                      message: `They’ll be removed from “${board.name}”. Your stats keep the history.`,
+                      confirmLabel: 'Delete',
+                      destructive: true,
+                    });
+                    if (ok) handlers.run(() => deleteCompletedTasksAction(board.id));
                   }}
                   disabled={completedCount === 0}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1641,24 +1658,33 @@ function BoardColumn({
                   Delete completed
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setMenuOpen(false);
-                    if (boards.length <= 1) {
-                      window.alert('This is your only list, so it can’t be deleted.');
-                      return;
-                    }
                     const others = boards.filter((b) => b.id !== board.id);
-                    const keep =
-                      rows.length === 0 ||
-                      window.confirm(
-                        `“${board.name}” has ${rows.length} task${rows.length === 1 ? '' : 's'}.\n\nOK: move them to “${others[0].name}”.\nCancel: delete them with the list.`
-                      );
+                    const n = rows.length;
+                    const choice =
+                      n === 0
+                        ? await choose({
+                            title: `Delete “${board.name}”?`,
+                            choices: [{ label: 'Delete list', value: 'delete' as const, tone: 'danger' }],
+                          })
+                        : await choose({
+                            title: `Delete “${board.name}”?`,
+                            message: `It has ${n} task${n === 1 ? '' : 's'}. Move ${n === 1 ? 'it' : 'them'} to “${others[0].name}”, or delete ${n === 1 ? 'it' : 'them'} with the list?`,
+                            choices: [
+                              { label: `Delete ${n === 1 ? 'task' : 'tasks'}`, value: 'delete' as const, tone: 'danger' },
+                              { label: `Move ${n === 1 ? 'task' : 'tasks'}`, value: 'move' as const, tone: 'primary' },
+                            ],
+                          });
+                    if (!choice) return;
                     handlers.run(async () => {
-                      await deleteBoardAction(board.id, keep ? others[0].id : null);
+                      await deleteBoardAction(board.id, choice === 'move' ? others[0].id : null);
                     });
                     onPickBoard(others[0].id);
                   }}
-                  className="w-full text-left px-3 py-2 text-sm rounded text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
+                  disabled={boards.length <= 1}
+                  title={boards.length <= 1 ? 'Your only list can’t be deleted' : undefined}
+                  className="w-full text-left px-3 py-2 text-sm rounded text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-red-400"
                 >
                   Delete list
                 </button>
@@ -1754,21 +1780,46 @@ function BoardColumn({
               offset is a decision about a deadline you already have. */}
           {detailsOpen && (
             <div className="px-2 pb-2 space-y-2">
-              <div className="flex gap-1.5">
-                <DateInput
-                  value={draftDate}
-                  onChange={(e) => setDraftDate(e.target.value)}
-                  aria-label="Deadline for the new task"
-                  className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
-                />
-                <input
-                  type="time"
-                  value={draftTime}
-                  disabled={!draftDate}
-                  onChange={(e) => setDraftTime(e.target.value)}
-                  aria-label="Time of day for the new task"
-                  className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
-                />
+              <div className="flex gap-1.5 items-center">
+                {draftAsap ? (
+                  <p className="flex-1 min-w-0 text-[10px] text-muted-foreground">
+                    Due as soon as possible.
+                  </p>
+                ) : (
+                  <>
+                    <DateInput
+                      value={draftDate}
+                      onChange={(e) => setDraftDate(e.target.value)}
+                      aria-label="Deadline for the new task"
+                      className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
+                    />
+                    <input
+                      type="time"
+                      value={draftTime}
+                      disabled={!draftDate}
+                      onChange={(e) => setDraftTime(e.target.value)}
+                      aria-label="Time of day for the new task"
+                      className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftAsap((a) => !a);
+                    setDraftDate('');
+                    setDraftTime('');
+                  }}
+                  aria-pressed={draftAsap}
+                  title="Due as soon as possible"
+                  className={`shrink-0 text-[10px] font-semibold px-1.5 py-1 rounded border transition-colors cursor-pointer ${
+                    draftAsap
+                      ? 'bg-amber-400/15 text-amber-400 border-amber-400/40'
+                      : 'text-muted-foreground border-border hover:text-foreground'
+                  }`}
+                >
+                  ASAP
+                </button>
               </div>
               <TagPicker all={availableTags} selected={draftTagIds} onChange={setDraftTagIds} />
             </div>
@@ -1989,12 +2040,26 @@ function EditTaskDialog({
 function DueChip({
   due,
   hasTime,
+  asap,
   done,
 }: {
   due: string | null;
   hasTime: boolean;
+  asap: boolean;
   done: boolean;
 }) {
+  if (asap) {
+    return (
+      <span
+        className={`flex items-center gap-1 text-[10px] leading-none shrink-0 ${
+          done ? 'text-muted-foreground' : 'text-amber-400'
+        }`}
+      >
+        <CalendarClock className="h-2.5 w-2.5" />
+        ASAP
+      </span>
+    );
+  }
   if (!due) return null;
 
   const now = new Date();
@@ -2041,8 +2106,10 @@ function SchedulePicker({
     remindOffsetMinutes: number | null;
     remindOffsetDays: number | null;
     remindTimeOfDay: string | null;
+    asap?: boolean;
   }) => void;
 }) {
+  const [asap, setAsap] = useState(task.dueAsap === 1);
   const initialDue = task.dueDatetime ? pacificDbStringToDate(task.dueDatetime) : null;
   const [dueDate, setDueDate] = useState(initialDue ? formatDateInputValue(initialDue) : '');
   const [dueTime, setDueTime] = useState(
@@ -2099,34 +2166,69 @@ function SchedulePicker({
     });
   }
 
+  const toggleAsap = () => {
+    const next = !asap;
+    setAsap(next);
+    setDueDate('');
+    setDueTime('');
+    onSave({
+      dueDate: null,
+      dueTime: null,
+      remindOffsetMinutes: null,
+      remindOffsetDays: null,
+      remindTimeOfDay: null,
+      asap: next,
+    });
+  };
+
   const field = FIELD_CLASS;
 
   return (
     <div className="space-y-2">
       <div className="space-y-1">
-        <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Deadline
-        </span>
-        <div className="flex gap-1.5">
-          <DateInput
-            value={dueDate}
-            onChange={(e) => {
-              setDueDate(e.target.value);
-              commit({ dueDate: e.target.value });
-            }}
-            className={`${field} flex-1 min-w-0 cursor-pointer`}
-          />
-          <input
-            type="time"
-            value={dueTime}
-            disabled={!dueDate}
-            onChange={(e) => {
-              setDueTime(e.target.value);
-              commit({ dueTime: e.target.value });
-            }}
-            className={`${field} w-[6.25rem] cursor-pointer disabled:opacity-40`}
-          />
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Deadline
+          </span>
+          <button
+            type="button"
+            onClick={toggleAsap}
+            aria-pressed={asap}
+            disabled={Boolean(task.rrule)}
+            title={task.rrule ? 'A repeating task needs a date' : 'Due as soon as possible'}
+            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+              asap
+                ? 'bg-amber-400/15 text-amber-400 border-amber-400/40'
+                : 'text-muted-foreground border-border hover:text-foreground'
+            }`}
+          >
+            ASAP
+          </button>
         </div>
+        {asap ? (
+          <p className="text-[10px] text-muted-foreground">Due as soon as possible.</p>
+        ) : (
+          <div className="flex gap-1.5">
+            <DateInput
+              value={dueDate}
+              onChange={(e) => {
+                setDueDate(e.target.value);
+                commit({ dueDate: e.target.value });
+              }}
+              className={`${field} flex-1 min-w-0 cursor-pointer`}
+            />
+            <input
+              type="time"
+              value={dueTime}
+              disabled={!dueDate}
+              onChange={(e) => {
+                setDueTime(e.target.value);
+                commit({ dueTime: e.target.value });
+              }}
+              className={`${field} w-[6.25rem] cursor-pointer disabled:opacity-40`}
+            />
+          </div>
+        )}
         {dueDate && !dueTime && (
           <p className="text-[10px] text-muted-foreground">Due any time that day.</p>
         )}

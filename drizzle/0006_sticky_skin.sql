@@ -1,0 +1,1 @@
+ALTER TABLE `discord_links` ADD `time_zone` text;

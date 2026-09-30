@@ -39,6 +39,7 @@ import {
   formatEventTimeRange,
 } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
+import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 
 interface Tag {
   id: number;
@@ -80,6 +81,7 @@ interface WeeklyCalendarClientProps {
 }
 
 export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags }: WeeklyCalendarClientProps) {
+  const { confirm } = useConfirm();
 
   // --- Zoom & Scroll ---
   const [zoomLevel, setZoomLevel] = useState<number>(60);
@@ -203,6 +205,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   // Click outside overlay listener to close the popover
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (isInsideModal(event.target)) return;
       if (
         activeOverlayId !== null &&
         overlayRef.current &&
@@ -297,6 +300,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   // Keyboard zoom (Cmd/Ctrl + '=', '-', '0'), arrow key navigation, and edit overlay shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isInsideModal(e.target)) return;
       // An open dropdown owns the keyboard; a closed one is a form field.
       const select = selectStateOf(e.target);
       if (select === 'open') return;
@@ -625,7 +629,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   };
 
   const handleDeleteInstance = async (eventId: number) => {
-    if (confirm('Delete this event?')) {
+    if (await confirm({ title: 'Delete this event?', confirmLabel: 'Delete', destructive: true })) {
       saveScroll();
       await deleteEventAction(eventId);
       setActiveOverlayId(null);

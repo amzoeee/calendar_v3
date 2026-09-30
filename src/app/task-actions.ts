@@ -517,6 +517,7 @@ export async function createTaskAction(
       title: trimmed,
       dueDatetime,
       dueHasTime: dueDatetime && details.dueTime ? 1 : 0,
+      dueAsap: !dueDatetime && details.asap ? 1 : 0,
     })
     .returning({ id: tasks.id });
 
@@ -662,6 +663,7 @@ export async function toggleTaskCompletionAction(
       counterValue: tasks.counterValue,
       completedAt: tasks.completedAt,
       dueDatetime: tasks.dueDatetime,
+      dueAsap: tasks.dueAsap,
     })
     .from(tasks)
     .where(and(inArray(tasks.id, candidateIds), eq(tasks.userId, session.userId)));
@@ -678,6 +680,7 @@ export async function toggleTaskCompletionAction(
       id: r.id,
       title: displayTitle(r.title, r.counterValue),
       dueDatetime: r.dueDatetime,
+      dueAsap: r.dueAsap,
     })),
     completed
   );
@@ -742,6 +745,7 @@ export async function setTaskCompletionAction(
       title: tasks.title,
       counterValue: tasks.counterValue,
       dueDatetime: tasks.dueDatetime,
+      dueAsap: tasks.dueAsap,
     })
     .from(tasks)
     .where(and(inArray(tasks.id, ids), eq(tasks.userId, session.userId)));
@@ -753,6 +757,7 @@ export async function setTaskCompletionAction(
       id: r.id,
       title: displayTitle(r.title, r.counterValue),
       dueDatetime: r.dueDatetime,
+      dueAsap: r.dueAsap,
     })),
     completed
   );
@@ -768,7 +773,7 @@ export async function setTaskCompletionAction(
  */
 async function applyCompletion(
   userId: number,
-  rows: { id: number; title: string; dueDatetime: string | null }[],
+  rows: { id: number; title: string; dueDatetime: string | null; dueAsap: number }[],
   completed: boolean
 ): Promise<void> {
   const ids = rows.map((r) => r.id);
@@ -787,6 +792,7 @@ async function applyCompletion(
         completedAt: stamp as string,
         titleSnapshot: r.title,
         dueSnapshot: r.dueDatetime,
+        asapSnapshot: r.dueAsap,
       }))
     );
   } else {
@@ -991,24 +997,28 @@ export async function setTaskScheduleAction(
     remindOffsetDays: number | null;
     /** "HH:MM", paired with remindOffsetDays. */
     remindTimeOfDay: string | null;
+    /** Due as soon as possible. Replaces any date. */
+    asap?: boolean;
   }
 ): Promise<void> {
   const session = await requireAuth();
 
   const [task] = await db
-    .select({ id: tasks.id })
+    .select({ id: tasks.id, rrule: tasks.rrule })
     .from(tasks)
     .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)))
     .limit(1);
   if (!task) throw new Error('Task not found');
+  if (input.asap && task.rrule) throw new Error('A repeating task needs a date, not ASAP');
 
-  if (!input.dueDate) {
+  if (input.asap || !input.dueDate) {
     // No deadline means no reminder — an offset from nothing has no meaning.
     await db
       .update(tasks)
       .set({
         dueDatetime: null,
         dueHasTime: 0,
+        dueAsap: input.asap ? 1 : 0,
         remindAt: null,
         remindOffsetMinutes: null,
         remindOffsetDays: null,
@@ -1053,6 +1063,7 @@ export async function setTaskScheduleAction(
     .set({
       dueDatetime,
       dueHasTime: hasTime ? 1 : 0,
+      dueAsap: 0,
       remindAt,
       remindOffsetMinutes: input.remindOffsetMinutes,
       remindOffsetDays: input.remindOffsetDays,
