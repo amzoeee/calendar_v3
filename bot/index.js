@@ -63,7 +63,7 @@ const CLEAR_BUTTON_ID = 'clear-staged';
 
 const clearButtonRow = () =>
   new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(CLEAR_BUTTON_ID).setLabel('clear staged events').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(CLEAR_BUTTON_ID).setLabel('clear staged events').setStyle(ButtonStyle.Secondary),
   );
 
 const client = new Client({
