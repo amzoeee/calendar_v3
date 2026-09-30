@@ -31,6 +31,7 @@ import {
 } from '@/app/actions';
 import { getBrowserTimeZone, pacificDbStringToDate, formatDateInputValue, formatTimeInputValue } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
+import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 
 interface Tag {
   id: number;
@@ -47,6 +48,7 @@ interface DailyCalendarClientProps {
 }
 
 export default function DailyCalendarClient({ date, initialEvents, tags }: DailyCalendarClientProps) {
+  const { confirm } = useConfirm();
   // --- Zoom level ---
   const [zoomLevel, setZoomLevel] = useState<number>(60); // px per hour
 
@@ -249,6 +251,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   // Keyboard zoom listener (Cmd/Ctrl + '=', Cmd/Ctrl + '-', Cmd/Ctrl + '0') and arrow keys navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isInsideModal(e.target)) return;
       const isInput =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
@@ -327,6 +330,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   // Click outside overlay listener to close the popover
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (isInsideModal(event.target)) return;
       if (
         activeOverlayId !== null &&
         overlayRef.current &&
@@ -611,7 +615,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   };
 
   const handleDeleteInstance = async (eventId: number) => {
-    if (confirm('Delete this event?')) {
+    if (await confirm({ title: 'Delete this event?', confirmLabel: 'Delete', destructive: true })) {
       saveScroll();
       await deleteEventAction(eventId);
       setActiveOverlayId(null);

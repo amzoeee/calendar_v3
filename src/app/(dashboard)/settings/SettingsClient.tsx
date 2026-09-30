@@ -45,6 +45,7 @@ import {
 } from '@/lib/week';
 import type { BuildInfo } from '@/lib/version';
 import DateInput from '@/app/components/DateInput';
+import { useConfirm } from '@/app/components/ConfirmDialog';
 
 interface Tag {
   id: number;
@@ -88,6 +89,7 @@ interface SettingsClientProps {
 
 export default function SettingsClient({ initialTags, buildInfo, weekStart, discordLinks }: SettingsClientProps) {
   const router = useRouter();
+  const { confirm } = useConfirm();
   const searchParams = useSearchParams();
 
   // --- ICS import result ---
@@ -252,7 +254,12 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
 
   // Archive / unarchive handlers
   const handleArchive = async (tagId: number, name: string) => {
-    if (confirm(`Archive tag "${name}"?\n\nYou will not be able to assign this tag to new events, but it will still display on the calendar.`)) {
+    const ok = await confirm({
+      title: `Archive tag “${name}”?`,
+      message: 'You won’t be able to assign it to new events, but it will still show on the calendar.',
+      confirmLabel: 'Archive',
+    });
+    if (ok) {
       await archiveTagAction(tagId);
       router.refresh();
     }
@@ -265,27 +272,28 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
 
   // Delete tag with check for associated events
   const handleDeleteTag = async (tagId: number, name: string) => {
+    // Query our api route handler to check if tag is in use
+    let count = 0;
     try {
-      // Query our api route handler to check if tag is in use
       const res = await fetch(`/api/events?tag=${encodeURIComponent(name)}`);
       const data = await res.json();
-      const count = data.events ? data.events.length : 0;
-
-      let msg = `Delete tag "${name}"?`;
-      if (count > 0) {
-        msg += `\n\nThis tag is used by ${count} event(s). They will be set to untagged.`;
-      }
-
-      if (confirm(msg)) {
-        await deleteTagAction(tagId);
-        router.refresh();
-      }
+      count = data.events ? data.events.length : 0;
     } catch {
-      // Fallback delete
-      if (confirm(`Delete tag "${name}"?`)) {
-        await deleteTagAction(tagId);
-        router.refresh();
-      }
+      // Still offer the delete, just without the count.
+    }
+
+    const ok = await confirm({
+      title: `Delete tag “${name}”?`,
+      message:
+        count > 0
+          ? `It’s used by ${count} event${count === 1 ? '' : 's'}, which will become untagged.`
+          : undefined,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) {
+      await deleteTagAction(tagId);
+      router.refresh();
     }
   };
 

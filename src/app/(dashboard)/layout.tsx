@@ -8,6 +8,7 @@ import SidebarNav from '@/app/components/SidebarNav';
 import MobileTabBar from '@/app/components/MobileTabBar';
 import MobileProfileMenu from '@/app/components/MobileProfileMenu';
 import TimezoneSync from '@/app/components/TimezoneSync';
+import { ConfirmProvider } from '@/app/components/ConfirmDialog';
 import PendingSync from '@/app/components/PendingSync';
 import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
@@ -185,7 +186,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto relative flex flex-col min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
-          {children}
+          <ConfirmProvider>{children}</ConfirmProvider>
         </main>
       </div>
 
