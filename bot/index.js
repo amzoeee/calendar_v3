@@ -51,6 +51,9 @@ const commands = [
         .setName('date')
         .setDescription('day the log belongs to (YYYY-MM-DD). defaults to the day you posted it.'),
     ),
+  new SlashCommandBuilder()
+    .setName('clear')
+    .setDescription('throw away the events you have staged but not approved yet'),
 ].map((command) => command.toJSON());
 
 const client = new Client({
@@ -225,6 +228,22 @@ async function handleFetch(interaction) {
   );
 }
 
+async function clearStaged(discordUserId) {
+  const result = await api.clearStaged(discordUserId);
+  if (!result.ok) {
+    return result.error === 'not_linked'
+      ? 'not linked yet, run `/link` first.'
+      : `could not reach the calendar :( (error: ${result.error || result.status}).`;
+  }
+  return result.count === 0
+    ? 'nothing staged, nothing to clear.'
+    : `cleared **${result.count}** staged events from **${result.username}**.`;
+}
+
+async function handleClear(interaction) {
+  await interaction.editReply(await clearStaged(interaction.user.id));
+}
+
 // A header the calendar's own paste form understands: it reads the date off
 // the line above the separator, so the printed block carries its day with it.
 function dateHeader(dateStr) {
@@ -284,6 +303,7 @@ const handlers = {
   fetch: handleFetch,
   marker: handleMarker,
   'manual-fetch': handleManualFetch,
+  clear: handleClear,
 };
 
 client.on('interactionCreate', async (interaction) => {
