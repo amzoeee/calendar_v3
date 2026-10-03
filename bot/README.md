@@ -12,10 +12,24 @@ the web UI. Nothing it does writes to your calendar directly.
 | `/whoami` | Says which calendar account this Discord account is linked to. |
 | `/fetch [date]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
 | `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
+| `/log name` | Posts `<current time> name` in the channel as a log line, e.g. `1430 study`. |
 | `/manual-fetch [date]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
 | `/clear` | Throws away every event you have staged but not approved yet, same as discarding in the web UI. The reply to a `/fetch` also has a button that does this. |
 
-All replies are ephemeral — only you see them.
+All replies are ephemeral — only you see them — except `/log`'s line, which is
+posted to the channel.
+
+## `/log`
+
+The time is the current time in your link's timezone, written as 24-hour
+`HHMM` so it never needs an am/pm guess. It's plain text rather than a Discord
+timestamp, so it copies cleanly and `/fetch` can read it. The line is the bot's
+message, but `/fetch` counts it as yours.
+
+A line's time marks when that activity ended. So if your last `/log` since the
+last `---` has the same name (ignoring case), the bot deletes it and the new
+line covers both — one event instead of two. Only its own `/log` messages get
+deleted, never lines you typed yourself.
 
 ## How `/fetch` decides what to take
 
