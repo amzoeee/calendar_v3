@@ -40,6 +40,37 @@ export const DATED_PRESETS: RemindPreset[] = [
 
 export const DEFAULT_REMIND_TIME = '09:00';
 
+export interface RemindUnit {
+  /** Singular; the picker adds the "s". */
+  label: string;
+  /** How many of the offset's base unit (minutes or days) one of these is. */
+  size: number;
+}
+
+// Custom offsets, in the same base unit as the presets for each deadline shape.
+// No months: a month has no fixed length in either base unit.
+export const TIMED_UNITS: RemindUnit[] = [
+  { label: 'minute', size: 1 },
+  { label: 'hour', size: 60 },
+  { label: 'day', size: 1440 },
+  { label: 'week', size: 10080 },
+];
+
+export const DATED_UNITS: RemindUnit[] = [
+  { label: 'day', size: 1 },
+  { label: 'week', size: 7 },
+];
+
+/** An offset in the largest unit that divides it evenly, so 120 reads as 2 hours. */
+export function splitOffset(offset: number, units: RemindUnit[]): { amount: number; unit: RemindUnit } {
+  for (let i = units.length - 1; i > 0; i--) {
+    if (offset > 0 && offset % units[i].size === 0) {
+      return { amount: offset / units[i].size, unit: units[i] };
+    }
+  }
+  return { amount: offset, unit: units[0] };
+}
+
 /**
  * When a reminder should fire, as a wall-clock string in the same timezone as
  * `dueDatetime`.
