@@ -12,7 +12,7 @@ const {
 
 const config = require('./config');
 const api = require('./api');
-const { collectLogLines } = require('./log-lines');
+const { collectLogLines, mergeRepeats } = require('./log-lines');
 const { capWarning, chunkLines } = require('./reply');
 
 // en-CA formats as YYYY-MM-DD, the shape the calendar wants.
@@ -24,6 +24,9 @@ function dateStrInZone(date, timeZone) {
     day: '2-digit',
   }).format(date);
 }
+
+const mergeOption = (option) =>
+  option.setName('merge').setDescription('merge back-to-back lines with the same name into one event');
 
 const commands = [
   new SlashCommandBuilder()
@@ -45,7 +48,8 @@ const commands = [
       option
         .setName('date')
         .setDescription('day to date the output with (YYYY-MM-DD). defaults to the day you posted it.'),
-    ),
+    )
+    .addBooleanOption(mergeOption),
   new SlashCommandBuilder()
     .setName('fetch')
     .setDescription('grab your log lines since the last --- marker and stage them in your calendar')
@@ -53,7 +57,8 @@ const commands = [
       option
         .setName('date')
         .setDescription('day the log belongs to (YYYY-MM-DD). defaults to the day you posted it.'),
-    ),
+    )
+    .addBooleanOption(mergeOption),
   new SlashCommandBuilder()
     .setName('clear')
     .setDescription('throw away the events you have staged but not approved yet'),
@@ -189,10 +194,11 @@ async function handleFetch(interaction) {
     return;
   }
 
-  const { lines, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
+  const { lines: scraped, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
+  const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
 
   if (lines.length === 0) {
     await interaction.editReply(
@@ -271,10 +277,11 @@ function dateHeader(dateStr) {
 }
 
 async function handleManualFetch(interaction) {
-  const { lines, markerFound, messagesScanned, hitCap, oldestAt } = await scrapeLogLines(
+  const { lines: scraped, markerFound, messagesScanned, hitCap, oldestAt } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
+  const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
 
   const warning = capWarning(markerFound, hitCap, messagesScanned);
 
