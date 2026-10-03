@@ -14,6 +14,7 @@ const config = require('./config');
 const api = require('./api');
 const { collectLogLines } = require('./log-lines');
 const { capWarning, chunkLines } = require('./reply');
+const serverChannels = config.serverChannels ? require('./server-channels') : null;
 
 // en-CA formats as YYYY-MM-DD, the shape the calendar wants.
 function dateStrInZone(date, timeZone) {
@@ -323,6 +324,7 @@ const handlers = {
   marker: handleMarker,
   'manual-fetch': handleManualFetch,
   clear: handleClear,
+  ...(serverChannels ? serverChannels.handlers : {}),
 };
 
 // The button under a /fetch reply. Ephemeral, so only the person who fetched
@@ -395,6 +397,17 @@ client.once('clientReady', async (readyClient) => {
   const rest = new REST().setToken(config.token);
   await rest.put(Routes.applicationCommands(readyClient.user.id), { body: commands });
   console.log(`Logged in as ${readyClient.user.tag}; ${commands.length} commands registered.`);
+
+  // Server-only commands, so they show up nowhere else.
+  if (serverChannels) {
+    await rest.put(Routes.applicationGuildCommands(readyClient.user.id, config.serverChannels.guildId), {
+      body: serverChannels.commands,
+    });
+    serverChannels.start(readyClient);
+    client.on('messageCreate', (message) => {
+      serverChannels.onMessage(message).catch((error) => console.error('Activity update failed:', error));
+    });
+  }
 
   if (config.postMarker) {
     setInterval(() => {

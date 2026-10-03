@@ -32,6 +32,9 @@ services:
   #   environment:
   #     - CALENDAR_API_URL=http://app:4000
   #     - CALENDAR_PUBLIC_URL=https://calendar.geodesync.com
+  #   volumes:
+  #     # Channel registrations for DISCORD_GUILD_ID's server.
+  #     - bot-data:/app/data
   #   depends_on:
   #     - app
   #   labels:
@@ -81,3 +84,4 @@ volumes:
   calendar-data:
   caddy-data:
   caddy-config:
+  # bot-data:

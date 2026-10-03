@@ -49,6 +49,35 @@ the oldest line it took. `/fetch date:2026-09-19` overrides both.
 the calendar's own paste form reads, so the block you copy carries its day with
 it. `/manual-fetch date:2026-09-19` sets that header.
 
+## Per-person log channels (one server only)
+
+Off unless `DISCORD_GUILD_ID` is set. In that server only, three more commands
+appear — they're registered to that server alone, so no other server sees them:
+
+| Command | What it does |
+| --- | --- |
+| `/register [channel]` | Links you to a channel. With no channel you get a new one named after you in the log channel category; with one, it has to be an unclaimed channel in the log channel or archive category. |
+| `/restore` | Moves your archived channel back and gives you the active role again. |
+| `/force-register user [channel]` | Admins only. Links anyone to any channel (or a new one), taking it from whoever had it. |
+
+- **Active role:** posting in your own channel gives you `DISCORD_ACTIVE_ROLE_ID`.
+- **Archiving:** every `ACTIVITY_CHECK_MINUTES` the bot checks each registered
+  channel. If its owner hasn't posted there in `INACTIVE_AFTER_DAYS` (and
+  wasn't registered or restored in that time), the channel moves to the archive
+  category, only its owner and admins can see it, and the role is removed.
+  Posting in an archived channel doesn't bring it back; `/restore` does.
+- **Permissions:** an active channel takes the log channel category's
+  permissions plus view/send for its owner. Set the category up the way you
+  want every channel in it to look.
+- **Bot log:** registrations, restores, archives and role changes are posted to
+  `DISCORD_LOG_CHANNEL_ID` without pinging anyone.
+- Registrations (who owns which channel) live in `data/registrations.json`,
+  a volume in Docker. A channel deleted by hand is dropped on the next check.
+
+Setup in the server: the bot needs **Manage Channels** and **Manage Roles**
+on top of the permissions below, and its own role must sit **above** the active
+role in Server Settings -> Roles, or Discord won't let it hand that role out.
+
 ## Timezones
 
 Discord exposes no timezone, and one bot serves people in several of them, so
@@ -66,7 +95,8 @@ existed show no zone and fall back to the calendar's own.
    Gateway Intents*. Without it every message reads as empty and `/fetch`
    finds nothing.
 4. **OAuth2** -> **URL Generator**: tick the `bot` and `applications.commands`
-   scopes, then the `Send Messages` and `Read Message History` bot permissions.
+   scopes, then the `Send Messages` and `Read Message History` bot permissions
+   (plus `Manage Channels` and `Manage Roles` for the per-person log channels).
    Open the generated URL to add the bot to a server. Repeat for as many
    servers as you like — the bot registers its commands globally and keys
    everything off Discord user IDs, not servers.
@@ -103,3 +133,12 @@ alongside `SECRET_KEY`.
 | `FETCH_MAX_MESSAGES` | no | `500` | How far back `/fetch` will look for a marker. |
 | `FETCH_POST_MARKER` | no | `true` | Kill switch for markers across the whole bot. Individual accounts opt out with `/marker`. |
 | `MARKER_POLL_SECONDS` | no | `15` | How often it checks for newly approved batches. |
+| `DISCORD_GUILD_ID` | no | — | Server the per-person log channels run in. Unset turns them off. |
+| `DISCORD_ACTIVE_ROLE_ID` | with guild | — | Role for people who posted in their channel recently. |
+| `DISCORD_ACTIVE_CATEGORY_ID` | with guild | — | Category active log channels live in. |
+| `DISCORD_ARCHIVE_CATEGORY_ID` | with guild | — | Category inactive channels are moved to. |
+| `DISCORD_ADMIN_ROLE_ID` | no | — | Who can `/force-register`. Without it, anyone with Administrator. |
+| `DISCORD_LOG_CHANNEL_ID` | no | — | Where the bot records what it did. |
+| `INACTIVE_AFTER_DAYS` | no | `7` | Quiet days before a channel is archived. |
+| `ACTIVITY_CHECK_MINUTES` | no | `60` | How often it checks. |
+| `BOT_DATA_DIR` | no | `bot/data` | Where registrations are stored. |
