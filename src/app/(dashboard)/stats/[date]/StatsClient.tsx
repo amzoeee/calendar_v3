@@ -670,7 +670,9 @@ export default function StatsClient({
         <div className="flex flex-col lg:flex-row gap-4 md:gap-8">
 
         {/* Stacked Bar Chart */}
-        <div className="flex-1 bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
+        {/* Fixed height on lg so the chart doesn't stretch to match a long tag
+            list beside it; it must stay definite for the plot's `h-full`. */}
+        <div className="flex-1 lg:self-start lg:h-[400px] bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
           <div>
             <h2 className="text-lg font-bold">Event Hours by Weekday</h2>
             <p className="text-xs text-muted-foreground mt-1">
@@ -751,12 +753,9 @@ export default function StatsClient({
           </div>
         </div>
 
-        {/* Tag Averages Panel. Stretching this card pins it to the row's
-            height, so once there are more tags than fit, the extra rows spill
-            out past its own border instead of making it taller. `lg:self-start`
-            lets it size to its rows; `lg:min-h-full` keeps the row height as a
-            floor, so a short list still matches the chart the way it used to. */}
-        <div className="w-full lg:self-start lg:min-h-full lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
+        {/* Tag Averages Panel. `lg:self-start` lets it grow with its rows;
+            the 400px floor matches the chart so a short list lines up with it. */}
+        <div className="w-full lg:self-start lg:min-h-[400px] lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
           <div>
             <h2 className="text-lg font-bold">Daily Event Averages</h2>
             <p className="text-xs text-muted-foreground mt-1">
