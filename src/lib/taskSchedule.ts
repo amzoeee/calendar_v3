@@ -4,7 +4,14 @@
 // convention events use. Pure functions only — no DB, no cookies — so the
 // server action and the edit dialog's live preview can share them.
 
-import { shiftDateStr, dbStringToUtcMillis, dateToServerDbString } from './timezone';
+import {
+  shiftDateStr,
+  dbStringToUtcMillis,
+  dateToServerDbString,
+  convertDbString,
+  browserDatetimeToServerDbString,
+  SERVER_TIMEZONE,
+} from './timezone';
 
 /** A date-only deadline is stored at the end of its day so it still sorts. */
 export const END_OF_DAY = '23:59';
@@ -41,6 +48,27 @@ export const DATED_PRESETS: RemindPreset[] = [
 export const DEFAULT_REMIND_TIME = '09:00';
 
 /**
+ * The stored (Pacific) reminder time of day, as `timeZone` reads it on the
+ * deadline's own date — the inverse of how it was saved.
+ *
+ * Saving converted the typed time on the deadline's local date, which can land
+ * on the Pacific day before or after. Exactly one of those three Pacific dates
+ * maps back onto the deadline's local date.
+ */
+export function localRemindTime(pacificTime: string, dueDatetime: string, timeZone: string): string {
+  const localDue = convertDbString(dueDatetime, SERVER_TIMEZONE, timeZone).slice(0, 10);
+  for (const shift of [0, -1, 1]) {
+    const local = convertDbString(
+      `${shiftDateStr(localDue, shift)} ${pacificTime}:00`,
+      SERVER_TIMEZONE,
+      timeZone
+    );
+    if (local.startsWith(localDue)) return local.slice(11, 16);
+  }
+  return pacificTime;
+}
+
+/**
  * When a reminder should fire, as a wall-clock string in the same timezone as
  * `dueDatetime`.
  *
@@ -50,7 +78,8 @@ export const DEFAULT_REMIND_TIME = '09:00';
  *   previous date at six, so the date is stepped and the clock time is stapled
  *   on untouched. Computing it as 1440 minutes of elapsed time lands an hour
  *   out either side of a DST change — for a deadline late on a 25-hour day it
- *   lands on the wrong date entirely.
+ *   lands on the wrong date entirely. The stepping happens on the viewer's
+ *   calendar (`timeZone`), since that's whose "day before" it is.
  * - **Minutes** are elapsed time, which is what "30 minutes before" means, so
  *   that one converts to an instant, subtracts, and converts back.
  */
@@ -58,13 +87,18 @@ export function computeRemindAt(
   dueDatetime: string | null,
   offsetMinutes: number | null,
   offsetDays: number | null,
-  timeOfDay: string | null
+  timeOfDay: string | null,
+  timeZone: string
 ): string | null {
   if (!dueDatetime) return null;
 
   if (offsetDays != null && timeOfDay) {
-    const [datePart] = dueDatetime.split(' ');
-    return `${shiftDateStr(datePart, -offsetDays)} ${timeOfDay}:00`;
+    const localDue = convertDbString(dueDatetime, SERVER_TIMEZONE, timeZone).slice(0, 10);
+    const localTime = localRemindTime(timeOfDay, dueDatetime, timeZone);
+    return browserDatetimeToServerDbString(
+      `${shiftDateStr(localDue, -offsetDays)}T${localTime}`,
+      timeZone
+    );
   }
 
   if (offsetMinutes != null) {

@@ -89,11 +89,13 @@ import {
   formatDateInputValue,
   formatTimeInputValue,
   shiftDateStr,
+  getBrowserTimeZone,
 } from '@/lib/timezone';
 import {
   TIMED_PRESETS,
   DATED_PRESETS,
   DEFAULT_REMIND_TIME,
+  localRemindTime,
   dueState,
   formatDue,
   displayTitle,
@@ -2187,7 +2189,11 @@ function SchedulePicker({
   );
   const [minutes, setMinutes] = useState<number | null>(task.remindOffsetMinutes ?? null);
   const [days, setDays] = useState<number | null>(task.remindOffsetDays ?? null);
-  const [remindTime, setRemindTime] = useState(task.remindTimeOfDay ?? DEFAULT_REMIND_TIME);
+  const [remindTime, setRemindTime] = useState(() =>
+    task.remindTimeOfDay && task.dueDatetime
+      ? localRemindTime(task.remindTimeOfDay, task.dueDatetime, getBrowserTimeZone())
+      : DEFAULT_REMIND_TIME
+  );
 
   const commit = (next: Partial<{
     dueDate: string;
