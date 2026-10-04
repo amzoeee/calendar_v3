@@ -2,6 +2,7 @@ import { db } from '../db';
 import { events, tags } from '../db/schema';
 import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
 import { dropUnapprovedStages } from './discord-markers';
+import { planPendingMerge } from './merge-pending';
 import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, pacificDbStringToDate, SERVER_TIMEZONE } from './timezone';
 
 export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
@@ -518,25 +519,18 @@ export async function discardPendingForUser(userId: number): Promise<number> {
   return deleted.length;
 }
 
-const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-
-/**
- * Folds pending events into their neighbours when they carry on the same
- * activity: the first one into the approved event it starts right where, and
- * each one into the pending event just before it. Only exactly back-to-back
- * events merge — a gap means the activity really did stop.
- */
+/** Applies planPendingMerge to the database: see there for what merges. */
 export async function mergePendingIntoNeighbours(userId: number): Promise<void> {
   const pending = await db
-    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title })
+    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
     .from(events)
     .where(and(eq(events.userId, userId), eq(events.isPending, 1)))
     .orderBy(events.startDatetime);
 
   if (pending.length === 0) return;
 
-  const [previous] = await db
-    .select({ id: events.id, endDatetime: events.endDatetime, title: events.title })
+  const previous = await db
+    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
     .from(events)
     .where(
       and(
@@ -550,16 +544,11 @@ export async function mergePendingIntoNeighbours(userId: number): Promise<void> 
     )
     .limit(1);
 
-  // Whatever each pending event would extend: an approved event or an earlier pending one.
-  let run: { id: number; endDatetime: string; title: string } | null = previous ?? null;
-
-  for (const ev of pending) {
-    if (run && run.endDatetime === ev.startDatetime && sameTitle(run.title, ev.title)) {
-      await db.update(events).set({ endDatetime: ev.endDatetime }).where(eq(events.id, run.id));
-      await db.delete(events).where(eq(events.id, ev.id));
-      run = { ...run, endDatetime: ev.endDatetime };
-    } else {
-      run = ev;
-    }
+  const { newEnds, absorbed } = planPendingMerge([...previous, ...pending]);
+  for (const [id, endDatetime] of newEnds) {
+    await db.update(events).set({ endDatetime }).where(eq(events.id, id));
+  }
+  for (const id of absorbed) {
+    await db.delete(events).where(eq(events.id, id));
   }
 }
