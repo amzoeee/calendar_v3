@@ -1014,6 +1014,11 @@ export async function setTaskScheduleAction(
     .limit(1);
   if (!task) throw new Error('Task not found');
   if (input.asap && task.rrule) throw new Error('A repeating task needs a date, not ASAP');
+  for (const offset of [input.remindOffsetMinutes, input.remindOffsetDays]) {
+    if (offset != null && !(Number.isInteger(offset) && offset >= 0)) {
+      throw new Error('Reminder offset must be a whole number, zero or more');
+    }
+  }
 
   if (input.asap || !input.dueDate) {
     // No deadline means no reminder — an offset from nothing has no meaning.
