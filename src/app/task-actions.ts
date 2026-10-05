@@ -304,7 +304,8 @@ async function rollForward(
     return null;
   }
 
-  const todayStr = dateStrInTimeZone(await getViewerTimeZone());
+  const tz = await getViewerTimeZone();
+  const todayStr = dateStrInTimeZone(tz);
   const nextDue = nextTaskOccurrence(task.dueDatetime, task.rrule, todayStr);
   if (!nextDue) return null;
 
@@ -314,7 +315,8 @@ async function rollForward(
     nextDue,
     task.remindOffsetMinutes,
     task.remindOffsetDays,
-    task.remindTimeOfDay
+    task.remindTimeOfDay,
+    tz
   );
 
   // Subtasks are the steps of this occurrence, so they come back open for the
@@ -381,7 +383,8 @@ async function applyDeadline(
         dueDatetime,
         task.remindOffsetMinutes,
         task.remindOffsetDays,
-        task.remindTimeOfDay
+        task.remindTimeOfDay,
+        await getViewerTimeZone()
       ),
     })
     .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
@@ -730,7 +733,8 @@ export async function setTaskCompletionAction(
               rolled.previousDue,
               task.remindOffsetMinutes,
               task.remindOffsetDays,
-              task.remindTimeOfDay
+              task.remindTimeOfDay,
+              await getViewerTimeZone()
             )
           : null,
       })
@@ -1060,7 +1064,8 @@ export async function setTaskScheduleAction(
     dueDatetime,
     input.remindOffsetMinutes,
     input.remindOffsetDays,
-    remindTimeOfDay
+    remindTimeOfDay,
+    tz
   );
 
   await db
