@@ -7,6 +7,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   useTransition,
 } from 'react';
 import { useRouter } from 'next/navigation';
@@ -2124,6 +2125,10 @@ function DueChip({
   asap: boolean;
   done: boolean;
 }) {
+  // The label reads the host's clock and timezone, which differ between the
+  // server and the browser, so it waits for hydration (#136).
+  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
+
   if (asap) {
     return (
       <span
@@ -2136,7 +2141,7 @@ function DueChip({
       </span>
     );
   }
-  if (!due) return null;
+  if (!due || !hydrated) return null;
 
   const now = new Date();
   const dueDate = pacificDbStringToDate(due);
@@ -2157,6 +2162,8 @@ function DueChip({
     </span>
   );
 }
+
+const noopSubscribe = () => () => {};
 
 const CUSTOM = 'custom';
 
