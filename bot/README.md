@@ -35,7 +35,9 @@ deleted, never lines you typed yourself.
 A time is read as the next time that clock reading comes round, so two lines
 in a row with the same time put the second a full day later. `/log` still
 posts the line but privately warns you when your previous line has the same
-time and a different name, so you can delete one or shift a time by a minute.
+time and a different name. The warning has buttons to delete the new line, or
+the earlier one if `/log` posted that too — only the bot can delete its own
+messages. A line you typed yourself you delete as usual.
 
 ## How `/fetch` decides what to take
 
