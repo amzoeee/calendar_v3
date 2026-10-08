@@ -51,8 +51,9 @@ function isLogLine(line) {
  *
  * `messages` arrives newest-first, each `{ content, authorId, createdAt }`.
  * Only `authorId === userId` contributes lines — a log channel is usually
- * shared — but a marker from *anyone* (including the bot's own) ends the scan,
- * which is what makes the bot's own marker work as a watermark.
+ * shared — unless `userId` is null, which takes everyone's. A marker from
+ * *anyone* (including the bot's own) ends the scan, which is what makes the
+ * bot's own marker work as a watermark.
  *
  * Returns the lines chronologically, plus whether a marker was actually found:
  * without one the caller knows it hit the end of its search rather than a
@@ -71,7 +72,7 @@ function collectLogLines(messages, userId) {
         markerFound = true;
         break outer;
       }
-      if (message.authorId !== userId) continue;
+      if (userId !== null && message.authorId !== userId) continue;
       if (isLogLine(raw)) {
         lines.push(raw.trim());
         oldestAt = message.createdAt;
