@@ -13,6 +13,7 @@ the web UI. Nothing it does writes to your calendar directly.
 | `/fetch [date] [merge] [military]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
 | `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
 | `/manual-fetch [date] [merge]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
+| `/debug-fetch [date] [merge] [military] [user]` | Server admins only. Same scan as `/fetch`, but takes lines from `user` (or from everyone if left empty), stages them into **your** calendar, and lists every event it made with its calculated time. Never posts a `---`. |
 | `/clear` | Throws away every event you have staged but not approved yet, same as discarding in the web UI. The reply to a `/fetch` also has a button that does this. |
 
 All replies are ephemeral — only you see them.
