@@ -200,16 +200,24 @@ const handlers = {
   'force-register': handleForceRegister,
 };
 
+// A /log line is posted by the bot but counts as whoever ran it.
+function speakerOf(message) {
+  if (message.author.id === message.client.user.id && message.interactionMetadata) {
+    return message.interactionMetadata.user.id;
+  }
+  return message.author.bot ? null : message.author.id;
+}
+
 // Talking in your own active channel is what keeps the role.
 async function onMessage(message) {
-  if (message.author.bot || message.guildId !== settings.guildId) return;
-  const registration = registrations[message.author.id];
+  const userId = speakerOf(message);
+  if (!userId || message.guildId !== settings.guildId) return;
+  const registration = registrations[userId];
   if (!registration || registration.channelId !== message.channelId) return;
   if (message.channel.parentId !== settings.activeCategoryId) return;
-  if (message.member?.roles.cache.has(settings.activeRoleId)) return;
 
-  if (await setActiveRole(message.guild, message.author.id, true)) {
-    await botLog(message.guild, `:green_circle: <@${message.author.id}> is active again.`);
+  if (await setActiveRole(message.guild, userId, true)) {
+    await botLog(message.guild, `:green_circle: <@${userId}> is active again.`);
   }
 }
 
@@ -223,7 +231,7 @@ async function lastPostedAt(channel, userId, cutoff) {
     const page = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) });
     for (const message of page.values()) {
       if (message.createdTimestamp < cutoff) return null;
-      if (message.author.id === userId) return message.createdTimestamp;
+      if (speakerOf(message) === userId) return message.createdTimestamp;
       before = message.id;
     }
     if (page.size < 100) return null;
