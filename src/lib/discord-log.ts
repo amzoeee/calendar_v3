@@ -456,6 +456,7 @@ export interface StageLogResult {
   count?: number;
   dateUsed?: string;
   warnings?: string[];
+  events?: Array<{ start: string; end: string; title: string; tag: string }>;
 }
 
 /**
@@ -508,7 +509,7 @@ export async function stageLogForUser(
       await db.insert(events).values(valuesToInsert);
     }
 
-    return { success: true, count: valuesToInsert.length, dateUsed, warnings };
+    return { success: true, count: valuesToInsert.length, dateUsed, warnings, events: parsedEvents };
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Log staging failed' };
   }

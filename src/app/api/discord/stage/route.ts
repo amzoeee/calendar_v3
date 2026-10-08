@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { isAuthorizedBotRequest, resolveLinkedUser } from '@/lib/discord-link';
 import { stageLogForUser } from '@/lib/discord-log';
 import { recordStage } from '@/lib/discord-markers';
-import { dayStrOfInstant, SERVER_TIMEZONE } from '@/lib/timezone';
+import { dayStrOfInstant, dbStringToUtcMillis, SERVER_TIMEZONE } from '@/lib/timezone';
 
 // Called by the bot's /fetch with the log text it scraped out of a channel.
 // Everything lands as pending, exactly like a pasted log — nothing reaches the
@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
     dateOverride?: unknown;
     fallbackAt?: unknown;
     military?: unknown;
+    skipMarker?: unknown;
   };
   try {
     body = await request.json();
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
 
   // Only once the user approves does this channel get its marker, and only
   // for someone who asked for one.
-  const wantsMarker = link.postMarker === 1;
+  const wantsMarker = link.postMarker === 1 && body.skipMarker !== true;
   if (channelId && wantsMarker) await recordStage(link.userId, channelId);
 
   revalidatePath('/calendar', 'layout');
@@ -72,5 +73,12 @@ export async function POST(request: NextRequest) {
     count: result.count,
     dateUsed: result.dateUsed,
     warnings: result.warnings,
+    // Instants, so the bot can show them in the link's zone.
+    events: (result.events ?? []).map((e) => ({
+      start: new Date(dbStringToUtcMillis(e.start)).toISOString(),
+      end: new Date(dbStringToUtcMillis(e.end)).toISOString(),
+      title: e.title,
+      tag: e.tag,
+    })),
   });
 }
