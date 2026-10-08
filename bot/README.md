@@ -12,7 +12,7 @@ the web UI. Nothing it does writes to your calendar directly.
 | `/whoami` | Says which calendar account this Discord account is linked to. |
 | `/fetch [date] [merge] [military]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
 | `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
-| `/log name` | Posts `<current time> name` in the channel as a log line, e.g. `1430 study`. |
+| `/log name` | Posts `<current time> name` in the channel as a log line, e.g. `2:30pm study`. |
 | `/manual-fetch [date] [merge]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
 | `/debug-fetch [date] [merge] [military] [user]` | Server admins only. Same scan as `/fetch`, but takes lines from `user` (or from everyone if left empty), stages them into **your** calendar, and lists every event it made with its calculated time. Never posts a `---`. |
 | `/clear` | Throws away every event you have staged but not approved yet, same as discarding in the web UI. The reply to a `/fetch` also has a button that does this. |
@@ -22,8 +22,8 @@ posted to the channel.
 
 ## `/log`
 
-The time is the current time in your link's timezone, written as 24-hour
-`HHMM` so it never needs an am/pm guess. It's plain text rather than a Discord
+The time is the current time in your link's timezone, written with am/pm
+(`2:30pm`) so it reads the same whatever `military` is set to. It's plain text rather than a Discord
 timestamp, so it copies cleanly and `/fetch` can read it. The line is the bot's
 message, but `/fetch` counts it as yours.
 
