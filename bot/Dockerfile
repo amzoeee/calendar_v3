@@ -11,8 +11,11 @@ RUN npm ci --omit=dev
 
 COPY . .
 
+# data/ holds channel registrations; created here so a fresh volume mounted
+# over it inherits the bot user's ownership.
 RUN groupadd --system --gid 1001 nodejs \
     && useradd --system --uid 1001 --gid nodejs bot \
+    && mkdir -p /app/data \
     && chown -R bot:nodejs /app
 
 USER bot

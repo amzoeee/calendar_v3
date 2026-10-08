@@ -39,6 +39,9 @@ __pycache__/
 venv/
 .venv/
 
+# ---- Discord bot state ----
+bot/data/
+
 # ---- Misc ----
 .DS_Store
 Thumbs.db

@@ -8,7 +8,27 @@ function required(name) {
   return value;
 }
 
-const apiUrl = (process.env.CALENDAR_API_URL || 'http://app:4000').replace(/\/+$/, '');
+// The per-person channel features only run in one server. Setting its ID
+// turns them on, and then the IDs they can't work without become required.
+function serverChannels() {
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!guildId) return null;
+
+  return {
+    guildId,
+    activeRoleId: required('DISCORD_ACTIVE_ROLE_ID'),
+    activeCategoryId: required('DISCORD_ACTIVE_CATEGORY_ID'),
+    archiveCategoryId: required('DISCORD_ARCHIVE_CATEGORY_ID'),
+    // Without one, admin means the Administrator permission.
+    adminRoleId: process.env.DISCORD_ADMIN_ROLE_ID || null,
+    logChannelId: process.env.DISCORD_LOG_CHANNEL_ID || null,
+    inactiveAfterDays: Number(process.env.INACTIVE_AFTER_DAYS || 7),
+    checkMinutes: Number(process.env.ACTIVITY_CHECK_MINUTES || 60),
+    dataDir: process.env.BOT_DATA_DIR || `${__dirname}/data`,
+  };
+}
+
+const apiUrl =(process.env.CALENDAR_API_URL || 'http://app:4000').replace(/\/+$/, '');
 
 module.exports = {
   token: required('DISCORD_BOT_TOKEN'),
@@ -33,4 +53,6 @@ module.exports = {
   // approved since. Approval happens in a browser, so there is nothing to
   // push the news back here.
   markerPollSeconds: Number(process.env.MARKER_POLL_SECONDS || 15),
+
+  serverChannels: serverChannels(),
 };
