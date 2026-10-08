@@ -17,6 +17,7 @@ import {
   CalendarDays,
   X,
   Plus,
+  KeyRound,
 } from 'lucide-react';
 import {
   addTagAction,
@@ -28,6 +29,7 @@ import {
   stageLogAction,
   linkDiscordAction,
   unlinkDiscordAction,
+  changePasswordAction,
 } from '@/app/actions';
 import TagSelect from '@/app/components/TagSelect';
 import Select from '@/app/components/Select';
@@ -172,6 +174,13 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
   const [linkCode, setLinkCode] = useState('');
   const [linkError, setLinkError] = useState('');
   const [isLinking, setIsLinking] = useState(false);
+
+  // --- Password State ---
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordResult, setPasswordResult] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // --- ICS Export State ---
   const [exportTagId, setExportTagId] = useState('');
@@ -345,6 +354,31 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
   const handleUnlinkDiscord = async (discordUserId: string) => {
     await unlinkDiscordAction(discordUserId);
     router.refresh();
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordResult(null);
+    if (!currentPassword || !newPassword) {
+      setPasswordResult({ kind: 'error', text: 'Fill in your current and new password.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordResult({ kind: 'error', text: 'New passwords do not match.' });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    const res = await changePasswordAction(currentPassword, newPassword);
+    setIsChangingPassword(false);
+    if (res.error) {
+      setPasswordResult({ kind: 'error', text: res.error });
+      return;
+    }
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordResult({ kind: 'success', text: 'Password changed.' });
   };
 
   // Export handler
@@ -716,6 +750,60 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
             options={WEEK_START_OPTIONS.map((day) => ({ value: day, label: WEEK_START_LABELS[day] }))}
           />
         </div>
+      </section>
+
+      {/* Account */}
+      <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <KeyRound className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-bold tracking-tight">Change Password</h2>
+        </div>
+
+        <form onSubmit={handleChangePassword} className="flex flex-col lg:flex-row lg:items-end gap-3">
+          <div className="w-full lg:w-48">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase">Current Password</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
+            />
+          </div>
+          <div className="w-full lg:w-48">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase">New Password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
+            />
+          </div>
+          <div className="w-full lg:w-48">
+            <label className="block text-xs font-semibold text-muted-foreground uppercase">Confirm New Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={isChangingPassword}
+            className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+          >
+            {isChangingPassword ? 'Saving...' : 'Change Password'}
+          </button>
+        </form>
+
+        {passwordResult && (
+          <p className={`text-xs ${passwordResult.kind === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+            {passwordResult.text}
+          </p>
+        )}
       </section>
 
       {/* Discord Bot */}
