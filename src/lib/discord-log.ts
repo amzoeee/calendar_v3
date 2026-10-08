@@ -2,6 +2,7 @@ import { db } from '../db';
 import { events, tags } from '../db/schema';
 import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
 import { dropUnapprovedStages } from './discord-markers';
+import { planPendingMerge } from './merge-pending';
 import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, pacificDbStringToDate, SERVER_TIMEZONE } from './timezone';
 
 export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
@@ -516,4 +517,38 @@ export async function discardPendingForUser(userId: number): Promise<number> {
     .returning({ id: events.id });
   await dropUnapprovedStages(userId);
   return deleted.length;
+}
+
+/** Applies planPendingMerge to the database: see there for what merges. */
+export async function mergePendingIntoNeighbours(userId: number): Promise<void> {
+  const pending = await db
+    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
+    .from(events)
+    .where(and(eq(events.userId, userId), eq(events.isPending, 1)))
+    .orderBy(events.startDatetime);
+
+  if (pending.length === 0) return;
+
+  const previous = await db
+    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, userId),
+        eq(events.isPending, 0),
+        eq(events.endDatetime, pending[0].startDatetime),
+        eq(sql`lower(trim(${events.title}))`, pending[0].title.trim().toLowerCase()),
+        isNull(events.recurrenceId),
+        isNull(events.rrule),
+      ),
+    )
+    .limit(1);
+
+  const { newEnds, absorbed } = planPendingMerge([...previous, ...pending]);
+  for (const [id, endDatetime] of newEnds) {
+    await db.update(events).set({ endDatetime }).where(eq(events.id, id));
+  }
+  for (const id of absorbed) {
+    await db.delete(events).where(eq(events.id, id));
+  }
 }

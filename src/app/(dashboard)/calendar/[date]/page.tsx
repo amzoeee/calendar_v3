@@ -5,6 +5,8 @@ import { eq, and, or, gte, lt } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import DailyCalendarClient from './DailyCalendarClient';
 import { todayForViewer } from '@/lib/server-timezone';
+import { getMergePending } from '@/lib/server-merge-pending';
+import { previewPendingMerge } from '@/lib/merge-pending';
 import { shiftDateStr } from '@/lib/timezone';
 
 interface PageProps {
@@ -72,7 +74,7 @@ export default async function DailyPage({ params }: PageProps) {
   return (
     <DailyCalendarClient
       date={date}
-      initialEvents={dbEvents}
+      initialEvents={(await getMergePending()) ? previewPendingMerge(dbEvents) : dbEvents}
       tags={dbTags}
     />
   );

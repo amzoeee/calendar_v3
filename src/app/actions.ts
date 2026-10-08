@@ -14,9 +14,10 @@ import {
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
-import { stageLogForUser, recalculatePendingEventsDate, discardPendingForUser } from '@/lib/discord-log';
+import { stageLogForUser, recalculatePendingEventsDate, mergePendingIntoNeighbours, discardPendingForUser } from '@/lib/discord-log';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 import { todayForViewer } from '@/lib/server-timezone';
+import { getMergePending } from '@/lib/server-merge-pending';
 import { isTagScope, type TagScope } from '@/lib/tags';
 import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
 import { markStagesApproved } from '@/lib/discord-markers';
@@ -413,6 +414,8 @@ export async function stageLogAction(text: string, dateOverride?: string | null,
 
 export async function approveAllPendingAction() {
   const session = await requireAuth();
+
+  if (await getMergePending()) await mergePendingIntoNeighbours(session.userId);
 
   await db
     .update(events)
