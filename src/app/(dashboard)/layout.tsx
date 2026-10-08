@@ -86,8 +86,8 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
       <TimezoneSync />
       <PendingSync count={pendingCount} />
       {/* Sidebar (desktop only — MobileTabBar covers navigation on small screens) */}
-      <aside className="hidden md:flex w-52 bg-card border-r border-border flex-col justify-between shrink-0">
-        <div>
+      <aside className="hidden md:flex w-52 bg-card border-r border-border flex-col shrink-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Logo */}
           <div className="h-16 flex items-center px-6 border-b border-border gap-2">
             <CalendarDays className="h-6 w-6 text-foreground" />
@@ -104,7 +104,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         </div>
 
         {/* User profile & Logout */}
-        <div className="p-4 border-t border-border space-y-3">
+        <div className="shrink-0 p-4 border-t border-border space-y-3">
           <div className="px-4 py-2 bg-secondary/50 rounded-lg flex items-center gap-3">
             <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center font-bold text-foreground text-sm uppercase">
               {session.username[0]}
