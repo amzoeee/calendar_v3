@@ -32,6 +32,11 @@ last `---` has the same name (ignoring case), the bot deletes it and the new
 line covers both — one event instead of two. Only its own `/log` messages get
 deleted, never lines you typed yourself.
 
+A time is read as the next time that clock reading comes round, so two lines
+in a row with the same time put the second a full day later. `/log` still
+posts the line but privately warns you when your previous line has the same
+time and a different name, so you can delete one or shift a time by a minute.
+
 ## How `/fetch` decides what to take
 
 It pages back through channel history 100 messages at a time, expanding the
