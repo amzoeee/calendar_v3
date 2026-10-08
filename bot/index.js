@@ -428,17 +428,57 @@ async function handleLog(interaction) {
     });
   }
 
-  await interaction.editReply(line);
+  const posted = await interaction.editReply(line);
 
   // A time is read as the next time that clock reading comes round, so a
   // repeat lands a full day after the line before it.
   if (latest && !sameName && sameTime(latest.line, line)) {
+    // Only the bot can delete its own lines, so it offers to. A line they
+    // typed themselves they can delete as usual.
+    const buttons = [
+      ...(latest.message.viaLog ? [deleteLogButton(latest.message.id, `delete earlier (${latest.line})`)] : []),
+      deleteLogButton(posted.id, `delete this one (${line})`),
+    ];
     await interaction.followUp({
-      content:
-        `:warning: your last line (\`${latest.line}\`) has the same time, so this one will be read as 24 hours later. ` +
-        'delete one of them, or change a time by a minute.',
+      content: `:warning: your last line (\`${latest.line}\`) has the same time, so this one will be read as 24 hours later.`,
+      components: [new ActionRowBuilder().addComponents(buttons)],
       flags: MessageFlags.Ephemeral,
     });
+  }
+}
+
+const DELETE_LOG_PREFIX = 'delete-log:';
+
+const deleteLogButton = (messageId, label) =>
+  new ButtonBuilder()
+    .setCustomId(`${DELETE_LOG_PREFIX}${messageId}`)
+    .setLabel(label.slice(0, 80))
+    .setStyle(ButtonStyle.Secondary);
+
+async function handleDeleteLogButton(interaction) {
+  await interaction.deferUpdate();
+  const messageId = interaction.customId.slice(DELETE_LOG_PREFIX.length);
+  try {
+    const message = await interaction.channel.messages.fetch(messageId).catch(() => null);
+    // Only a /log line, and only one the presser made.
+    const deletable =
+      message &&
+      message.author.id === client.user.id &&
+      message.interactionMetadata?.user.id === interaction.user.id;
+    if (deletable) await message.delete();
+    await interaction.editReply({
+      content: !message
+        ? 'that line is already gone.'
+        : deletable
+          ? `deleted \`${message.content}\`.`
+          : "that's not one of your /log lines, so i left it.",
+      components: [],
+    });
+  } catch (error) {
+    console.error('delete-log button failed:', error);
+    await interaction
+      .followUp({ content: 'something broke :( check the bot logs.', flags: MessageFlags.Ephemeral })
+      .catch(() => {});
   }
 }
 
@@ -529,6 +569,10 @@ async function handleClearButton(interaction) {
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton() && interaction.customId === CLEAR_BUTTON_ID) {
     await handleClearButton(interaction);
+    return;
+  }
+  if (interaction.isButton() && interaction.customId.startsWith(DELETE_LOG_PREFIX)) {
+    await handleDeleteLogButton(interaction);
     return;
   }
   if (!interaction.isChatInputCommand()) return;
