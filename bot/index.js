@@ -4,6 +4,7 @@ const {
   ButtonStyle,
   Client,
   GatewayIntentBits,
+  InteractionContextType,
   MessageFlags,
   REST,
   Routes,
@@ -27,6 +28,9 @@ function dateStrInZone(date, timeZone) {
 
 const mergeOption = (option) =>
   option.setName('merge').setDescription('merge back-to-back lines with the same name into one event');
+
+const militaryOption = (option) =>
+  option.setName('military').setDescription('read times with a leading 0 (like 0145) as 24h. defaults to true.');
 
 const commands = [
   new SlashCommandBuilder()
@@ -59,10 +63,20 @@ const commands = [
         .setDescription('day the log belongs to (YYYY-MM-DD). defaults to the day you posted it.'),
     )
     .addBooleanOption(mergeOption)
-    .addBooleanOption((option) =>
-      option
-        .setName('military')
-        .setDescription('read times with a leading 0 (like 0145) as 24h. defaults to true.'),
+    .addBooleanOption(militaryOption),
+  new SlashCommandBuilder()
+    .setName('debug-fetch')
+    .setDescription("stage anyone's log lines into your calendar and list every event it made")
+    // Admins only, and only in servers: a permission default means nothing in DMs.
+    .setDefaultMemberPermissions(0)
+    .setContexts(InteractionContextType.Guild)
+    .addStringOption((option) =>
+      option.setName('date').setDescription('day the log belongs to (YYYY-MM-DD). defaults to the day it was posted.'),
+    )
+    .addBooleanOption(mergeOption)
+    .addBooleanOption(militaryOption)
+    .addUserOption((option) =>
+      option.setName('user').setDescription("whose lines to read. defaults to everyone's."),
     ),
   new SlashCommandBuilder()
     .setName('clear')
@@ -227,18 +241,7 @@ async function handleFetch(interaction) {
   });
 
   if (!result.ok) {
-    if (result.error === 'pending_exists') {
-      await interaction.editReply(
-        'you already have staged events waiting. approve them at ' +
-          `${config.publicUrl}, or run \`/clear\` to throw them away and then \`/fetch\` again.`,
-      );
-      return;
-    }
-    await interaction.editReply(
-      result.error === 'not_linked'
-        ? 'not linked yet, run `/link` first.'
-        : `couldn't stage that :( ${result.error || result.status}`,
-    );
+    await interaction.editReply(stageFailure(result));
     return;
   }
 
@@ -257,6 +260,97 @@ async function handleFetch(interaction) {
         capWarning(markerFound, hitCap, messagesScanned),
     components: [clearButtonRow()],
   });
+}
+
+function stageFailure(result) {
+  if (result.error === 'pending_exists') {
+    return (
+      'you already have staged events waiting. approve them at ' +
+      `${config.publicUrl}, or run \`/clear\` to throw them away and then fetch again.`
+    );
+  }
+  return result.error === 'not_linked'
+    ? 'not linked yet, run `/link` first.'
+    : `couldn't stage that :( ${result.error || result.status}`;
+}
+
+// "YYYY-MM-DD HH:MM" in the given zone.
+function wallClock(iso, timeZone) {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(iso));
+}
+
+function eventLine(event, timeZone) {
+  const start = wallClock(event.start, timeZone);
+  const end = wallClock(event.end, timeZone);
+  // Only repeat the date when the event crosses midnight.
+  const endShown = end.slice(0, 10) === start.slice(0, 10) ? end.slice(11) : end;
+  return `${start} → ${endShown}  ${event.title}` + (event.tag ? `  #${event.tag}` : '');
+}
+
+// Like /fetch, but from any author (or all of them), never leaving a marker
+// behind, and listing every event it made so the scheduling can be checked.
+async function handleDebugFetch(interaction) {
+  const target = interaction.options.getUser('user');
+  const { lines: scraped, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
+    interaction.channel,
+    target ? target.id : null,
+  );
+  const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
+  const warning = capWarning(markerFound, hitCap, messagesScanned);
+  const source = target ? `<@${target.id}>'s lines` : "everyone's lines";
+
+  if (lines.length === 0) {
+    await interaction.editReply(
+      (markerFound
+        ? `none of ${source} since the last \`---\`.`
+        : `couldn't find any of ${source} in the last ${messagesScanned} messages.`) + warning,
+    );
+    return;
+  }
+
+  const result = await api.stageLog({
+    discordUserId: interaction.user.id,
+    channelId: interaction.channelId,
+    text: lines.join('\n'),
+    dateOverride: interaction.options.getString('date') || null,
+    military: interaction.options.getBoolean('military') ?? true,
+    fallbackAt: oldestAt ? oldestAt.toISOString() : null,
+    skipMarker: true,
+  });
+
+  if (!result.ok) {
+    await interaction.editReply(stageFailure(result));
+    return;
+  }
+
+  const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
+  const events = result.events || [];
+
+  await interaction.editReply({
+    content:
+      `staged **${events.length}** events from **${lines.length}** of ${source} ${boundary}, ` +
+      `on **${result.dateUsed}** (${result.timeZone}) for **${result.username}**. no \`---\` will be posted.\n` +
+      `approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
+      warning,
+    components: [clearButtonRow()],
+  });
+
+  const warnings = result.warnings || [];
+  const body = [...events.map((event) => eventLine(event, result.timeZone)), ...(warnings.length ? ['', ...warnings] : [])];
+  for (const chunk of chunkLines(body, 1900)) {
+    await interaction.followUp({
+      content: '```\n' + chunk.join('\n') + '\n```',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 }
 
 async function clearStaged(discordUserId) {
@@ -335,6 +429,7 @@ const handlers = {
   fetch: handleFetch,
   marker: handleMarker,
   'manual-fetch': handleManualFetch,
+  'debug-fetch': handleDebugFetch,
   clear: handleClear,
 };
 
