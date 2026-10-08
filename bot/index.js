@@ -29,11 +29,14 @@ function dateStrInZone(date, timeZone) {
 // The app reads links without a zone in its own, America/Los_Angeles.
 const FALLBACK_TIMEZONE = 'America/Los_Angeles';
 
-// 24-hour HHMM, which the log parser reads without am/pm guessing.
+// 12-hour with am/pm, e.g. 6:30pm, so no setting can misread it.
 function shorthandTimeInZone(date, timeZone) {
-  return new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-    .format(date)
-    .replace(':', '');
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit', hour12: true })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.hour}:${parts.minute}${parts.dayPeriod.toLowerCase()}`;
 }
 
 const mergeOption = (option) =>
