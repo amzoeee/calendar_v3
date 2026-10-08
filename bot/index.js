@@ -13,7 +13,7 @@ const {
 
 const config = require('./config');
 const api = require('./api');
-const { collectLogLines, mergeRepeats } = require('./log-lines');
+const { activityOf, collectLogLines, isLogLine, mergeRepeats, sameTime } = require('./log-lines');
 const { capWarning, chunkLines } = require('./reply');
 
 // en-CA formats as YYYY-MM-DD, the shape the calendar wants.
@@ -24,6 +24,19 @@ function dateStrInZone(date, timeZone) {
     month: '2-digit',
     day: '2-digit',
   }).format(date);
+}
+
+// The app reads links without a zone in its own, America/Los_Angeles.
+const FALLBACK_TIMEZONE = 'America/Los_Angeles';
+
+// 12-hour with am/pm, e.g. 6:30pm, so no setting can misread it.
+function shorthandTimeInZone(date, timeZone) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit', hour12: true })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.hour}:${parts.minute}${parts.dayPeriod.toLowerCase()}`;
 }
 
 const mergeOption = (option) =>
@@ -44,6 +57,12 @@ const commands = [
     .setDescription('choose whether a --- gets posted here after you approve a staged log')
     .addBooleanOption((option) =>
       option.setName('on').setDescription('true to post the marker, false to leave the channel alone').setRequired(true),
+    ),
+  new SlashCommandBuilder()
+    .setName('log')
+    .setDescription('post a log line for something you just finished, stamped with the current time')
+    .addStringOption((option) =>
+      option.setName('name').setDescription('what you just finished').setRequired(true).setMaxLength(200),
     ),
   new SlashCommandBuilder()
     .setName('manual-fetch')
@@ -120,9 +139,13 @@ async function scrapeLogLines(channel, userId) {
     }
 
     for (const message of page.values()) {
+      // A /log line is the bot's reply, but it belongs to whoever ran it.
+      const viaLog = message.author.id === client.user.id && message.interactionMetadata;
       collected.push({
+        id: message.id,
         content: message.content,
-        authorId: message.author.id,
+        authorId: viaLog ? message.interactionMetadata.user.id : message.author.id,
+        viaLog: Boolean(viaLog),
         createdAt: message.createdAt,
       });
       before = message.id;
@@ -369,6 +392,96 @@ async function handleClear(interaction) {
   await interaction.editReply(await clearStaged(interaction.user.id));
 }
 
+// /log's reply is public so it lands in the channel as a log line; anything
+// else it has to say swaps that for a private message.
+async function replyPrivately(interaction, content) {
+  await interaction.deleteReply().catch(() => {});
+  await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+}
+
+async function handleLog(interaction) {
+  const name = interaction.options.getString('name').trim();
+  const status = await api.getLinkStatus(interaction.user.id);
+  if (!status.ok) {
+    await replyPrivately(interaction, `could not reach the calendar :( (error: ${status.error || status.status}).`);
+    return;
+  }
+  if (!status.linked) {
+    await replyPrivately(interaction, 'not linked yet, run `/link` first so i know your timezone.');
+    return;
+  }
+
+  const line = `${shorthandTimeInZone(new Date(), status.timeZone || FALLBACK_TIMEZONE)} ${name}`;
+  if (!isLogLine(line)) {
+    await replyPrivately(interaction, "that doesn't make a log line, try another name.");
+    return;
+  }
+
+  // Each line's time is when that activity ended, so logging the same thing
+  // twice in a row means it was still going: drop the older line and let this
+  // one cover both. Only the bot's own /log messages get deleted.
+  const { latest } = await scrapeLogLines(interaction.channel, interaction.user.id);
+  const sameName = latest && activityOf(latest.line) === activityOf(line);
+  if (sameName && latest.message.viaLog) {
+    await interaction.channel.messages.delete(latest.message.id).catch((error) => {
+      console.error('Could not delete the previous /log line:', error.message);
+    });
+  }
+
+  const posted = await interaction.editReply(line);
+
+  // A time is read as the next time that clock reading comes round, so a
+  // repeat lands a full day after the line before it.
+  if (latest && !sameName && sameTime(latest.line, line)) {
+    // Only the bot can delete its own lines, so it offers to. A line they
+    // typed themselves they can delete as usual.
+    const buttons = [
+      ...(latest.message.viaLog ? [deleteLogButton(latest.message.id, `delete earlier (${latest.line})`)] : []),
+      deleteLogButton(posted.id, `delete this one (${line})`),
+    ];
+    await interaction.followUp({
+      content: `:warning: your last line (\`${latest.line}\`) has the same time, so this one will be read as 24 hours later.`,
+      components: [new ActionRowBuilder().addComponents(buttons)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}
+
+const DELETE_LOG_PREFIX = 'delete-log:';
+
+const deleteLogButton = (messageId, label) =>
+  new ButtonBuilder()
+    .setCustomId(`${DELETE_LOG_PREFIX}${messageId}`)
+    .setLabel(label.slice(0, 80))
+    .setStyle(ButtonStyle.Secondary);
+
+async function handleDeleteLogButton(interaction) {
+  await interaction.deferUpdate();
+  const messageId = interaction.customId.slice(DELETE_LOG_PREFIX.length);
+  try {
+    const message = await interaction.channel.messages.fetch(messageId).catch(() => null);
+    // Only a /log line, and only one the presser made.
+    const deletable =
+      message &&
+      message.author.id === client.user.id &&
+      message.interactionMetadata?.user.id === interaction.user.id;
+    if (deletable) await message.delete();
+    await interaction.editReply({
+      content: !message
+        ? 'that line is already gone.'
+        : deletable
+          ? `deleted \`${message.content}\`.`
+          : "that's not one of your /log lines, so i left it.",
+      components: [],
+    });
+  } catch (error) {
+    console.error('delete-log button failed:', error);
+    await interaction
+      .followUp({ content: 'something broke :( check the bot logs.', flags: MessageFlags.Ephemeral })
+      .catch(() => {});
+  }
+}
+
 // A header the calendar's own paste form understands: it reads the date off
 // the line above the separator, so the printed block carries its day with it.
 function dateHeader(dateStr) {
@@ -431,7 +544,11 @@ const handlers = {
   'manual-fetch': handleManualFetch,
   'debug-fetch': handleDebugFetch,
   clear: handleClear,
+  log: handleLog,
 };
+
+// Commands whose reply is meant for the channel rather than just the caller.
+const publicCommands = new Set(['log']);
 
 // The button under a /fetch reply. Ephemeral, so only the person who fetched
 // can press it; the reply loses the button once used.
@@ -454,19 +571,25 @@ client.on('interactionCreate', async (interaction) => {
     await handleClearButton(interaction);
     return;
   }
+  if (interaction.isButton() && interaction.customId.startsWith(DELETE_LOG_PREFIX)) {
+    await handleDeleteLogButton(interaction);
+    return;
+  }
   if (!interaction.isChatInputCommand()) return;
   const handler = handlers[interaction.commandName];
   if (!handler) return;
 
-  // Every reply is ephemeral: a link code is a secret, and someone else's
-  // staged day is nobody's business in a shared channel.
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  // Replies are ephemeral by default: a link code is a secret, and someone
+  // else's staged day is nobody's business in a shared channel.
+  const isPublic = publicCommands.has(interaction.commandName);
+  await interaction.deferReply(isPublic ? {} : { flags: MessageFlags.Ephemeral });
 
   try {
     await handler(interaction);
   } catch (error) {
     console.error(`/${interaction.commandName} failed:`, error);
-    await interaction.editReply('something broke :( check the bot logs.').catch(() => {});
+    const message = 'something broke :( check the bot logs.';
+    await (isPublic ? replyPrivately(interaction, message) : interaction.editReply(message)).catch(() => {});
   }
 });
 
