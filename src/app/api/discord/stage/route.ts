@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     text?: unknown;
     dateOverride?: unknown;
     fallbackAt?: unknown;
+    military?: unknown;
   };
   try {
     body = await request.json();
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
   // An instant, not a date: which calendar day the oldest scraped message
   // falls on depends on the zone, which only the link knows.
   const fallbackAt = typeof body.fallbackAt === 'string' ? Date.parse(body.fallbackAt) : NaN;
+  const military = body.military !== false;
 
   if (!discordUserId) {
     return NextResponse.json({ error: 'discordUserId is required' }, { status: 400 });
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
   const timeZone = link.timeZone || SERVER_TIMEZONE;
   const fallbackDate = Number.isNaN(fallbackAt) ? null : dayStrOfInstant(fallbackAt, timeZone);
 
-  const result = await stageLogForUser(link.userId, text, dateOverride, timeZone, fallbackDate);
+  const result = await stageLogForUser(link.userId, text, dateOverride, timeZone, fallbackDate, military);
   if (result.error) {
     return NextResponse.json({ error: result.code || result.error }, { status: result.code ? 409 : 422 });
   }

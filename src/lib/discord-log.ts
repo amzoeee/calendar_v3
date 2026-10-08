@@ -40,7 +40,9 @@ export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_
 
 export function parseShorthandTime(
   timeStr: string,
-  ampm?: string
+  ampm?: string,
+  // When true, a 4-digit time with a leading 0 (e.g. 0145) is read as 24h.
+  leadingZeroIs24h: boolean = true
 ): { hour: number; minute: number; exact24h: number | null } | null {
   // 10:30 and 21:00 read the same as 1030 and 2100.
   timeStr = timeStr.replace(':', '');
@@ -75,7 +77,7 @@ export function parseShorthandTime(
     }
   } else if (hour === 0 || hour > 12) {
     exact24h = hour;
-  } else if (timeStr.length === 4 && timeStr.startsWith('0')) {
+  } else if (leadingZeroIs24h && timeStr.length === 4 && timeStr.startsWith('0')) {
     exact24h = hour;
   }
 
@@ -319,7 +321,8 @@ export async function parseLogText(
   // Used only when the log carries no date of its own. The bot supplies the
   // date of the oldest message it scraped, so a channel log that is just bare
   // times still lands on the right day instead of being rejected.
-  fallbackDate?: string | null
+  fallbackDate?: string | null,
+  leadingZeroIs24h: boolean = true
 ): Promise<{
   events: Array<{ start: string; end: string; title: string; tag: string }>;
   dateUsed: string;
@@ -384,7 +387,7 @@ export async function parseLogText(
       const ampm = match[2];
       const title = match[3];
 
-      if (parseShorthandTime(timeStr, ampm) !== null) {
+      if (parseShorthandTime(timeStr, ampm, leadingZeroIs24h) !== null) {
         activities.push({ timeStr, ampm, title });
       }
     }
@@ -412,7 +415,7 @@ export async function parseLogText(
   const eventsResult: Array<{ start: string; end: string; title: string; tag: string }> = [];
 
   for (const act of activities) {
-    const timeParsed = parseShorthandTime(act.timeStr, act.ampm);
+    const timeParsed = parseShorthandTime(act.timeStr, act.ampm, leadingZeroIs24h);
     if (!timeParsed) continue;
 
     const endTime = getNextOccurrence(currentTime, timeParsed.hour, timeParsed.minute, timeParsed.exact24h, browserTimeZone);
@@ -468,6 +471,7 @@ export async function stageLogForUser(
   dateOverride?: string | null,
   browserTimeZone: string = SERVER_TIMEZONE,
   fallbackDate?: string | null,
+  leadingZeroIs24h: boolean = true,
 ): Promise<StageLogResult> {
   try {
     const hasPendingResult = await db
@@ -488,6 +492,7 @@ export async function stageLogForUser(
       dateOverride,
       browserTimeZone,
       fallbackDate,
+      leadingZeroIs24h,
     );
 
     const valuesToInsert = parsedEvents.map((e) => ({

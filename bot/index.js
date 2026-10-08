@@ -58,7 +58,12 @@ const commands = [
         .setName('date')
         .setDescription('day the log belongs to (YYYY-MM-DD). defaults to the day you posted it.'),
     )
-    .addBooleanOption(mergeOption),
+    .addBooleanOption(mergeOption)
+    .addBooleanOption((option) =>
+      option
+        .setName('military')
+        .setDescription('read times with a leading 0 (like 0145) as 24h. defaults to true.'),
+    ),
   new SlashCommandBuilder()
     .setName('clear')
     .setDescription('throw away the events you have staged but not approved yet'),
@@ -215,6 +220,7 @@ async function handleFetch(interaction) {
     channelId: interaction.channelId,
     text: lines.join('\n'),
     dateOverride: interaction.options.getString('date') || null,
+    military: interaction.options.getBoolean('military') ?? true,
     // An instant. Which day it falls on is the app's call, using the timezone
     // recorded on the link — the bot serves several people and has no one zone.
     fallbackAt: oldestAt ? oldestAt.toISOString() : null,
