@@ -261,6 +261,8 @@ export interface RolledForward {
   taskId: number;
   previousDue: string | null;
   previousCounter: number | null;
+  /** Kept as-is, since it may have been set by hand rather than from the offset. */
+  previousRemindAt: string | null;
   /** Subtasks the roll reset, so Undo can re-complete exactly those. */
   resetIds: number[];
 }
@@ -283,6 +285,7 @@ async function rollForward(
       rrule: tasks.rrule,
       counterValue: tasks.counterValue,
       counterEnd: tasks.counterEnd,
+      remindAt: tasks.remindAt,
       remindOffsetMinutes: tasks.remindOffsetMinutes,
       remindOffsetDays: tasks.remindOffsetDays,
       remindTimeOfDay: tasks.remindTimeOfDay,
@@ -339,6 +342,7 @@ async function rollForward(
     taskId,
     previousDue: task.dueDatetime,
     previousCounter: task.counterValue,
+    previousRemindAt: task.remindAt,
     resetIds,
   };
 }
@@ -729,30 +733,12 @@ export async function setTaskCompletionAction(
   // Undoing a completion that rolled the task forward has to put the deadline
   // and the counter back too, or "undo" would quietly leave it a week ahead.
   if (rolled) {
-    const [task] = await db
-      .select({
-        remindOffsetMinutes: tasks.remindOffsetMinutes,
-        remindOffsetDays: tasks.remindOffsetDays,
-        remindTimeOfDay: tasks.remindTimeOfDay,
-      })
-      .from(tasks)
-      .where(and(eq(tasks.id, rolled.taskId), eq(tasks.userId, session.userId)))
-      .limit(1);
-
     await db
       .update(tasks)
       .set({
         dueDatetime: rolled.previousDue,
         counterValue: rolled.previousCounter,
-        remindAt: task
-          ? computeRemindAt(
-              rolled.previousDue,
-              task.remindOffsetMinutes,
-              task.remindOffsetDays,
-              task.remindTimeOfDay,
-              await getViewerTimeZone()
-            )
-          : null,
+        remindAt: rolled.previousRemindAt,
       })
       .where(and(eq(tasks.id, rolled.taskId), eq(tasks.userId, session.userId)));
   }
