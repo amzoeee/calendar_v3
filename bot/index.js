@@ -28,9 +28,6 @@ function dateStrInZone(date, timeZone) {
 const mergeOption = (option) =>
   option.setName('merge').setDescription('merge back-to-back lines with the same name into one event');
 
-const userOption = (option) =>
-  option.setName('user').setDescription("read this person's log lines instead of yours (for debugging)");
-
 const commands = [
   new SlashCommandBuilder()
     .setName('link')
@@ -52,8 +49,7 @@ const commands = [
         .setName('date')
         .setDescription('day to date the output with (YYYY-MM-DD). defaults to the day you posted it.'),
     )
-    .addBooleanOption(mergeOption)
-    .addUserOption(userOption),
+    .addBooleanOption(mergeOption),
   new SlashCommandBuilder()
     .setName('fetch')
     .setDescription('grab your log lines since the last --- marker and stage them in your calendar')
@@ -67,8 +63,7 @@ const commands = [
       option
         .setName('military')
         .setDescription('read times with a leading 0 (like 0145) as 24h. defaults to true.'),
-    )
-    .addUserOption(userOption),
+    ),
   new SlashCommandBuilder()
     .setName('clear')
     .setDescription('throw away the events you have staged but not approved yet'),
@@ -134,16 +129,6 @@ async function scrapeLogLines(channel, userId) {
   };
 }
 
-
-// Whose lines to read. Staging still goes to the caller's own calendar.
-function logAuthorId(interaction) {
-  return (interaction.options.getUser('user') ?? interaction.user).id;
-}
-
-function authorNote(interaction) {
-  const target = interaction.options.getUser('user');
-  return target && target.id !== interaction.user.id ? `, read from <@${target.id}>'s lines` : '';
-}
 
 async function handleLink(interaction) {
   const result = await api.createLinkCode(interaction.user.id, interaction.user.tag);
@@ -216,7 +201,7 @@ async function handleFetch(interaction) {
 
   const { lines: scraped, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
     interaction.channel,
-    logAuthorId(interaction),
+    interaction.user.id,
   );
   const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
 
@@ -258,14 +243,13 @@ async function handleFetch(interaction) {
   }
 
   const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
-  const source = authorNote(interaction);
   const preview = lines.slice(0, 10).join('\n');
   const elided = lines.length > 10 ? `\n...and ${lines.length - 10} more` : '';
 
   await interaction.editReply({
     content:
       `staged **${result.count}** events on **${result.dateUsed}** (${result.timeZone}) ` +
-        `for **${result.username}**, ${boundary}${source}.\n` +
+        `for **${result.username}**, ${boundary}.\n` +
         `approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
         (config.postMarker ? ". \nthere will be a `---` posted here once you do :)" : '') +
         '\n\n' +
@@ -301,7 +285,7 @@ function dateHeader(dateStr) {
 async function handleManualFetch(interaction) {
   const { lines: scraped, markerFound, messagesScanned, hitCap, oldestAt } = await scrapeLogLines(
     interaction.channel,
-    logAuthorId(interaction),
+    interaction.user.id,
   );
   const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
 
@@ -317,7 +301,6 @@ async function handleManualFetch(interaction) {
   }
 
   const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
-  const source = authorNote(interaction);
 
   // Same zone /fetch would have used, so the printed day matches what staging
   // would have picked. Unlinked, there is no zone and no default.
@@ -332,7 +315,7 @@ async function handleManualFetch(interaction) {
   const chunks = chunkLines(body, 1900);
 
   await interaction.editReply(
-    `**${lines.length}** lines ${boundary}${source}` +
+    `**${lines.length}** lines ${boundary}` +
       (dateStr ? `, dated **${dateStr}**` : '') +
       '. note: nothing was staged.' +
       warning,
