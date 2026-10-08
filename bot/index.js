@@ -13,7 +13,7 @@ const {
 
 const config = require('./config');
 const api = require('./api');
-const { activityOf, collectLogLines, isLogLine, mergeRepeats } = require('./log-lines');
+const { activityOf, collectLogLines, isLogLine, mergeRepeats, sameTime } = require('./log-lines');
 const { capWarning, chunkLines } = require('./reply');
 
 // en-CA formats as YYYY-MM-DD, the shape the calendar wants.
@@ -421,13 +421,25 @@ async function handleLog(interaction) {
   // twice in a row means it was still going: drop the older line and let this
   // one cover both. Only the bot's own /log messages get deleted.
   const { latest } = await scrapeLogLines(interaction.channel, interaction.user.id);
-  if (latest && latest.message.viaLog && activityOf(latest.line) === activityOf(line)) {
+  const sameName = latest && activityOf(latest.line) === activityOf(line);
+  if (sameName && latest.message.viaLog) {
     await interaction.channel.messages.delete(latest.message.id).catch((error) => {
       console.error('Could not delete the previous /log line:', error.message);
     });
   }
 
   await interaction.editReply(line);
+
+  // A time is read as the next time that clock reading comes round, so a
+  // repeat lands a full day after the line before it.
+  if (latest && !sameName && sameTime(latest.line, line)) {
+    await interaction.followUp({
+      content:
+        `:warning: your last line (\`${latest.line}\`) has the same time, so this one will be read as 24 hours later. ` +
+        'delete one of them, or change a time by a minute.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 }
 
 // A header the calendar's own paste form understands: it reads the date off

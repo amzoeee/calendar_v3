@@ -99,4 +99,33 @@ function mergeRepeats(lines) {
   return lines.filter((line, i) => i === lines.length - 1 || activityOf(line) !== activityOf(lines[i + 1]));
 }
 
-module.exports = { activityOf, collectLogLines, isLogLine, isMarker, isValidShorthandTime, mergeRepeats };
+/**
+ * Minutes past midnight a log line's time could mean. One value when it's
+ * unambiguous; both readings for a bare 1-12 like `630`.
+ */
+function possibleMinutes(line) {
+  const match = line.trim().match(LOG_LINE);
+  if (!match || !isValidShorthandTime(match[1])) return [];
+
+  const digits = match[1].replace(':', '');
+  const [hourStr, minuteStr] = match[1].includes(':')
+    ? match[1].split(':')
+    : digits.length <= 2
+      ? [digits, '0']
+      : [digits.slice(0, digits.length - 2), digits.slice(-2)];
+  const hour = parseInt(hourStr, 10);
+  const minute = parseInt(minuteStr, 10);
+
+  const ampm = match[2]?.toLowerCase();
+  if (ampm) return [((hour % 12) + (ampm === 'pm' ? 12 : 0)) * 60 + minute];
+  if (hour === 0 || hour > 12) return [hour * 60 + minute];
+  return [(hour % 12) * 60 + minute, ((hour % 12) + 12) * 60 + minute];
+}
+
+/** Whether two lines could carry the same time of day. */
+function sameTime(a, b) {
+  const minutesA = possibleMinutes(a);
+  return possibleMinutes(b).some((m) => minutesA.includes(m));
+}
+
+module.exports = { activityOf, collectLogLines, isLogLine, isMarker, isValidShorthandTime, mergeRepeats, sameTime };
