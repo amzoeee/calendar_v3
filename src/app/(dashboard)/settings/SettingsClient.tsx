@@ -758,6 +758,9 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
           <KeyRound className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-bold tracking-tight">Change Password</h2>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Forgot your password? Reach out to <span className="font-semibold text-foreground">zweezwee</span> on Discord.
+        </p>
 
         <form onSubmit={handleChangePassword} className="flex flex-col lg:flex-row lg:items-end gap-3">
           <div className="w-full lg:w-48">
