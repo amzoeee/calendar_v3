@@ -304,7 +304,8 @@ async function rollForward(
     return null;
   }
 
-  const todayStr = dateStrInTimeZone(await getViewerTimeZone());
+  const tz = await getViewerTimeZone();
+  const todayStr = dateStrInTimeZone(tz);
   const nextDue = nextTaskOccurrence(task.dueDatetime, task.rrule, todayStr);
   if (!nextDue) return null;
 
@@ -314,7 +315,8 @@ async function rollForward(
     nextDue,
     task.remindOffsetMinutes,
     task.remindOffsetDays,
-    task.remindTimeOfDay
+    task.remindTimeOfDay,
+    tz
   );
 
   // Subtasks are the steps of this occurrence, so they come back open for the
@@ -381,7 +383,8 @@ async function applyDeadline(
         dueDatetime,
         task.remindOffsetMinutes,
         task.remindOffsetDays,
-        task.remindTimeOfDay
+        task.remindTimeOfDay,
+        await getViewerTimeZone()
       ),
     })
     .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
@@ -730,7 +733,8 @@ export async function setTaskCompletionAction(
               rolled.previousDue,
               task.remindOffsetMinutes,
               task.remindOffsetDays,
-              task.remindTimeOfDay
+              task.remindTimeOfDay,
+              await getViewerTimeZone()
             )
           : null,
       })
@@ -1010,6 +1014,11 @@ export async function setTaskScheduleAction(
     .limit(1);
   if (!task) throw new Error('Task not found');
   if (input.asap && task.rrule) throw new Error('A repeating task needs a date, not ASAP');
+  for (const offset of [input.remindOffsetMinutes, input.remindOffsetDays]) {
+    if (offset != null && !(Number.isInteger(offset) && offset >= 0)) {
+      throw new Error('Reminder offset must be a whole number, zero or more');
+    }
+  }
 
   if (input.asap || !input.dueDate) {
     // No deadline means no reminder — an offset from nothing has no meaning.
@@ -1055,7 +1064,8 @@ export async function setTaskScheduleAction(
     dueDatetime,
     input.remindOffsetMinutes,
     input.remindOffsetDays,
-    remindTimeOfDay
+    remindTimeOfDay,
+    tz
   );
 
   await db

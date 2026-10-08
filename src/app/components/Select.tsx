@@ -205,12 +205,17 @@ export default function Select<T extends string | number>({
         fontSize: getComputedStyle(trigger).fontSize,
       });
     };
+    // The menu's own scrolling must not re-place it: a new placement re-runs
+    // the scroll-into-view below, snapping a touch scroll back to the selection.
+    const onScroll = (e: Event) => {
+      if (!menuRef.current?.contains(e.target as Node)) place();
+    };
     place();
     window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [open]);
 

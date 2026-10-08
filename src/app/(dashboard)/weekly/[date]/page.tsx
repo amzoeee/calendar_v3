@@ -5,6 +5,8 @@ import { eq, and, or, gte, lt } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import WeeklyCalendarClient from './WeeklyCalendarClient';
 import { todayForViewer } from '@/lib/server-timezone';
+import { getMergePending } from '@/lib/server-merge-pending';
+import { previewPendingMerge } from '@/lib/merge-pending';
 import { shiftDateStr } from '@/lib/timezone';
 import { getWeekStart } from '@/lib/server-week';
 import { startOfWeek, type WeekStart } from '@/lib/week';
@@ -89,7 +91,7 @@ export default async function WeeklyPage({ params }: PageProps) {
       date={date}
       weekStartDate={first.toLocaleDateString('en-CA')}
       weekStart={weekStart}
-      initialEvents={dbEvents}
+      initialEvents={(await getMergePending()) ? previewPendingMerge(dbEvents) : dbEvents}
       tags={dbTags}
     />
   );

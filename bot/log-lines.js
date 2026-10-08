@@ -51,17 +51,19 @@ function isLogLine(line) {
  *
  * `messages` arrives newest-first, each `{ content, authorId, createdAt }`.
  * Only `authorId === userId` contributes lines — a log channel is usually
- * shared — but a marker from *anyone* (including the bot's own) ends the scan,
- * which is what makes the bot's own marker work as a watermark.
+ * shared — unless `userId` is null, which takes everyone's. A marker from
+ * *anyone* (including the bot's own) ends the scan, which is what makes the
+ * bot's own marker work as a watermark.
  *
  * Returns the lines chronologically, plus whether a marker was actually found:
  * without one the caller knows it hit the end of its search rather than a
- * real boundary.
+ * real boundary. `latest` is the newest line and the message it came from.
  */
 function collectLogLines(messages, userId) {
   const lines = [];
   let markerFound = false;
   let oldestAt = null;
+  let latest = null;
 
   outer: for (const message of messages) {
     const messageLines = message.content.split(/\r?\n/).reverse();
@@ -71,15 +73,59 @@ function collectLogLines(messages, userId) {
         markerFound = true;
         break outer;
       }
-      if (message.authorId !== userId) continue;
+      if (userId !== null && message.authorId !== userId) continue;
       if (isLogLine(raw)) {
         lines.push(raw.trim());
         oldestAt = message.createdAt;
+        latest ??= { line: raw.trim(), message };
       }
     }
   }
 
-  return { lines: lines.reverse(), markerFound, oldestAt };
+  return { lines: lines.reverse(), markerFound, oldestAt, latest };
 }
 
-module.exports = { collectLogLines, isLogLine, isMarker, isValidShorthandTime };
+function activityOf(line) {
+  const match = line.trim().match(LOG_LINE);
+  return match ? match[3].trim().toLowerCase() : null;
+}
+
+/**
+ * Collapses runs of the same activity into one line. A line's time is when
+ * that activity *ended*, so the last of the run is kept: `1400 study` then
+ * `1500 study` becomes a single study event ending at 1500.
+ */
+function mergeRepeats(lines) {
+  return lines.filter((line, i) => i === lines.length - 1 || activityOf(line) !== activityOf(lines[i + 1]));
+}
+
+/**
+ * Minutes past midnight a log line's time could mean. One value when it's
+ * unambiguous; both readings for a bare 1-12 like `630`.
+ */
+function possibleMinutes(line) {
+  const match = line.trim().match(LOG_LINE);
+  if (!match || !isValidShorthandTime(match[1])) return [];
+
+  const digits = match[1].replace(':', '');
+  const [hourStr, minuteStr] = match[1].includes(':')
+    ? match[1].split(':')
+    : digits.length <= 2
+      ? [digits, '0']
+      : [digits.slice(0, digits.length - 2), digits.slice(-2)];
+  const hour = parseInt(hourStr, 10);
+  const minute = parseInt(minuteStr, 10);
+
+  const ampm = match[2]?.toLowerCase();
+  if (ampm) return [((hour % 12) + (ampm === 'pm' ? 12 : 0)) * 60 + minute];
+  if (hour === 0 || hour > 12) return [hour * 60 + minute];
+  return [(hour % 12) * 60 + minute, ((hour % 12) + 12) * 60 + minute];
+}
+
+/** Whether two lines could carry the same time of day. */
+function sameTime(a, b) {
+  const minutesA = possibleMinutes(a);
+  return possibleMinutes(b).some((m) => minutesA.includes(m));
+}
+
+module.exports = { activityOf, collectLogLines, isLogLine, isMarker, isValidShorthandTime, mergeRepeats, sameTime };

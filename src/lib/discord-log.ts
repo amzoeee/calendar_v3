@@ -2,6 +2,7 @@ import { db } from '../db';
 import { events, tags } from '../db/schema';
 import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
 import { dropUnapprovedStages } from './discord-markers';
+import { planPendingMerge } from './merge-pending';
 import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, pacificDbStringToDate, SERVER_TIMEZONE } from './timezone';
 
 export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
@@ -39,7 +40,9 @@ export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_
 
 export function parseShorthandTime(
   timeStr: string,
-  ampm?: string
+  ampm?: string,
+  // When true, a 4-digit time with a leading 0 (e.g. 0145) is read as 24h.
+  leadingZeroIs24h: boolean = true
 ): { hour: number; minute: number; exact24h: number | null } | null {
   // 10:30 and 21:00 read the same as 1030 and 2100.
   timeStr = timeStr.replace(':', '');
@@ -74,7 +77,7 @@ export function parseShorthandTime(
     }
   } else if (hour === 0 || hour > 12) {
     exact24h = hour;
-  } else if (timeStr.length === 4 && timeStr.startsWith('0')) {
+  } else if (leadingZeroIs24h && timeStr.length === 4 && timeStr.startsWith('0')) {
     exact24h = hour;
   }
 
@@ -318,7 +321,8 @@ export async function parseLogText(
   // Used only when the log carries no date of its own. The bot supplies the
   // date of the oldest message it scraped, so a channel log that is just bare
   // times still lands on the right day instead of being rejected.
-  fallbackDate?: string | null
+  fallbackDate?: string | null,
+  leadingZeroIs24h: boolean = true
 ): Promise<{
   events: Array<{ start: string; end: string; title: string; tag: string }>;
   dateUsed: string;
@@ -383,7 +387,7 @@ export async function parseLogText(
       const ampm = match[2];
       const title = match[3];
 
-      if (parseShorthandTime(timeStr, ampm) !== null) {
+      if (parseShorthandTime(timeStr, ampm, leadingZeroIs24h) !== null) {
         activities.push({ timeStr, ampm, title });
       }
     }
@@ -411,7 +415,7 @@ export async function parseLogText(
   const eventsResult: Array<{ start: string; end: string; title: string; tag: string }> = [];
 
   for (const act of activities) {
-    const timeParsed = parseShorthandTime(act.timeStr, act.ampm);
+    const timeParsed = parseShorthandTime(act.timeStr, act.ampm, leadingZeroIs24h);
     if (!timeParsed) continue;
 
     const endTime = getNextOccurrence(currentTime, timeParsed.hour, timeParsed.minute, timeParsed.exact24h, browserTimeZone);
@@ -452,6 +456,7 @@ export interface StageLogResult {
   count?: number;
   dateUsed?: string;
   warnings?: string[];
+  events?: Array<{ start: string; end: string; title: string; tag: string }>;
 }
 
 /**
@@ -467,6 +472,7 @@ export async function stageLogForUser(
   dateOverride?: string | null,
   browserTimeZone: string = SERVER_TIMEZONE,
   fallbackDate?: string | null,
+  leadingZeroIs24h: boolean = true,
 ): Promise<StageLogResult> {
   try {
     const hasPendingResult = await db
@@ -487,6 +493,7 @@ export async function stageLogForUser(
       dateOverride,
       browserTimeZone,
       fallbackDate,
+      leadingZeroIs24h,
     );
 
     const valuesToInsert = parsedEvents.map((e) => ({
@@ -502,7 +509,7 @@ export async function stageLogForUser(
       await db.insert(events).values(valuesToInsert);
     }
 
-    return { success: true, count: valuesToInsert.length, dateUsed, warnings };
+    return { success: true, count: valuesToInsert.length, dateUsed, warnings, events: parsedEvents };
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Log staging failed' };
   }
@@ -516,4 +523,38 @@ export async function discardPendingForUser(userId: number): Promise<number> {
     .returning({ id: events.id });
   await dropUnapprovedStages(userId);
   return deleted.length;
+}
+
+/** Applies planPendingMerge to the database: see there for what merges. */
+export async function mergePendingIntoNeighbours(userId: number): Promise<void> {
+  const pending = await db
+    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
+    .from(events)
+    .where(and(eq(events.userId, userId), eq(events.isPending, 1)))
+    .orderBy(events.startDatetime);
+
+  if (pending.length === 0) return;
+
+  const previous = await db
+    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, userId),
+        eq(events.isPending, 0),
+        eq(events.endDatetime, pending[0].startDatetime),
+        eq(sql`lower(trim(${events.title}))`, pending[0].title.trim().toLowerCase()),
+        isNull(events.recurrenceId),
+        isNull(events.rrule),
+      ),
+    )
+    .limit(1);
+
+  const { newEnds, absorbed } = planPendingMerge([...previous, ...pending]);
+  for (const [id, endDatetime] of newEnds) {
+    await db.update(events).set({ endDatetime }).where(eq(events.id, id));
+  }
+  for (const id of absorbed) {
+    await db.delete(events).where(eq(events.id, id));
+  }
 }

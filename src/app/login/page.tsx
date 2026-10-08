@@ -70,6 +70,9 @@ export default function LoginPage() {
             Register here
           </Link>
         </p>
+        <p className="mt-2 text-center text-sm text-muted-foreground">
+          Forgot your password? Reach out to <span className="font-semibold text-foreground">zweezwee</span> on Discord.
+        </p>
       </div>
     </div>
   );

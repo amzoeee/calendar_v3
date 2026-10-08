@@ -10,12 +10,34 @@ the web UI. Nothing it does writes to your calendar directly.
 | --- | --- |
 | `/link` | Gives you a one-time code to connect this Discord account to a calendar account. |
 | `/whoami` | Says which calendar account this Discord account is linked to. |
-| `/fetch [date]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
+| `/fetch [date] [merge] [military]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
 | `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
-| `/manual-fetch [date]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
+| `/log name` | Posts `<current time> name` in the channel as a log line, e.g. `2:30pm study`. |
+| `/manual-fetch [date] [merge]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
+| `/debug-fetch [date] [merge] [military] [user]` | Server admins only. Same scan as `/fetch`, but takes lines from `user` (or from everyone if left empty), stages them into **your** calendar, and lists every event it made with its calculated time. Never posts a `---`. |
 | `/clear` | Throws away every event you have staged but not approved yet, same as discarding in the web UI. The reply to a `/fetch` also has a button that does this. |
 
-All replies are ephemeral — only you see them.
+All replies are ephemeral — only you see them — except `/log`'s line, which is
+posted to the channel.
+
+## `/log`
+
+The time is the current time in your link's timezone, written with am/pm
+(`2:30pm`) so it reads the same whatever `military` is set to. It's plain text rather than a Discord
+timestamp, so it copies cleanly and `/fetch` can read it. The line is the bot's
+message, but `/fetch` counts it as yours.
+
+A line's time marks when that activity ended. So if your last `/log` since the
+last `---` has the same name (ignoring case), the bot deletes it and the new
+line covers both — one event instead of two. Only its own `/log` messages get
+deleted, never lines you typed yourself.
+
+A time is read as the next time that clock reading comes round, so two lines
+in a row with the same time put the second a full day later. `/log` still
+posts the line but privately warns you when your previous line has the same
+time and a different name. The warning has buttons to delete the new line, or
+the earlier one if `/log` posted that too — only the bot can delete its own
+messages. A line you typed yourself you delete as usual.
 
 ## How `/fetch` decides what to take
 
@@ -44,6 +66,15 @@ approve it, or `/clear` it and fetch again.
 
 Dates come from the log itself if it has one, otherwise from the day you posted
 the oldest line it took. `/fetch date:2026-09-19` overrides both.
+
+`merge:true` collapses back-to-back lines with the same name into one event.
+A line's time is when that activity ended, so the last of the run is kept:
+`1400 study` then `1500 study` becomes one study event ending at 1500. Names
+match ignoring case.
+
+`military:false` stops reading a leading 0 as 24h. By default `0145` is
+always 1:45am; with it off, `0145` is treated like `145` and lands on whichever
+of 1:45am or 1:45pm comes next. Times like `1430` or `0030` are still 24h.
 
 `/manual-fetch` heads its output with that date and a `---`, which is the shape
 the calendar's own paste form reads, so the block you copy carries its day with

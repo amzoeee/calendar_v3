@@ -4,6 +4,7 @@ const {
   ButtonStyle,
   Client,
   GatewayIntentBits,
+  InteractionContextType,
   MessageFlags,
   REST,
   Routes,
@@ -12,7 +13,7 @@ const {
 
 const config = require('./config');
 const api = require('./api');
-const { collectLogLines } = require('./log-lines');
+const { activityOf, collectLogLines, isLogLine, mergeRepeats, sameTime } = require('./log-lines');
 const { capWarning, chunkLines } = require('./reply');
 const serverChannels = config.serverChannels ? require('./server-channels') : null;
 
@@ -25,6 +26,25 @@ function dateStrInZone(date, timeZone) {
     day: '2-digit',
   }).format(date);
 }
+
+// The app reads links without a zone in its own, America/Los_Angeles.
+const FALLBACK_TIMEZONE = 'America/Los_Angeles';
+
+// 12-hour with am/pm, e.g. 6:30pm, so no setting can misread it.
+function shorthandTimeInZone(date, timeZone) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit', hour12: true })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.hour}:${parts.minute}${parts.dayPeriod.toLowerCase()}`;
+}
+
+const mergeOption = (option) =>
+  option.setName('merge').setDescription('merge back-to-back lines with the same name into one event');
+
+const militaryOption = (option) =>
+  option.setName('military').setDescription('read times with a leading 0 (like 0145) as 24h. defaults to true.');
 
 const commands = [
   new SlashCommandBuilder()
@@ -40,13 +60,20 @@ const commands = [
       option.setName('on').setDescription('true to post the marker, false to leave the channel alone').setRequired(true),
     ),
   new SlashCommandBuilder()
+    .setName('log')
+    .setDescription('post a log line for something you just finished, stamped with the current time')
+    .addStringOption((option) =>
+      option.setName('name').setDescription('what you just finished').setRequired(true).setMaxLength(200),
+    ),
+  new SlashCommandBuilder()
     .setName('manual-fetch')
     .setDescription('print your log lines since the last --- marker, without staging them')
     .addStringOption((option) =>
       option
         .setName('date')
         .setDescription('day to date the output with (YYYY-MM-DD). defaults to the day you posted it.'),
-    ),
+    )
+    .addBooleanOption(mergeOption),
   new SlashCommandBuilder()
     .setName('fetch')
     .setDescription('grab your log lines since the last --- marker and stage them in your calendar')
@@ -54,6 +81,22 @@ const commands = [
       option
         .setName('date')
         .setDescription('day the log belongs to (YYYY-MM-DD). defaults to the day you posted it.'),
+    )
+    .addBooleanOption(mergeOption)
+    .addBooleanOption(militaryOption),
+  new SlashCommandBuilder()
+    .setName('debug-fetch')
+    .setDescription("stage anyone's log lines into your calendar and list every event it made")
+    // Admins only, and only in servers: a permission default means nothing in DMs.
+    .setDefaultMemberPermissions(0)
+    .setContexts(InteractionContextType.Guild)
+    .addStringOption((option) =>
+      option.setName('date').setDescription('day the log belongs to (YYYY-MM-DD). defaults to the day it was posted.'),
+    )
+    .addBooleanOption(mergeOption)
+    .addBooleanOption(militaryOption)
+    .addUserOption((option) =>
+      option.setName('user').setDescription("whose lines to read. defaults to everyone's."),
     ),
   new SlashCommandBuilder()
     .setName('clear')
@@ -97,9 +140,13 @@ async function scrapeLogLines(channel, userId) {
     }
 
     for (const message of page.values()) {
+      // A /log line is the bot's reply, but it belongs to whoever ran it.
+      const viaLog = message.author.id === client.user.id && message.interactionMetadata;
       collected.push({
+        id: message.id,
         content: message.content,
-        authorId: message.author.id,
+        authorId: viaLog ? message.interactionMetadata.user.id : message.author.id,
+        viaLog: Boolean(viaLog),
         createdAt: message.createdAt,
       });
       before = message.id;
@@ -190,10 +237,11 @@ async function handleFetch(interaction) {
     return;
   }
 
-  const { lines, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
+  const { lines: scraped, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
+  const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
 
   if (lines.length === 0) {
     await interaction.editReply(
@@ -210,24 +258,14 @@ async function handleFetch(interaction) {
     channelId: interaction.channelId,
     text: lines.join('\n'),
     dateOverride: interaction.options.getString('date') || null,
+    military: interaction.options.getBoolean('military') ?? true,
     // An instant. Which day it falls on is the app's call, using the timezone
     // recorded on the link — the bot serves several people and has no one zone.
     fallbackAt: oldestAt ? oldestAt.toISOString() : null,
   });
 
   if (!result.ok) {
-    if (result.error === 'pending_exists') {
-      await interaction.editReply(
-        'you already have staged events waiting. approve them at ' +
-          `${config.publicUrl}, or run \`/clear\` to throw them away and then \`/fetch\` again.`,
-      );
-      return;
-    }
-    await interaction.editReply(
-      result.error === 'not_linked'
-        ? 'not linked yet, run `/link` first.'
-        : `couldn't stage that :( ${result.error || result.status}`,
-    );
+    await interaction.editReply(stageFailure(result));
     return;
   }
 
@@ -248,6 +286,97 @@ async function handleFetch(interaction) {
   });
 }
 
+function stageFailure(result) {
+  if (result.error === 'pending_exists') {
+    return (
+      'you already have staged events waiting. approve them at ' +
+      `${config.publicUrl}, or run \`/clear\` to throw them away and then fetch again.`
+    );
+  }
+  return result.error === 'not_linked'
+    ? 'not linked yet, run `/link` first.'
+    : `couldn't stage that :( ${result.error || result.status}`;
+}
+
+// "YYYY-MM-DD HH:MM" in the given zone.
+function wallClock(iso, timeZone) {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(iso));
+}
+
+function eventLine(event, timeZone) {
+  const start = wallClock(event.start, timeZone);
+  const end = wallClock(event.end, timeZone);
+  // Only repeat the date when the event crosses midnight.
+  const endShown = end.slice(0, 10) === start.slice(0, 10) ? end.slice(11) : end;
+  return `${start} → ${endShown}  ${event.title}` + (event.tag ? `  #${event.tag}` : '');
+}
+
+// Like /fetch, but from any author (or all of them), never leaving a marker
+// behind, and listing every event it made so the scheduling can be checked.
+async function handleDebugFetch(interaction) {
+  const target = interaction.options.getUser('user');
+  const { lines: scraped, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
+    interaction.channel,
+    target ? target.id : null,
+  );
+  const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
+  const warning = capWarning(markerFound, hitCap, messagesScanned);
+  const source = target ? `<@${target.id}>'s lines` : "everyone's lines";
+
+  if (lines.length === 0) {
+    await interaction.editReply(
+      (markerFound
+        ? `none of ${source} since the last \`---\`.`
+        : `couldn't find any of ${source} in the last ${messagesScanned} messages.`) + warning,
+    );
+    return;
+  }
+
+  const result = await api.stageLog({
+    discordUserId: interaction.user.id,
+    channelId: interaction.channelId,
+    text: lines.join('\n'),
+    dateOverride: interaction.options.getString('date') || null,
+    military: interaction.options.getBoolean('military') ?? true,
+    fallbackAt: oldestAt ? oldestAt.toISOString() : null,
+    skipMarker: true,
+  });
+
+  if (!result.ok) {
+    await interaction.editReply(stageFailure(result));
+    return;
+  }
+
+  const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
+  const events = result.events || [];
+
+  await interaction.editReply({
+    content:
+      `staged **${events.length}** events from **${lines.length}** of ${source} ${boundary}, ` +
+      `on **${result.dateUsed}** (${result.timeZone}) for **${result.username}**. no \`---\` will be posted.\n` +
+      `approve them at ${config.publicUrl}/calendar/${result.dateUsed}` +
+      warning,
+    components: [clearButtonRow()],
+  });
+
+  const warnings = result.warnings || [];
+  const body = [...events.map((event) => eventLine(event, result.timeZone)), ...(warnings.length ? ['', ...warnings] : [])];
+  for (const chunk of chunkLines(body, 1900)) {
+    await interaction.followUp({
+      content: '```\n' + chunk.join('\n') + '\n```',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}
+
 async function clearStaged(discordUserId) {
   const result = await api.clearStaged(discordUserId);
   if (!result.ok) {
@@ -264,6 +393,96 @@ async function handleClear(interaction) {
   await interaction.editReply(await clearStaged(interaction.user.id));
 }
 
+// /log's reply is public so it lands in the channel as a log line; anything
+// else it has to say swaps that for a private message.
+async function replyPrivately(interaction, content) {
+  await interaction.deleteReply().catch(() => {});
+  await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+}
+
+async function handleLog(interaction) {
+  const name = interaction.options.getString('name').trim();
+  const status = await api.getLinkStatus(interaction.user.id);
+  if (!status.ok) {
+    await replyPrivately(interaction, `could not reach the calendar :( (error: ${status.error || status.status}).`);
+    return;
+  }
+  if (!status.linked) {
+    await replyPrivately(interaction, 'not linked yet, run `/link` first so i know your timezone.');
+    return;
+  }
+
+  const line = `${shorthandTimeInZone(new Date(), status.timeZone || FALLBACK_TIMEZONE)} ${name}`;
+  if (!isLogLine(line)) {
+    await replyPrivately(interaction, "that doesn't make a log line, try another name.");
+    return;
+  }
+
+  // Each line's time is when that activity ended, so logging the same thing
+  // twice in a row means it was still going: drop the older line and let this
+  // one cover both. Only the bot's own /log messages get deleted.
+  const { latest } = await scrapeLogLines(interaction.channel, interaction.user.id);
+  const sameName = latest && activityOf(latest.line) === activityOf(line);
+  if (sameName && latest.message.viaLog) {
+    await interaction.channel.messages.delete(latest.message.id).catch((error) => {
+      console.error('Could not delete the previous /log line:', error.message);
+    });
+  }
+
+  const posted = await interaction.editReply(line);
+
+  // A time is read as the next time that clock reading comes round, so a
+  // repeat lands a full day after the line before it.
+  if (latest && !sameName && sameTime(latest.line, line)) {
+    // Only the bot can delete its own lines, so it offers to. A line they
+    // typed themselves they can delete as usual.
+    const buttons = [
+      ...(latest.message.viaLog ? [deleteLogButton(latest.message.id, `delete earlier (${latest.line})`)] : []),
+      deleteLogButton(posted.id, `delete this one (${line})`),
+    ];
+    await interaction.followUp({
+      content: `:warning: your last line (\`${latest.line}\`) has the same time, so this one will be read as 24 hours later.`,
+      components: [new ActionRowBuilder().addComponents(buttons)],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}
+
+const DELETE_LOG_PREFIX = 'delete-log:';
+
+const deleteLogButton = (messageId, label) =>
+  new ButtonBuilder()
+    .setCustomId(`${DELETE_LOG_PREFIX}${messageId}`)
+    .setLabel(label.slice(0, 80))
+    .setStyle(ButtonStyle.Secondary);
+
+async function handleDeleteLogButton(interaction) {
+  await interaction.deferUpdate();
+  const messageId = interaction.customId.slice(DELETE_LOG_PREFIX.length);
+  try {
+    const message = await interaction.channel.messages.fetch(messageId).catch(() => null);
+    // Only a /log line, and only one the presser made.
+    const deletable =
+      message &&
+      message.author.id === client.user.id &&
+      message.interactionMetadata?.user.id === interaction.user.id;
+    if (deletable) await message.delete();
+    await interaction.editReply({
+      content: !message
+        ? 'that line is already gone.'
+        : deletable
+          ? `deleted \`${message.content}\`.`
+          : "that's not one of your /log lines, so i left it.",
+      components: [],
+    });
+  } catch (error) {
+    console.error('delete-log button failed:', error);
+    await interaction
+      .followUp({ content: 'something broke :( check the bot logs.', flags: MessageFlags.Ephemeral })
+      .catch(() => {});
+  }
+}
+
 // A header the calendar's own paste form understands: it reads the date off
 // the line above the separator, so the printed block carries its day with it.
 function dateHeader(dateStr) {
@@ -272,10 +491,11 @@ function dateHeader(dateStr) {
 }
 
 async function handleManualFetch(interaction) {
-  const { lines, markerFound, messagesScanned, hitCap, oldestAt } = await scrapeLogLines(
+  const { lines: scraped, markerFound, messagesScanned, hitCap, oldestAt } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
+  const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
 
   const warning = capWarning(markerFound, hitCap, messagesScanned);
 
@@ -323,9 +543,14 @@ const handlers = {
   fetch: handleFetch,
   marker: handleMarker,
   'manual-fetch': handleManualFetch,
+  'debug-fetch': handleDebugFetch,
   clear: handleClear,
+  log: handleLog,
   ...(serverChannels ? serverChannels.handlers : {}),
 };
+
+// Commands whose reply is meant for the channel rather than just the caller.
+const publicCommands = new Set(['log']);
 
 // The button under a /fetch reply. Ephemeral, so only the person who fetched
 // can press it; the reply loses the button once used.
@@ -348,19 +573,25 @@ client.on('interactionCreate', async (interaction) => {
     await handleClearButton(interaction);
     return;
   }
+  if (interaction.isButton() && interaction.customId.startsWith(DELETE_LOG_PREFIX)) {
+    await handleDeleteLogButton(interaction);
+    return;
+  }
   if (!interaction.isChatInputCommand()) return;
   const handler = handlers[interaction.commandName];
   if (!handler) return;
 
-  // Every reply is ephemeral: a link code is a secret, and someone else's
-  // staged day is nobody's business in a shared channel.
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  // Replies are ephemeral by default: a link code is a secret, and someone
+  // else's staged day is nobody's business in a shared channel.
+  const isPublic = publicCommands.has(interaction.commandName);
+  await interaction.deferReply(isPublic ? {} : { flags: MessageFlags.Ephemeral });
 
   try {
     await handler(interaction);
   } catch (error) {
     console.error(`/${interaction.commandName} failed:`, error);
-    await interaction.editReply('something broke :( check the bot logs.').catch(() => {});
+    const message = 'something broke :( check the bot logs.';
+    await (isPublic ? replyPrivately(interaction, message) : interaction.editReply(message)).catch(() => {});
   }
 });
 
