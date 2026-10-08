@@ -10,6 +10,8 @@ import MobileProfileMenu from '@/app/components/MobileProfileMenu';
 import TimezoneSync from '@/app/components/TimezoneSync';
 import { ConfirmProvider } from '@/app/components/ConfirmDialog';
 import PendingSync from '@/app/components/PendingSync';
+import MergePendingToggle from '@/app/components/MergePendingToggle';
+import { getMergePending } from '@/lib/server-merge-pending';
 import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
 import { dbStringToUtcMillis, dayStrOfInstant, shiftDateStr } from '@/lib/timezone';
@@ -46,6 +48,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const pendingCount = pendingCountResult[0]?.count || 0;
 
   const todayStr = await todayForViewer();
+  const mergePending = await getMergePending();
   const weekStart = await getWeekStart();
 
   // Tasks due today, overdue or ASAP, for the badge on the Tasks tab.
@@ -83,8 +86,8 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
       <TimezoneSync />
       <PendingSync count={pendingCount} />
       {/* Sidebar (desktop only — MobileTabBar covers navigation on small screens) */}
-      <aside className="hidden md:flex w-52 bg-card border-r border-border flex-col justify-between shrink-0">
-        <div>
+      <aside className="hidden md:flex w-52 bg-card border-r border-border flex-col shrink-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Logo */}
           <div className="h-16 flex items-center px-6 border-b border-border gap-2">
             <CalendarDays className="h-6 w-6 text-foreground" />
@@ -101,7 +104,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         </div>
 
         {/* User profile & Logout */}
-        <div className="p-4 border-t border-border space-y-3">
+        <div className="shrink-0 p-4 border-t border-border space-y-3">
           <div className="px-4 py-2 bg-secondary/50 rounded-lg flex items-center gap-3">
             <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center font-bold text-foreground text-sm uppercase">
               {session.username[0]}
@@ -144,7 +147,8 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             </div>
             <div className="flex flex-wrap items-center gap-3">
               {/* Approve All */}
-              <form action={approveAllPendingAction}>
+              <form action={approveAllPendingAction} className="flex items-center gap-2">
+                <MergePendingToggle initial={mergePending} />
                 <button
                   type="submit"
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold shadow transition cursor-pointer"

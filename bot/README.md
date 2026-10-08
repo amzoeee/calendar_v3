@@ -10,10 +10,11 @@ the web UI. Nothing it does writes to your calendar directly.
 | --- | --- |
 | `/link` | Gives you a one-time code to connect this Discord account to a calendar account. |
 | `/whoami` | Says which calendar account this Discord account is linked to. |
-| `/fetch [date]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
+| `/fetch [date] [merge] [military]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
 | `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
 | `/log name` | Posts `<current time> name` in the channel as a log line, e.g. `1430 study`. |
-| `/manual-fetch [date]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
+| `/manual-fetch [date] [merge]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
+| `/debug-fetch [date] [merge] [military] [user]` | Server admins only. Same scan as `/fetch`, but takes lines from `user` (or from everyone if left empty), stages them into **your** calendar, and lists every event it made with its calculated time. Never posts a `---`. |
 | `/clear` | Throws away every event you have staged but not approved yet, same as discarding in the web UI. The reply to a `/fetch` also has a button that does this. |
 
 All replies are ephemeral — only you see them — except `/log`'s line, which is
@@ -58,6 +59,15 @@ approve it, or `/clear` it and fetch again.
 
 Dates come from the log itself if it has one, otherwise from the day you posted
 the oldest line it took. `/fetch date:2026-09-19` overrides both.
+
+`merge:true` collapses back-to-back lines with the same name into one event.
+A line's time is when that activity ended, so the last of the run is kept:
+`1400 study` then `1500 study` becomes one study event ending at 1500. Names
+match ignoring case.
+
+`military:false` stops reading a leading 0 as 24h. By default `0145` is
+always 1:45am; with it off, `0145` is treated like `145` and lands on whichever
+of 1:45am or 1:45pm comes next. Times like `1430` or `0030` are still 24h.
 
 `/manual-fetch` heads its output with that date and a `---`, which is the shape
 the calendar's own paste form reads, so the block you copy carries its day with

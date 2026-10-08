@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { isAuthorizedBotRequest, resolveLinkedUser } from '@/lib/discord-link';
 import { stageLogForUser } from '@/lib/discord-log';
 import { recordStage } from '@/lib/discord-markers';
-import { dayStrOfInstant, SERVER_TIMEZONE } from '@/lib/timezone';
+import { dayStrOfInstant, dbStringToUtcMillis, SERVER_TIMEZONE } from '@/lib/timezone';
 
 // Called by the bot's /fetch with the log text it scraped out of a channel.
 // Everything lands as pending, exactly like a pasted log — nothing reaches the
@@ -19,6 +19,8 @@ export async function POST(request: NextRequest) {
     text?: unknown;
     dateOverride?: unknown;
     fallbackAt?: unknown;
+    military?: unknown;
+    skipMarker?: unknown;
   };
   try {
     body = await request.json();
@@ -33,6 +35,7 @@ export async function POST(request: NextRequest) {
   // An instant, not a date: which calendar day the oldest scraped message
   // falls on depends on the zone, which only the link knows.
   const fallbackAt = typeof body.fallbackAt === 'string' ? Date.parse(body.fallbackAt) : NaN;
+  const military = body.military !== false;
 
   if (!discordUserId) {
     return NextResponse.json({ error: 'discordUserId is required' }, { status: 400 });
@@ -52,14 +55,14 @@ export async function POST(request: NextRequest) {
   const timeZone = link.timeZone || SERVER_TIMEZONE;
   const fallbackDate = Number.isNaN(fallbackAt) ? null : dayStrOfInstant(fallbackAt, timeZone);
 
-  const result = await stageLogForUser(link.userId, text, dateOverride, timeZone, fallbackDate);
+  const result = await stageLogForUser(link.userId, text, dateOverride, timeZone, fallbackDate, military);
   if (result.error) {
     return NextResponse.json({ error: result.code || result.error }, { status: result.code ? 409 : 422 });
   }
 
   // Only once the user approves does this channel get its marker, and only
   // for someone who asked for one.
-  const wantsMarker = link.postMarker === 1;
+  const wantsMarker = link.postMarker === 1 && body.skipMarker !== true;
   if (channelId && wantsMarker) await recordStage(link.userId, channelId);
 
   revalidatePath('/calendar', 'layout');
@@ -70,5 +73,12 @@ export async function POST(request: NextRequest) {
     count: result.count,
     dateUsed: result.dateUsed,
     warnings: result.warnings,
+    // Instants, so the bot can show them in the link's zone.
+    events: (result.events ?? []).map((e) => ({
+      start: new Date(dbStringToUtcMillis(e.start)).toISOString(),
+      end: new Date(dbStringToUtcMillis(e.end)).toISOString(),
+      title: e.title,
+      tag: e.tag,
+    })),
   });
 }

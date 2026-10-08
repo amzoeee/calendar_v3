@@ -14,9 +14,10 @@ import {
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
-import { stageLogForUser, recalculatePendingEventsDate, discardPendingForUser } from '@/lib/discord-log';
+import { stageLogForUser, recalculatePendingEventsDate, mergePendingIntoNeighbours, discardPendingForUser } from '@/lib/discord-log';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 import { todayForViewer } from '@/lib/server-timezone';
+import { getMergePending } from '@/lib/server-merge-pending';
 import { isTagScope, type TagScope } from '@/lib/tags';
 import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
 import { markStagesApproved } from '@/lib/discord-markers';
@@ -105,6 +106,26 @@ export async function loginAction(prevState: any, formData: FormData) {
 export async function logoutAction() {
   await destroySession();
   redirect('/login');
+}
+
+export async function changePasswordAction(currentPassword: string, newPassword: string) {
+  const session = await requireAuth();
+
+  if (!currentPassword || !newPassword) {
+    return { error: 'Current and new password are required' };
+  }
+
+  const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
+  if (!user || !(await verifyPassword(currentPassword, user.passwordHash))) {
+    return { error: 'Current password is incorrect' };
+  }
+
+  await db
+    .update(users)
+    .set({ passwordHash: await hashPassword(newPassword) })
+    .where(eq(users.id, session.userId));
+
+  return { success: true };
 }
 
 // ==========================================
@@ -413,6 +434,8 @@ export async function stageLogAction(text: string, dateOverride?: string | null,
 
 export async function approveAllPendingAction() {
   const session = await requireAuth();
+
+  if (await getMergePending()) await mergePendingIntoNeighbours(session.userId);
 
   await db
     .update(events)
