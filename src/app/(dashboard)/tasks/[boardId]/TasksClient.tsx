@@ -15,6 +15,7 @@ import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import {
   Bell,
+  BellOff,
   Check,
   ChevronDown,
   ChevronRight,
@@ -82,6 +83,7 @@ import {
   skipOccurrenceAction,
   postponeOccurrenceAction,
   restoreTaskDeadlineAction,
+  setTaskReminderActiveAction,
   createTasksBulkAction,
 } from '@/app/task-actions';
 import {
@@ -481,6 +483,11 @@ export default function TasksClient({
     run(() => setTaskStarredAction(row.id, next === 1));
   };
 
+  const setReminderActive = (row: TaskRow, active: boolean) => {
+    patchLocal([row.id], { remindAt: active ? dateToServerDbString(new Date()) : null });
+    run(() => setTaskReminderActiveAction(row.id, active));
+  };
+
   // Manual ordering is the only thing a drag can express, so a board sorted
   // some other way is switched over rather than the drop being refused —
   // refusing is what makes reordering feel broken in most task apps.
@@ -871,6 +878,29 @@ export default function TasksClient({
             />
             {selected.isStarred ? 'Starred' : 'Add star'}
           </button>
+
+          {/* ASAP tasks always count as reminded, so there's nothing to toggle. */}
+          {!selected.completedAt && selected.dueAsap !== 1 && (
+            reminderFired(selected) ? (
+              <button
+                onClick={() => setReminderActive(selected, false)}
+                title="Turn the reminder off"
+                className="flex items-center gap-2 text-sm md:text-xs text-foreground hover:text-amber-400 transition-colors cursor-pointer"
+              >
+                <BellOff className="h-3.5 w-3.5" />
+                Dismiss reminder
+              </button>
+            ) : (
+              <button
+                onClick={() => setReminderActive(selected, true)}
+                title="Count this task as reminded from now"
+                className="flex items-center gap-2 text-sm md:text-xs text-foreground hover:text-amber-400 transition-colors cursor-pointer"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                Set reminder active
+              </button>
+            )
+          )}
 
           <div className="pt-2 border-t border-border">
             <button
