@@ -10,7 +10,7 @@ the web UI. Nothing it does writes to your calendar directly.
 | --- | --- |
 | `/link` | Gives you a one-time code to connect this Discord account to a calendar account. |
 | `/whoami` | Says which calendar account this Discord account is linked to. |
-| `/fetch [date] [merge]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
+| `/fetch [date] [merge] [military]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
 | `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
 | `/manual-fetch [date] [merge]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
 | `/clear` | Throws away every event you have staged but not approved yet, same as discarding in the web UI. The reply to a `/fetch` also has a button that does this. |
@@ -49,6 +49,10 @@ the oldest line it took. `/fetch date:2026-09-19` overrides both.
 A line's time is when that activity ended, so the last of the run is kept:
 `1400 study` then `1500 study` becomes one study event ending at 1500. Names
 match ignoring case.
+
+`military:false` stops reading a leading 0 as 24h. By default `0145` is
+always 1:45am; with it off, `0145` is treated like `145` and lands on whichever
+of 1:45am or 1:45pm comes next. Times like `1430` or `0030` are still 24h.
 
 `/manual-fetch` heads its output with that date and a `---`, which is the shape
 the calendar's own paste form reads, so the block you copy carries its day with
