@@ -1,7 +1,7 @@
 import { getSession } from '@/lib/auth';
 import { db } from '@/db';
 import { events, tasks } from '@/db/schema';
-import { eq, and, or, sql, isNull, lte } from 'drizzle-orm';
+import { eq, and, sql, isNotNull, isNull, lte } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import MiniCalendar from '@/app/components/MiniCalendar';
 import SidebarNav from '@/app/components/SidebarNav';
@@ -14,7 +14,7 @@ import MergePendingToggle from '@/app/components/MergePendingToggle';
 import { getMergePending } from '@/lib/server-merge-pending';
 import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
-import { dbStringToUtcMillis, dayStrOfInstant, shiftDateStr, dateToServerDbString } from '@/lib/timezone';
+import { dbStringToUtcMillis, dayStrOfInstant, shiftDateStr } from '@/lib/timezone';
 import {
   LogOut,
   Sparkles,
@@ -51,34 +51,35 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const mergePending = await getMergePending();
   const weekStart = await getWeekStart();
 
-  // Tasks due today, overdue or ASAP, or whose reminder has gone off, for the
-  // badge on the Tasks tab. Deadlines are Pacific strings but "today" is the
-  // viewer's day, so the query casts a wide net by one day on each side and the
-  // exact comparison happens per row in the viewer's own timezone — the same
-  // shape the stats page uses for the same reason.
+  // Tasks due today, overdue or ASAP, for the badge on the Tasks tab.
+  // Deadlines are Pacific strings but "today" is the viewer's day, so the
+  // query casts a wide net by one day on each side and the exact comparison
+  // happens per row in the viewer's own timezone — the same shape the stats
+  // page uses for the same reason.
   const viewerTimeZone = await getViewerTimeZone();
-  const nowStr = dateToServerDbString(new Date());
-  const openRows = await db
-    .select({ dueDatetime: tasks.dueDatetime, dueAsap: tasks.dueAsap, remindAt: tasks.remindAt })
+  const dueRows = await db
+    .select({ dueDatetime: tasks.dueDatetime })
     .from(tasks)
     .where(
       and(
         eq(tasks.userId, session.userId),
         isNull(tasks.completedAt),
-        or(
-          lte(tasks.dueDatetime, `${shiftDateStr(todayStr, 1)} 23:59:59`),
-          eq(tasks.dueAsap, 1),
-          lte(tasks.remindAt, nowStr)
-        )
+        isNotNull(tasks.dueDatetime),
+        lte(tasks.dueDatetime, `${shiftDateStr(todayStr, 1)} 23:59:59`)
       )
     );
-  const dueCount = openRows.filter(
-    (r) =>
-      r.dueAsap === 1 ||
-      (r.remindAt != null && r.remindAt <= nowStr) ||
-      (r.dueDatetime != null &&
-        dayStrOfInstant(dbStringToUtcMillis(r.dueDatetime), viewerTimeZone) <= todayStr)
-  ).length;
+  // ASAP counts as due now.
+  const [{ asapCount }] = await db
+    .select({ asapCount: sql<number>`count(*)` })
+    .from(tasks)
+    .where(
+      and(eq(tasks.userId, session.userId), isNull(tasks.completedAt), eq(tasks.dueAsap, 1))
+    );
+  const dueCount =
+    asapCount +
+    dueRows.filter(
+      (r) => dayStrOfInstant(dbStringToUtcMillis(r.dueDatetime!), viewerTimeZone) <= todayStr
+    ).length;
 
   return (
     <div className="flex h-dvh bg-background text-foreground overflow-hidden">
