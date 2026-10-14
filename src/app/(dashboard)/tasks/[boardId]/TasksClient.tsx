@@ -1369,7 +1369,7 @@ function BoardColumn({
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
             )}
-            {(board.virtual || node.dueDatetime || node.dueAsap === 1 || node.rrule || rowTags.length > 0) && (
+            {(board.virtual || node.dueDatetime || node.dueAsap === 1 || node.rrule || rowTags.length > 0 || reminderFired(node)) && (
               /* gap-x/gap-y separately: a single `gap` on a wrapping flex
                  applies to both axes, so the deadline wrapping above the tags
                  opened a full row-gap between them. The top margin lives here
