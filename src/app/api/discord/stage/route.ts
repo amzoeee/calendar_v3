@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
   const channelId = typeof body.channelId === 'string' ? body.channelId : '';
   const text = typeof body.text === 'string' ? body.text : '';
   const dateOverride = typeof body.dateOverride === 'string' && body.dateOverride ? body.dateOverride : null;
-  // An instant, not a date: which calendar day the oldest scraped message
-  // falls on depends on the zone, which only the link knows.
+  // An instant, not a date: which calendar day the marker (or, without one,
+  // the oldest scraped message) falls on depends on the zone, which only the link knows.
   const fallbackAt = typeof body.fallbackAt === 'string' ? Date.parse(body.fallbackAt) : NaN;
   const military = body.military !== false;
 
