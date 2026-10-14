@@ -64,8 +64,10 @@ for good. Approval happens in a browser, so the bot asks the app every
 `/fetch` won't stage anything while an earlier batch is still waiting;
 approve it, or `/clear` it and fetch again.
 
-Dates come from the log itself if it has one, otherwise from the day you posted
-the oldest line it took. `/fetch date:2026-09-19` overrides both.
+Dates come from the log itself if it has one, otherwise from the day the `---`
+it stopped at was posted, since that marks the end of the previous event. With
+no marker it falls back to the day you posted the oldest line it took.
+`/fetch date:2026-09-19` overrides all of these.
 
 `merge:true` collapses back-to-back lines with the same name into one event.
 A line's time is when that activity ended, so the last of the run is kept:

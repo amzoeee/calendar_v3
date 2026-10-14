@@ -236,7 +236,7 @@ async function handleFetch(interaction) {
     return;
   }
 
-  const { lines: scraped, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
+  const { lines: scraped, markerFound, startAt, messagesScanned, hitCap } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
@@ -260,7 +260,7 @@ async function handleFetch(interaction) {
     military: interaction.options.getBoolean('military') ?? true,
     // An instant. Which day it falls on is the app's call, using the timezone
     // recorded on the link — the bot serves several people and has no one zone.
-    fallbackAt: oldestAt ? oldestAt.toISOString() : null,
+    fallbackAt: startAt ? startAt.toISOString() : null,
   });
 
   if (!result.ok) {
@@ -322,7 +322,7 @@ function eventLine(event, timeZone) {
 // behind, and listing every event it made so the scheduling can be checked.
 async function handleDebugFetch(interaction) {
   const target = interaction.options.getUser('user');
-  const { lines: scraped, markerFound, oldestAt, messagesScanned, hitCap } = await scrapeLogLines(
+  const { lines: scraped, markerFound, startAt, messagesScanned, hitCap } = await scrapeLogLines(
     interaction.channel,
     target ? target.id : null,
   );
@@ -345,7 +345,7 @@ async function handleDebugFetch(interaction) {
     text: lines.join('\n'),
     dateOverride: interaction.options.getString('date') || null,
     military: interaction.options.getBoolean('military') ?? true,
-    fallbackAt: oldestAt ? oldestAt.toISOString() : null,
+    fallbackAt: startAt ? startAt.toISOString() : null,
     skipMarker: true,
   });
 
@@ -490,7 +490,7 @@ function dateHeader(dateStr) {
 }
 
 async function handleManualFetch(interaction) {
-  const { lines: scraped, markerFound, messagesScanned, hitCap, oldestAt } = await scrapeLogLines(
+  const { lines: scraped, markerFound, messagesScanned, hitCap, startAt } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
@@ -515,7 +515,7 @@ async function handleManualFetch(interaction) {
   const zone = status.ok ? status.timeZone : null;
   const dateStr =
     interaction.options.getString('date') ||
-    (oldestAt && zone ? dateStrInZone(oldestAt, zone) : null);
+    (startAt && zone ? dateStrInZone(startAt, zone) : null);
 
   const body = dateStr ? [...dateHeader(dateStr), ...lines] : lines;
   // Room for the code fences and the trailing newline inside the 2000 budget.
