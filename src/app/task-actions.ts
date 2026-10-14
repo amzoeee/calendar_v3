@@ -261,6 +261,8 @@ export interface RolledForward {
   taskId: number;
   previousDue: string | null;
   previousCounter: number | null;
+  /** Kept as-is, since it may have been set by hand rather than from the offset. */
+  previousRemindAt: string | null;
   /** Subtasks the roll reset, so Undo can re-complete exactly those. */
   resetIds: number[];
 }
@@ -283,6 +285,7 @@ async function rollForward(
       rrule: tasks.rrule,
       counterValue: tasks.counterValue,
       counterEnd: tasks.counterEnd,
+      remindAt: tasks.remindAt,
       remindOffsetMinutes: tasks.remindOffsetMinutes,
       remindOffsetDays: tasks.remindOffsetDays,
       remindTimeOfDay: tasks.remindTimeOfDay,
@@ -339,6 +342,7 @@ async function rollForward(
     taskId,
     previousDue: task.dueDatetime,
     previousCounter: task.counterValue,
+    previousRemindAt: task.remindAt,
     resetIds,
   };
 }
@@ -643,6 +647,22 @@ export async function setTaskStarredAction(id: number, starred: boolean): Promis
 }
 
 /**
+ * Turn a task's reminder on now, or dismiss it.
+ *
+ * Writes `remindAt` directly, overriding whatever the offset produced. The
+ * offset itself is kept, so a repeating task's next occurrence goes back to
+ * its usual reminder when it rolls forward.
+ */
+export async function setTaskReminderActiveAction(id: number, active: boolean): Promise<void> {
+  const session = await requireAuth();
+  await db
+    .update(tasks)
+    .set({ remindAt: active ? now() : null })
+    .where(and(eq(tasks.id, id), eq(tasks.userId, session.userId)));
+  refresh();
+}
+
+/**
  * Tick or untick a task, optionally carrying its subtree with it.
  *
  * Returns the ids it actually changed — not the whole subtree — so Undo can put
@@ -713,30 +733,12 @@ export async function setTaskCompletionAction(
   // Undoing a completion that rolled the task forward has to put the deadline
   // and the counter back too, or "undo" would quietly leave it a week ahead.
   if (rolled) {
-    const [task] = await db
-      .select({
-        remindOffsetMinutes: tasks.remindOffsetMinutes,
-        remindOffsetDays: tasks.remindOffsetDays,
-        remindTimeOfDay: tasks.remindTimeOfDay,
-      })
-      .from(tasks)
-      .where(and(eq(tasks.id, rolled.taskId), eq(tasks.userId, session.userId)))
-      .limit(1);
-
     await db
       .update(tasks)
       .set({
         dueDatetime: rolled.previousDue,
         counterValue: rolled.previousCounter,
-        remindAt: task
-          ? computeRemindAt(
-              rolled.previousDue,
-              task.remindOffsetMinutes,
-              task.remindOffsetDays,
-              task.remindTimeOfDay,
-              await getViewerTimeZone()
-            )
-          : null,
+        remindAt: rolled.previousRemindAt,
       })
       .where(and(eq(tasks.id, rolled.taskId), eq(tasks.userId, session.userId)));
   }
