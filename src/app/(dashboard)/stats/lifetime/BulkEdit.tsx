@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import Select from '@/app/components/Select';
 import { useConfirm } from '@/app/components/ConfirmDialog';
-import { bulkEditEventsAction } from '@/app/actions';
+import { bulkEditEventsAction, type EventSnapshot } from '@/app/actions';
 import { scopeAllows } from '@/lib/tags';
 
 interface Tag {
@@ -24,10 +24,17 @@ export interface BulkTarget {
   renameMode: 'word' | 'substring';
 }
 
+export interface BulkResult {
+  newName: string | null;
+  renamed: number;
+  retagged: number;
+  previous: EventSnapshot[];
+}
+
 interface BulkEditProps {
   target: BulkTarget;
   tags: Tag[];
-  onApplied: (newName: string | null) => void;
+  onApplied: (result: BulkResult) => void;
 }
 
 const KEEP = '\u0000keep';
@@ -91,7 +98,6 @@ export default function BulkEdit({ target, tags, onApplied }: BulkEditProps) {
               {l}
             </span>
           ))}
-          <span className="block mt-2">This can&apos;t be undone.</span>
         </>
       ),
       confirmLabel: 'Apply',
@@ -114,7 +120,12 @@ export default function BulkEdit({ target, tags, onApplied }: BulkEditProps) {
         return;
       }
       setOpen(false);
-      onApplied(renaming ? newName : null);
+      onApplied({
+        newName: renaming ? newName : null,
+        renamed: res.renamed,
+        retagged: res.retagged,
+        previous: res.previous,
+      });
     } catch {
       setError('Something went wrong.');
     } finally {

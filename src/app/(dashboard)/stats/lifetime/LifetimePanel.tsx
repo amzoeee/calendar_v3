@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { X } from 'lucide-react';
 import { formatDuration, type Focus, type LifetimeEvents, type NameStats } from '@/lib/lifetime';
 import { formatDateInputValue } from '@/lib/timezone';
-import BulkEdit, { type BulkTarget } from './BulkEdit';
+import BulkEdit, { type BulkResult, type BulkTarget } from './BulkEdit';
 
 const WEEKDAYS = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
 const MS_PER_MIN = 60_000;
@@ -23,7 +23,7 @@ interface LifetimePanelProps {
   onClear: () => void;
   bulkTarget: BulkTarget | null;
   tags: React.ComponentProps<typeof BulkEdit>['tags'];
-  onBulkApplied: (newName: string | null) => void;
+  onBulkApplied: (result: BulkResult) => void;
 }
 
 const startOf = (data: LifetimeEvents, e: number) => new Date(data.starts[e] * MS_PER_MIN);
