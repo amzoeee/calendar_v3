@@ -5,6 +5,7 @@ import {
   buildMatchIndex,
   buildSegments,
   computeStats,
+  EXACT,
   formatDuration,
   matchTitles,
   todayColumn,
@@ -15,12 +16,15 @@ import StatsViewSwitch from '@/app/components/StatsViewSwitch';
 import LifetimeChart from './LifetimeChart';
 import LifetimePanel from './LifetimePanel';
 import LifetimeSearch from './LifetimeSearch';
+import type { BulkTarget } from './BulkEdit';
+import { normalizeTitle } from '@/lib/titleParts';
 
 interface Tag {
   id: number;
   name: string;
   color: string;
   isArchived: number;
+  scope: string;
 }
 
 interface LifetimeClientProps {
@@ -150,6 +154,37 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
         : []
       : [];
 
+  // The events a rename or retag would touch, split by match level.
+  const bulkTarget = useMemo<BulkTarget | null>(() => {
+    if (!focus || !titleLevels) return null;
+    const exactIds: number[] = [];
+    const relatedIds: number[] = [];
+    titleLevels.forEach((lvl, t) => {
+      if (!lvl) return;
+      const into = lvl === EXACT ? exactIds : relatedIds;
+      for (const e of index.eventsByTitle[t]) into.push(data.ids[e]);
+    });
+    if (focus.kind === 'query') {
+      const q = normalizeTitle(focus.q);
+      return { label: q, exactIds, relatedIds, renameFrom: q, renameMode: 'substring' };
+    }
+    const ps = index.parts[focus.title];
+    const from = focus.part ?? (ps.length === 1 ? ps[0] : null);
+    return { label: from ?? data.titles[focus.title], exactIds, relatedIds, renameFrom: from, renameMode: 'word' };
+  }, [focus, titleLevels, index, data]);
+
+  // Title indices shift once the page reloads with the edit, so the pin
+  // becomes a search for the new name instead.
+  const onBulkApplied = (newName: string | null) => {
+    setDwell(null);
+    if (newName) {
+      setQuery(newName);
+      setPinned({ kind: 'query', q: newName });
+    } else {
+      clearFocus();
+    }
+  };
+
   const onPart = (part: string | null) => {
     if (focus?.kind === 'title') setPinned({ ...focus, part });
   };
@@ -256,6 +291,9 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
               colorOf={colorOf}
               onPart={onPart}
               onClear={clearFocus}
+              bulkTarget={bulkTarget}
+              tags={tags}
+              onBulkApplied={onBulkApplied}
             />
           </aside>
         </div>
