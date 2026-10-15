@@ -108,34 +108,36 @@ export default function LifetimePanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-2">
-        <h2 className="text-lg font-bold tracking-tight break-words min-w-0">{heading}</h2>
-        {pinned && (
-          <button
-            onClick={onClear}
-            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
-            aria-label="Clear selection"
-          >
-            <X className="h-4 w-4" />
-          </button>
+      <div>
+        <div className="flex items-start justify-between gap-2">
+          <h2 className="text-lg font-bold tracking-tight break-words min-w-0">{heading}</h2>
+          {pinned && (
+            <button
+              onClick={onClear}
+              className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+              aria-label="Clear selection"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {anchor !== null && (
+          <div className="text-xs text-muted-foreground space-y-1 mt-0.5">
+            <p>
+              This one: {fmtDate(startOf(data, anchor))},{' '}
+              {fmtClock(startOf(data, anchor).getHours() * 60 + startOf(data, anchor).getMinutes())} ·{' '}
+              {formatDuration(data.durations[anchor])}
+            </p>
+            <Link
+              href={`/calendar/${formatDateInputValue(startOf(data, anchor))}?event=${data.ids[anchor]}`}
+              className="inline-block text-foreground underline underline-offset-2 hover:text-primary"
+            >
+              Open in daily view
+            </Link>
+          </div>
         )}
       </div>
-
-      {anchor !== null && (
-        <div className="text-xs text-muted-foreground space-y-1">
-          <p>
-            This one: {fmtDate(startOf(data, anchor))},{' '}
-            {fmtClock(startOf(data, anchor).getHours() * 60 + startOf(data, anchor).getMinutes())} ·{' '}
-            {formatDuration(data.durations[anchor])}
-          </p>
-          <Link
-            href={`/calendar/${formatDateInputValue(startOf(data, anchor))}?event=${data.ids[anchor]}`}
-            className="inline-block text-foreground underline underline-offset-2 hover:text-primary"
-          >
-            Open in daily view
-          </Link>
-        </div>
-      )}
 
       {parts.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
