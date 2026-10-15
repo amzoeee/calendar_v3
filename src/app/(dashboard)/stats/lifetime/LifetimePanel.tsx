@@ -161,7 +161,7 @@ export default function LifetimePanel({
         <p className="text-sm text-muted-foreground">No matching events.</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 lg:grid-cols-5 xl:grid-cols-2 gap-2">
             <Fact label="Times" value={stats.count.toLocaleString()} />
             <Fact label="Total" value={formatDuration(stats.totalMin)} />
             <Fact
