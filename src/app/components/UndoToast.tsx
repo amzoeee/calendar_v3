@@ -53,12 +53,14 @@ export function UndoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const runUndo = async () => {
-    if (!toast?.undo) return;
+    const current = toast;
+    if (!current?.undo) return;
     if (timer.current) clearTimeout(timer.current);
     setBusy(true);
     try {
-      await toast.undo();
-      setToast(null);
+      await current.undo();
+      // The undo may have raised a toast of its own, e.g. to say why it failed.
+      setToast((t) => (t === current ? null : t));
     } catch {
       raiseUndo({ message: 'Couldn’t undo that', undo: null });
     } finally {
