@@ -229,7 +229,7 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
                 />
               )}
             </div>
-            <div className="flex flex-wrap gap-1.5 mt-3">
+            <div className="hidden md:flex flex-wrap gap-1.5 mt-3">
               {legend.map((g) => (
                 <button
                   key={g}
