@@ -125,7 +125,7 @@ export default function LifetimePanel({
         {anchor !== null && (
           <div className="text-xs text-muted-foreground space-y-1 mt-0.5">
             <p>
-              This one: {fmtDate(startOf(data, anchor))},{' '}
+              {fmtDate(startOf(data, anchor))},{' '}
               {fmtClock(startOf(data, anchor).getHours() * 60 + startOf(data, anchor).getMinutes())} ·{' '}
               {formatDuration(data.durations[anchor])}
             </p>
