@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { track } from '@/lib/usage';
 import { parseIcsContent } from '@/lib/ics';
 import { createRecurringEvent } from '@/lib/recurring';
 import { db } from '@/db';
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
   if (!session) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
+  track(session.userId, 'ics.import');
 
   try {
     const formData = await request.formData();
