@@ -186,6 +186,8 @@ export default function LifetimeChart({
       if (label === null) continue;
       // Day ticks sit mid-column; month and week ticks mark the boundary.
       const x = Math.round(xOf(day) + (mode === 'day' ? colW / 2 : 0)) + 0.5;
+      // Skip ticks whose label would be cut off at the plot edges.
+      if (x < MARGIN.left + 12 || x > MARGIN.left + plotW - 12) continue;
       ctx.fillStyle = GRID;
       ctx.fillRect(x, MARGIN.top, 1, plotBottom - MARGIN.top);
       ctx.fillStyle = dom === 1 ? '#bbbbbb' : LABEL;
