@@ -295,6 +295,8 @@ export default function LifetimeChart({
 
   // Drag to pan, two pointers to pinch. A press that never moves is a click.
   const pointersRef = useRef(new Map<number, number>());
+  // Double-click resets the zoom for a mouse only; a double tap shouldn't.
+  const lastPointerType = useRef('mouse');
   const gestureRef = useRef<
     | { kind: 'pan'; startX: number; base: View; moved: boolean }
     | { kind: 'pinch'; dist: number; mid: number; base: View }
@@ -311,6 +313,7 @@ export default function LifetimeChart({
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    lastPointerType.current = e.pointerType;
     e.currentTarget.setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, e.clientX);
     if (pointersRef.current.size === 1) {
@@ -414,7 +417,9 @@ export default function LifetimeChart({
         onPointerLeave={(e) => {
           if (!pointersRef.current.has(e.pointerId)) onHover(null, e.clientX, e.clientY);
         }}
-        onDoubleClick={() => setView(null)}
+        onDoubleClick={() => {
+          if (lastPointerType.current === 'mouse') setView(null);
+        }}
       />
       {view && (
         <button
