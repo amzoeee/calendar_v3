@@ -5,6 +5,7 @@ import { db } from '@/db';
 import { events, usageEvents, users } from '@/db/schema';
 import { requireAdmin } from '@/lib/admin';
 import { USAGE_CATALOG } from '@/lib/usage-catalog';
+import ResetPasswordButton from './ResetPasswordButton';
 
 const PERIODS = [7, 30, 90];
 
@@ -176,6 +177,7 @@ export default async function AdminPage({
                   <th className="py-2 px-2 font-semibold">Joined</th>
                   <th className="py-2 px-2 font-semibold">Last active</th>
                   <th className="py-2 px-2 font-semibold text-right">Events</th>
+                  <th className="py-2 pl-2" />
                 </tr>
               </thead>
               <tbody>
@@ -185,6 +187,9 @@ export default async function AdminPage({
                     <td className="py-2 px-2 whitespace-nowrap">{u.createdAt?.slice(0, 10) ?? '—'}</td>
                     <td className="py-2 px-2 whitespace-nowrap">{ago(lastActive.get(u.id) ?? null)}</td>
                     <td className="py-2 px-2 text-right tabular-nums">{eventCounts.get(u.id) ?? 0}</td>
+                    <td className="py-2 pl-2 text-right">
+                      <ResetPasswordButton userId={u.id} username={u.username} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
