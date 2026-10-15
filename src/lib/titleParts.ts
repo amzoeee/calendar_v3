@@ -51,3 +51,10 @@ export function replaceInTitle(title: string, from: string, to: string, mode: 'w
   const pattern = mode === 'word' ? `(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])` : body;
   return title.replace(new RegExp(pattern, 'giu'), () => to);
 }
+
+// `to` as a whole new title, keeping any bracketed context from `title`:
+// "[home] SLEEP!! :D yippee" -> "[home] sleep".
+export function retitleKeepingBrackets(title: string, to: string): string {
+  const brackets = title.match(/\[[^\]]*\]/g) ?? [];
+  return [...brackets, to].join(' ');
+}

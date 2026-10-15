@@ -91,6 +91,7 @@ export default function BulkEdit({ target, tags, onApplied, onClose }: BulkEditP
       const res = await bulkEditEventsAction({
         renameIds: renaming ? renameIds : [],
         renameFrom: target.renameFrom,
+        exactIds: target.exactIds,
         renameMode: target.renameMode,
         renameTo: renaming ? newName : null,
         retagIds: retagging ? ids : [],
