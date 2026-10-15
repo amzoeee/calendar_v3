@@ -209,9 +209,9 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
       {!hasEvents ? (
         <p className="p-8 text-sm text-muted-foreground">No events logged yet.</p>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row gap-4 p-4 md:p-6">
-          <section className="bg-card rounded-xl border border-border p-3 md:p-4 flex flex-col md:flex-1 md:min-h-0 min-w-0">
-            <div className="h-[420px] md:h-auto md:flex-1 md:min-h-0" onPointerLeave={onLeave}>
+        <div className="flex-1 min-h-0 overflow-y-auto xl:overflow-hidden flex flex-col xl:flex-row gap-4 p-4 md:p-6">
+          <section className="bg-card rounded-xl border border-border p-3 md:p-4 flex flex-col xl:flex-1 xl:min-h-0 min-w-0">
+            <div className="h-[420px] md:h-[520px] xl:h-auto xl:flex-1 xl:min-h-0" onPointerLeave={onLeave}>
               {hydrated && (
                 <LifetimeChart
                   data={data}
@@ -246,7 +246,7 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
             </div>
           </section>
 
-          <aside className="bg-card rounded-xl border border-border p-4 md:w-80 shrink-0 md:overflow-y-auto">
+          <aside className="bg-card rounded-xl border border-border p-4 xl:w-80 shrink-0 xl:overflow-y-auto">
             <LifetimePanel
               data={data}
               focus={focus}
