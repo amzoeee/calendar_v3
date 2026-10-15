@@ -22,6 +22,7 @@ import { isTagScope, type TagScope } from '@/lib/tags';
 import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
 import { markStagesApproved } from '@/lib/discord-markers';
 import { replaceInTitle, retitleKeepingBrackets } from '@/lib/titleParts';
+import { track } from '@/lib/usage';
 
 // ==========================================
 // Authentication Actions
@@ -68,6 +69,7 @@ export async function registerAction(prevState: any, formData: FormData) {
     await db.insert(taskBoards).values({ name: 'My Tasks', orderIndex: 1, userId: newUser.id });
 
     await createSession(newUser.id, username);
+    track(newUser.id, 'auth.register');
   } catch (e: any) {
     return { error: e.message || 'Registration failed' };
   }
@@ -96,6 +98,7 @@ export async function loginAction(prevState: any, formData: FormData) {
     }
 
     await createSession(user.id, user.username);
+    track(user.id, 'auth.login');
   } catch (e: any) {
     return { error: e.message || 'Login failed' };
   }
@@ -111,6 +114,7 @@ export async function logoutAction() {
 
 export async function changePasswordAction(currentPassword: string, newPassword: string) {
   const session = await requireAuth();
+  track(session.userId, 'account.change_password');
 
   if (!currentPassword || !newPassword) {
     return { error: 'Current and new password are required' };
@@ -135,6 +139,7 @@ export async function changePasswordAction(currentPassword: string, newPassword:
 
 export async function addTagAction(name: string, color: string, scope: TagScope = 'both') {
   const session = await requireAuth();
+  track(session.userId, 'tag.create');
   const trimmedName = name.trim();
 
   if (!trimmedName) throw new Error('Tag name is required');
@@ -177,6 +182,7 @@ export async function updateTagAction(
   scope?: TagScope
 ) {
   const session = await requireAuth();
+  track(session.userId, 'tag.edit');
   const trimmedName = name.trim();
 
   if (!trimmedName) throw new Error('Tag name is required');
@@ -226,6 +232,7 @@ export async function updateTagAction(
 
 export async function deleteTagAction(id: number) {
   const session = await requireAuth();
+  track(session.userId, 'tag.delete');
 
   const [tag] = await db
     .select()
@@ -250,6 +257,7 @@ export async function deleteTagAction(id: number) {
 
 export async function archiveTagAction(id: number) {
   const session = await requireAuth();
+  track(session.userId, 'tag.archive');
 
   await db
     .update(tags)
@@ -261,6 +269,7 @@ export async function archiveTagAction(id: number) {
 
 export async function unarchiveTagAction(id: number) {
   const session = await requireAuth();
+  track(session.userId, 'tag.archive');
 
   await db
     .update(tags)
@@ -272,6 +281,7 @@ export async function unarchiveTagAction(id: number) {
 
 export async function reorderTagsAction(tagIds: number[]) {
   const session = await requireAuth();
+  track(session.userId, 'tag.reorder');
 
   for (let index = 0; index < tagIds.length; index++) {
     await db
@@ -298,6 +308,7 @@ export async function addEventAction(data: {
   timeZone: string;
 }) {
   const session = await requireAuth();
+  track(session.userId, 'event.create');
 
   const title = data.title.trim() || '(no name)';
   const description = data.description || '';
@@ -349,6 +360,7 @@ export async function updateEventAction(
   }
 ) {
   const session = await requireAuth();
+  track(session.userId, 'event.edit');
 
   const title = data.title.trim() || '(no name)';
   const description = data.description || '';
@@ -377,6 +389,7 @@ export async function updateEventAction(
 
 export async function deleteEventAction(id: number) {
   const session = await requireAuth();
+  track(session.userId, 'event.delete');
 
   await db.delete(events).where(and(eq(events.id, id), eq(events.userId, session.userId)));
 
@@ -385,6 +398,7 @@ export async function deleteEventAction(id: number) {
 
 export async function copyEventAction(id: number) {
   const session = await requireAuth();
+  track(session.userId, 'event.copy');
 
   const [event] = await db
     .select()
@@ -409,6 +423,7 @@ export async function copyEventAction(id: number) {
 
 export async function deleteRecurringSeriesAction(recurrenceId: string) {
   const session = await requireAuth();
+  track(session.userId, 'event.series_delete');
   await deleteRecurringSeries(recurrenceId, session.userId);
   revalidatePath('/calendar', 'layout');
 }
@@ -418,6 +433,7 @@ export async function updateRecurringSeriesAction(
   data: { title: string; description: string; tag: string }
 ) {
   const session = await requireAuth();
+  track(session.userId, 'event.series_edit');
   await updateRecurringSeries(recurrenceId, session.userId, data.title, data.description, data.tag);
   revalidatePath('/calendar', 'layout');
 }
@@ -451,6 +467,7 @@ export interface EventSnapshot {
  */
 export async function bulkEditEventsAction(input: BulkEditInput) {
   const session = await requireAuth();
+  track(session.userId, 'lifetime.bulk_edit');
   const renameTo = input.renameTo?.trim() || null;
   const retag = input.tag !== undefined;
   let renamed = 0;
@@ -527,6 +544,7 @@ export async function restoreEventsAction(snapshots: EventSnapshot[]) {
 
 export async function stageLogAction(text: string, dateOverride?: string | null, browserTimeZone?: string) {
   const session = await requireAuth();
+  track(session.userId, 'import.paste_log');
   const result = await stageLogForUser(session.userId, text, dateOverride, browserTimeZone);
   if (result.success) revalidatePath('/calendar', 'layout');
   return result;
@@ -534,8 +552,10 @@ export async function stageLogAction(text: string, dateOverride?: string | null,
 
 export async function approveAllPendingAction() {
   const session = await requireAuth();
+  const merge = await getMergePending();
+  track(session.userId, 'import.approve', { merge });
 
-  if (await getMergePending()) await mergePendingIntoNeighbours(session.userId);
+  if (merge) await mergePendingIntoNeighbours(session.userId);
 
   await db
     .update(events)
@@ -550,6 +570,7 @@ export async function approveAllPendingAction() {
 
 export async function discardAllPendingAction() {
   const session = await requireAuth();
+  track(session.userId, 'import.discard');
 
   await discardPendingForUser(session.userId);
 
@@ -558,6 +579,7 @@ export async function discardAllPendingAction() {
 
 export async function overridePendingDateAction(formData: FormData) {
   const session = await requireAuth();
+  track(session.userId, 'import.override_date');
   const newDate = formData.get('newDate') as string;
   if (!newDate) throw new Error('New date is required');
 
@@ -571,6 +593,7 @@ export async function overridePendingDateAction(formData: FormData) {
 
 export async function linkDiscordAction(code: string, timeZone: string | null) {
   const session = await requireAuth();
+  track(session.userId, 'discord.link');
   const result = await redeemLinkCode(code, session.userId, timeZone);
   if ('error' in result) return { error: result.error };
 
@@ -580,6 +603,7 @@ export async function linkDiscordAction(code: string, timeZone: string | null) {
 
 export async function unlinkDiscordAction(discordUserId: string) {
   const session = await requireAuth();
+  track(session.userId, 'discord.unlink');
   await unlinkDiscordAccount(session.userId, discordUserId);
   revalidatePath('/settings');
 }

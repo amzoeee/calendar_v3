@@ -11,6 +11,7 @@ import { computeRemindAt, END_OF_DAY, displayTitle } from '@/lib/taskSchedule';
 import { expandRrule } from '@/lib/recurring';
 import { dateStrInTimeZone } from '@/lib/timezone';
 import { MAX_TASK_DEPTH, type NewTaskDetails, type SortMode } from '@/lib/tasks';
+import { track } from '@/lib/usage';
 
 const VALID_SORT_MODES: SortMode[] = ['manual', 'alpha', 'created', 'remind', 'deadline'];
 
@@ -54,6 +55,7 @@ export async function ensureDefaultBoard(userId: number): Promise<number> {
 
 export async function createBoardAction(name: string): Promise<number> {
   const session = await requireAuth();
+  track(session.userId, 'board.create');
   const trimmed = name.trim();
   if (!trimmed) throw new Error('Board name is required');
 
@@ -78,6 +80,7 @@ export async function createBoardAction(name: string): Promise<number> {
  */
 export async function reorderBoardsAction(orderedIds: number[]): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'board.reorder');
 
   const owned = await db
     .select({ id: taskBoards.id })
@@ -102,6 +105,7 @@ export async function reorderBoardsAction(orderedIds: number[]): Promise<void> {
 /** Make `id` the board that All tasks and Starred add to. At most one per user. */
 export async function setDefaultBoardAction(id: number): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'board.default');
 
   const [board] = await db
     .select({ id: taskBoards.id })
@@ -121,6 +125,7 @@ export async function setDefaultBoardAction(id: number): Promise<void> {
 
 export async function renameBoardAction(id: number, name: string): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'board.rename');
   const trimmed = name.trim();
   if (!trimmed) throw new Error('Board name is required');
 
@@ -134,6 +139,7 @@ export async function renameBoardAction(id: number, name: string): Promise<void>
 
 export async function setBoardSortAction(id: number, sortMode: string): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'board.sort');
   if (!VALID_SORT_MODES.includes(sortMode as SortMode)) {
     throw new Error(`Unknown sort mode '${sortMode}'`);
   }
@@ -156,6 +162,7 @@ export async function deleteBoardAction(
   moveTasksToBoardId: number | null
 ): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'board.delete');
 
   const boards = await db
     .select({ id: taskBoards.id })
@@ -350,6 +357,7 @@ async function rollForward(
 /** Move a rolling task on without recording it as done. */
 export async function skipOccurrenceAction(taskId: number): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.skip');
   const subtree = await subtreeIds(taskId, session.userId);
   if (subtree.length === 0) throw new Error('Task not found');
   await rollForward(taskId, session.userId, subtree);
@@ -412,6 +420,7 @@ export async function postponeOccurrenceAction(
   taskId: number
 ): Promise<{ previousDue: string; due: string } | null> {
   const session = await requireAuth();
+  track(session.userId, 'task.postpone');
 
   const [task] = await db
     .select({ dueDatetime: tasks.dueDatetime, rrule: tasks.rrule })
@@ -448,6 +457,7 @@ export async function restoreTaskDeadlineAction(
   dueDatetime: string
 ): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.restore_deadline');
   if (!DB_DATETIME.test(dueDatetime)) throw new Error('Invalid deadline');
   await applyDeadline(taskId, session.userId, dueDatetime);
   refresh();
@@ -460,6 +470,7 @@ export async function createTaskAction(
   details: NewTaskDetails = {}
 ): Promise<number> {
   const session = await requireAuth();
+  track(session.userId, 'task.create');
   const trimmed = title.trim();
   if (!trimmed) throw new Error('Task title is required');
 
@@ -550,6 +561,7 @@ export async function createTasksBulkAction(
   items: { title: string; depth: number; dueDate: string | null }[]
 ): Promise<number> {
   const session = await requireAuth();
+  track(session.userId, 'task.bulk_create');
 
   const [board] = await db
     .select({ id: taskBoards.id })
@@ -617,6 +629,7 @@ export async function updateTaskAction(
   fields: { title?: string; description?: string | null }
 ): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.edit');
 
   const patch: { title?: string; description?: string | null } = {};
   if (fields.title !== undefined) {
@@ -639,6 +652,7 @@ export async function updateTaskAction(
 
 export async function setTaskStarredAction(id: number, starred: boolean): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.star');
   await db
     .update(tasks)
     .set({ isStarred: starred ? 1 : 0 })
@@ -655,6 +669,7 @@ export async function setTaskStarredAction(id: number, starred: boolean): Promis
  */
 export async function setTaskReminderActiveAction(id: number, active: boolean): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.reminder_toggle');
   await db
     .update(tasks)
     .set({ remindAt: active ? now() : null })
@@ -675,6 +690,7 @@ export async function toggleTaskCompletionAction(
   cascade: boolean
 ): Promise<{ changed: number[]; rolled: RolledForward | null }> {
   const session = await requireAuth();
+  track(session.userId, 'task.complete');
 
   const candidateIds = cascade ? await subtreeIds(id, session.userId) : [id];
   if (candidateIds.length === 0) throw new Error('Task not found');
@@ -729,6 +745,7 @@ export async function setTaskCompletionAction(
   rolled: RolledForward | null = null
 ): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.complete');
 
   // Undoing a completion that rolled the task forward has to put the deadline
   // and the counter back too, or "undo" would quietly leave it a week ahead.
@@ -818,6 +835,7 @@ async function applyCompletion(
 
 export async function deleteTaskAction(id: number): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.delete');
 
   const ids = await subtreeIds(id, session.userId);
   if (ids.length === 0) throw new Error('Task not found');
@@ -863,6 +881,7 @@ export async function moveTaskAction(
   target: { boardId: number; parentId: number | null; siblingIds: number[] }
 ): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.move');
   const { boardId, parentId, siblingIds } = target;
 
   const [board] = await db
@@ -968,6 +987,7 @@ async function replaceTaskTags(
 
 export async function setTaskTagsAction(taskId: number, tagIds: number[]): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.tags');
 
   const [task] = await db
     .select({ id: tasks.id })
@@ -1008,6 +1028,7 @@ export async function setTaskScheduleAction(
   }
 ): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.schedule');
 
   const [task] = await db
     .select({ id: tasks.id, rrule: tasks.rrule })
@@ -1103,6 +1124,7 @@ export async function setTaskRecurrenceAction(
   counterEnd: number | null
 ): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.recurrence');
 
   const [task] = await db
     .select({ dueDatetime: tasks.dueDatetime, counterValue: tasks.counterValue })
@@ -1129,6 +1151,7 @@ export async function setTaskRecurrenceAction(
 /** Move a task and everything under it to another board. */
 export async function moveTaskToBoardAction(id: number, boardId: number): Promise<void> {
   const session = await requireAuth();
+  track(session.userId, 'task.move_board');
 
   const [board] = await db
     .select({ id: taskBoards.id })
@@ -1165,6 +1188,7 @@ export async function moveTaskToBoardAction(id: number, boardId: number): Promis
 /** Clear out a board's finished tasks. History in task_completions survives. */
 export async function deleteCompletedTasksAction(boardId: number | null): Promise<number> {
   const session = await requireAuth();
+  track(session.userId, 'task.delete_completed');
 
   const scope = boardId == null
     ? and(eq(tasks.userId, session.userId), isNotNull(tasks.completedAt))
