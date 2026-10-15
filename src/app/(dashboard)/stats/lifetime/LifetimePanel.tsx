@@ -1,10 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { X } from 'lucide-react';
+import { MoreHorizontal, X } from 'lucide-react';
 import { formatDuration, type Focus, type LifetimeEvents, type NameStats } from '@/lib/lifetime';
 import { formatDateInputValue } from '@/lib/timezone';
+import BulkEdit, { type BulkResult, type BulkTarget } from './BulkEdit';
 
 const WEEKDAYS = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
 const MS_PER_MIN = 60_000;
@@ -20,6 +21,9 @@ interface LifetimePanelProps {
   colorOf: (tag: number) => string;
   onPart: (part: string | null) => void;
   onClear: () => void;
+  bulkTarget: BulkTarget | null;
+  tags: React.ComponentProps<typeof BulkEdit>['tags'];
+  onBulkApplied: (result: BulkResult) => void;
 }
 
 const startOf = (data: LifetimeEvents, e: number) => new Date(data.starts[e] * MS_PER_MIN);
@@ -86,7 +90,16 @@ export default function LifetimePanel({
   colorOf,
   onPart,
   onClear,
+  bulkTarget,
+  tags,
+  onBulkApplied,
 }: LifetimePanelProps) {
+  const focusKey = JSON.stringify(focus);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Tied to the selection it was opened for, so picking something else closes it.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const editing = editingKey === focusKey;
+
   if (!focus) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -112,13 +125,44 @@ export default function LifetimePanel({
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-lg font-bold tracking-tight break-words min-w-0">{heading}</h2>
           {pinned && (
-            <button
-              onClick={onClear}
-              className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
-              aria-label="Clear selection"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            // Matches the heading's line height so the icons centre on its first line.
+            <div className="relative flex items-center gap-0.5 h-7 shrink-0">
+              {bulkTarget && (
+                <>
+                  <button
+                    onClick={() => setMenuOpen((o) => !o)}
+                    aria-label="More options"
+                    aria-expanded={menuOpen}
+                    className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                  {menuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                      <div className="absolute right-0 top-full mt-1 whitespace-nowrap z-50 bg-card border border-border rounded-lg shadow-2xl p-1">
+                        <button
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setEditingKey(focusKey);
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+                        >
+                          Rename or retag…
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+              <button
+                onClick={onClear}
+                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                aria-label="Clear selection"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </div>
 
@@ -155,6 +199,16 @@ export default function LifetimePanel({
             </button>
           ))}
         </div>
+      )}
+
+      {pinned && bulkTarget && editing && (
+        <BulkEdit
+          key={focusKey}
+          target={bulkTarget}
+          tags={tags}
+          onApplied={onBulkApplied}
+          onClose={() => setEditingKey(null)}
+        />
       )}
 
       {!stats ? (

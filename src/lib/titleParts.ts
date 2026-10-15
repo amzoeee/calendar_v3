@@ -40,3 +40,14 @@ export function titleParts(title: string): string[] {
 
   return [...new Set(parts)];
 }
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Replaces `from` inside `title`, ignoring case and runs of spaces. 'word'
+// only matches whole words, so renaming "rr" leaves "error" alone.
+export function replaceInTitle(title: string, from: string, to: string, mode: 'word' | 'substring'): string {
+  const body = normalizeTitle(from).split(' ').map(escapeRegExp).join('\\s+');
+  if (!body) return title;
+  const pattern = mode === 'word' ? `(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])` : body;
+  return title.replace(new RegExp(pattern, 'giu'), () => to);
+}

@@ -5,6 +5,7 @@ import {
   buildMatchIndex,
   buildSegments,
   computeStats,
+  EXACT,
   formatDuration,
   matchTitles,
   todayColumn,
@@ -15,12 +16,17 @@ import StatsViewSwitch from '@/app/components/StatsViewSwitch';
 import LifetimeChart from './LifetimeChart';
 import LifetimePanel from './LifetimePanel';
 import LifetimeSearch from './LifetimeSearch';
+import type { BulkResult, BulkTarget } from './BulkEdit';
+import { restoreEventsAction, type EventSnapshot } from '@/app/actions';
+import { X } from 'lucide-react';
+import { normalizeTitle } from '@/lib/titleParts';
 
 interface Tag {
   id: number;
   name: string;
   color: string;
   isArchived: number;
+  scope: string;
 }
 
 interface LifetimeClientProps {
@@ -33,6 +39,7 @@ const UNTAGGED_COLOR = '#6b7280';
 // How long the pointer rests on an event before its matches light up.
 const DWELL_MS = 600;
 const MS_PER_MIN = 60_000;
+const UNDO_MS = 10_000;
 
 const noopSubscribe = () => () => {};
 
@@ -150,6 +157,72 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
         : []
       : [];
 
+  // The events a rename or retag would touch, split by match level.
+  const bulkTarget = useMemo<BulkTarget | null>(() => {
+    if (!focus || !titleLevels) return null;
+    const exactIds: number[] = [];
+    const relatedIds: number[] = [];
+    titleLevels.forEach((lvl, t) => {
+      if (!lvl) return;
+      const into = lvl === EXACT ? exactIds : relatedIds;
+      for (const e of index.eventsByTitle[t]) into.push(data.ids[e]);
+    });
+    if (focus.kind === 'query') {
+      const q = normalizeTitle(focus.q);
+      return { label: q, exactIds, relatedIds, renameFrom: q, renameMode: 'substring' };
+    }
+    const ps = index.parts[focus.title];
+    const from = focus.part ?? (ps.length === 1 ? ps[0] : null);
+    return { label: from ?? data.titles[focus.title], exactIds, relatedIds, renameFrom: from, renameMode: 'word' };
+  }, [focus, titleLevels, index, data]);
+
+  const [undo, setUndo] = useState<{ message: string; previous: EventSnapshot[] } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dismissUndo = () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo(null);
+  };
+  useEffect(() => () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  }, []);
+
+  // Title indices shift once the page reloads with the edit, so the pin
+  // becomes a search for the new name instead.
+  const onBulkApplied = ({ newName, renamed, retagged, previous }: BulkResult) => {
+    setDwell(null);
+    if (newName) {
+      setQuery(newName);
+      setPinned({ kind: 'query', q: newName });
+    } else {
+      clearFocus();
+    }
+    const n = (k: number) => `${k.toLocaleString()} event${k === 1 ? '' : 's'}`;
+    const message =
+      renamed && retagged
+        ? `Renamed ${n(renamed)}, retagged ${n(retagged)}`
+        : renamed
+          ? `Renamed ${n(renamed)}`
+          : retagged
+            ? `Retagged ${n(retagged)}`
+            : 'Nothing needed changing';
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo({ message, previous });
+    undoTimer.current = setTimeout(() => setUndo(null), UNDO_MS);
+  };
+
+  const runUndo = async () => {
+    if (!undo) return;
+    setUndoing(true);
+    try {
+      await restoreEventsAction(undo.previous);
+      clearFocus();
+      dismissUndo();
+    } finally {
+      setUndoing(false);
+    }
+  };
+
   const onPart = (part: string | null) => {
     if (focus?.kind === 'title') setPinned({ ...focus, part });
   };
@@ -256,8 +329,37 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
               colorOf={colorOf}
               onPart={onPart}
               onClear={clearFocus}
+              bulkTarget={bulkTarget}
+              tags={tags}
+              onBulkApplied={onBulkApplied}
             />
           </aside>
+        </div>
+      )}
+
+      {undo && (
+        <div
+          role="status"
+          className="fixed left-1/2 -translate-x-1/2 z-[70] flex items-center gap-4 px-4 py-3 rounded-lg bg-card border border-border shadow-2xl max-w-[calc(100vw-2rem)]"
+          style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
+        >
+          <span className="text-sm text-foreground truncate">{undo.message}</span>
+          {undo.previous.length > 0 && (
+            <button
+              onClick={runUndo}
+              disabled={undoing}
+              className="text-sm font-semibold text-foreground underline underline-offset-2 hover:opacity-80 shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              {undoing ? 'Undoing…' : 'Undo'}
+            </button>
+          )}
+          <button
+            onClick={dismissUndo}
+            aria-label="Dismiss"
+            className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
