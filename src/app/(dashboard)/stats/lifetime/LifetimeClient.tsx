@@ -19,7 +19,7 @@ import LifetimeSearch from './LifetimeSearch';
 import type { BulkResult, BulkTarget } from './BulkEdit';
 import { restoreEventsAction, type EventSnapshot } from '@/app/actions';
 import { X } from 'lucide-react';
-import { normalizeTitle } from '@/lib/titleParts';
+import { normalizeTitle, type NameMatching } from '@/lib/titleParts';
 
 interface Tag {
   id: number;
@@ -33,6 +33,7 @@ interface LifetimeClientProps {
   data: LifetimeEvents;
   tags: Tag[];
   todayStr: string;
+  nameMatching: NameMatching;
 }
 
 const UNTAGGED_COLOR = '#6b7280';
@@ -43,13 +44,13 @@ const UNDO_MS = 10_000;
 
 const noopSubscribe = () => () => {};
 
-export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientProps) {
+export default function LifetimeClient({ data, tags, todayStr, nameMatching }: LifetimeClientProps) {
   // Columns and times depend on the browser's timezone, so the chart only
   // renders on the client.
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   const segments = useMemo(() => buildSegments(data), [data]);
-  const index = useMemo(() => buildMatchIndex(data), [data]);
+  const index = useMemo(() => buildMatchIndex(data, nameMatching), [data, nameMatching]);
   const counts = useMemo(() => index.eventsByTitle.map((es) => es.length), [index]);
 
   const tagColors = useMemo(
