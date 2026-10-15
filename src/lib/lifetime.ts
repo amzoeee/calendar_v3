@@ -97,6 +97,8 @@ export function buildSegments(data: LifetimeEvents): Segments {
 export interface MatchIndex {
   keys: string[];
   parts: string[][];
+  // Sorted parts, so "[train] dwg" and "dwg" count as the same name.
+  signatures: string[];
   titlesByPart: Map<string, number[]>;
   eventsByTitle: number[][];
 }
@@ -104,6 +106,7 @@ export interface MatchIndex {
 export function buildMatchIndex(data: LifetimeEvents): MatchIndex {
   const keys = data.titles.map(normalizeTitle);
   const parts = data.titles.map(titleParts);
+  const signatures = parts.map((ps) => [...ps].sort().join('\u0000'));
   const titlesByPart = new Map<string, number[]>();
   parts.forEach((ps, t) => {
     for (const p of ps) {
@@ -114,7 +117,7 @@ export function buildMatchIndex(data: LifetimeEvents): MatchIndex {
   });
   const eventsByTitle: number[][] = data.titles.map(() => []);
   data.titleIdx.forEach((t, e) => eventsByTitle[t].push(e));
-  return { keys, parts, titlesByPart, eventsByTitle };
+  return { keys, parts, signatures, titlesByPart, eventsByTitle };
 }
 
 export type Focus =
@@ -151,6 +154,12 @@ export function matchTitles(index: MatchIndex, focus: Focus): Uint8Array {
   }
 
   markParts(index.parts[focus.title]);
+  const sig = index.signatures[focus.title];
+  if (sig) {
+    for (const t of index.titlesByPart.get(index.parts[focus.title][0]) ?? []) {
+      if (index.signatures[t] === sig) levels[t] = EXACT;
+    }
+  }
   levels[focus.title] = EXACT;
   return levels;
 }
