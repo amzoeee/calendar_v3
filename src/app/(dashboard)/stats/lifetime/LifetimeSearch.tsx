@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { track } from '@/lib/track';
 import { createPortal } from 'react-dom';
 import { Search, X } from 'lucide-react';
 import { normalizeTitle } from '@/lib/titleParts';
@@ -75,6 +76,7 @@ export default function LifetimeSearch({ titles, keys, counts, query, onQuery, o
 
   // Row 0 is the free-text search; rows 1.. are titles.
   const choose = (row: number) => {
+    track('lifetime.search', { suggestion: row > 0 });
     setOpen(false);
     if (row === 0) {
       inputRef.current?.blur();
