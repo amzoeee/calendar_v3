@@ -1,8 +1,8 @@
 'use server';
 
 import { db } from '@/db';
-import { users, tags, events, taskBoards, taskTags } from '@/db/schema';
-import { eq, and, asc, desc, sql, ne } from 'drizzle-orm';
+import { users, tags, events, taskBoards, taskTags, tasks } from '@/db/schema';
+import { eq, and, asc, desc, sql, ne, inArray, isNull } from 'drizzle-orm';
 import {
   hashPassword,
   verifyPassword,
@@ -223,7 +223,14 @@ export async function updateTagAction(
   revalidatePath('/tasks', 'layout');
 }
 
-export async function deleteTagAction(id: number) {
+export interface TagSnapshot {
+  tag: typeof tags.$inferSelect;
+  eventIds: number[];
+  taskIds: number[];
+}
+
+/** Returns what the tag was attached to, so Undo can put it back. */
+export async function deleteTagAction(id: number): Promise<TagSnapshot> {
   const session = await requireAuth();
 
   const [tag] = await db
@@ -233,6 +240,15 @@ export async function deleteTagAction(id: number) {
     .limit(1);
 
   if (!tag) throw new Error('Tag not found');
+
+  const tagged = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.tag, tag.name), eq(events.userId, session.userId)));
+  const links = await db
+    .select({ taskId: taskTags.taskId })
+    .from(taskTags)
+    .where(eq(taskTags.tagId, id));
 
   // Set events using this tag to null
   await db
@@ -249,6 +265,58 @@ export async function deleteTagAction(id: number) {
   revalidatePath('/settings');
   revalidatePath('/calendar', 'layout');
   revalidatePath('/tasks', 'layout');
+  return { tag, eventIds: tagged.map((e) => e.id), taskIds: links.map((l) => l.taskId) };
+}
+
+const RESTORE_CHUNK = 500;
+
+/**
+ * Recreates a deleted tag under its old id and reattaches it. Events retagged
+ * since the delete keep their new tag.
+ */
+export async function restoreTagAction(snapshot: TagSnapshot): Promise<{ error?: string }> {
+  const session = await requireAuth();
+  const { tag } = snapshot;
+
+  const [clash] = await db
+    .select({ id: tags.id })
+    .from(tags)
+    .where(and(eq(tags.userId, session.userId), eq(tags.name, tag.name)));
+  if (clash) return { error: `A tag called “${tag.name}” exists again` };
+
+  await db.insert(tags).values({ ...tag, userId: session.userId }).onConflictDoNothing();
+
+  for (let i = 0; i < snapshot.eventIds.length; i += RESTORE_CHUNK) {
+    await db
+      .update(events)
+      .set({ tag: tag.name })
+      .where(
+        and(
+          eq(events.userId, session.userId),
+          isNull(events.tag),
+          inArray(events.id, snapshot.eventIds.slice(i, i + RESTORE_CHUNK)),
+        ),
+      );
+  }
+
+  // Only tasks that still exist and are still this user's.
+  const live = snapshot.taskIds.length
+    ? await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(eq(tasks.userId, session.userId), inArray(tasks.id, snapshot.taskIds)))
+    : [];
+  if (live.length) {
+    await db
+      .insert(taskTags)
+      .values(live.map((t) => ({ taskId: t.id, tagId: tag.id })))
+      .onConflictDoNothing();
+  }
+
+  revalidatePath('/settings');
+  revalidatePath('/calendar', 'layout');
+  revalidatePath('/tasks', 'layout');
+  return {};
 }
 
 export async function archiveTagAction(id: number) {
