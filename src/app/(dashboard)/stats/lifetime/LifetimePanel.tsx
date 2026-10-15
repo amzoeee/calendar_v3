@@ -125,9 +125,10 @@ export default function LifetimePanel({
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-lg font-bold tracking-tight break-words min-w-0">{heading}</h2>
           {pinned && (
-            <div className="flex items-center gap-0.5 shrink-0">
+            // Matches the heading's line height so the icons centre on its first line.
+            <div className="relative flex items-center gap-0.5 h-7 shrink-0">
               {bulkTarget && (
-                <div className="relative">
+                <>
                   <button
                     onClick={() => setMenuOpen((o) => !o)}
                     aria-label="More options"
@@ -139,7 +140,7 @@ export default function LifetimePanel({
                   {menuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                      <div className="absolute right-0 top-full mt-1 w-44 z-50 bg-card border border-border rounded-lg shadow-2xl p-1">
+                      <div className="absolute right-0 top-full mt-1 whitespace-nowrap z-50 bg-card border border-border rounded-lg shadow-2xl p-1">
                         <button
                           onClick={() => {
                             setMenuOpen(false);
@@ -152,7 +153,7 @@ export default function LifetimePanel({
                       </div>
                     </>
                   )}
-                </div>
+                </>
               )}
               <button
                 onClick={onClear}
