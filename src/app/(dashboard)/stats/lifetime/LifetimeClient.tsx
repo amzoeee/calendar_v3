@@ -211,22 +211,7 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row gap-4 p-4 md:p-6">
           <section className="bg-card rounded-xl border border-border p-3 md:p-4 flex flex-col md:flex-1 md:min-h-0 min-w-0">
-            <div className="flex flex-wrap gap-1.5">
-              {legend.map((g) => (
-                <button
-                  key={g}
-                  onClick={() => toggleTag(g)}
-                  aria-pressed={!hiddenTags.has(g)}
-                  className={`flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-md border border-border bg-secondary transition cursor-pointer ${
-                    hiddenTags.has(g) ? 'opacity-40 line-through' : 'hover:bg-muted'
-                  }`}
-                >
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colorOf(g) }} />
-                  {g >= 0 ? data.tagNames[g] : 'Untagged'}
-                </button>
-              ))}
-            </div>
-            <div className="h-[420px] md:h-auto md:flex-1 md:min-h-0 mt-3" onPointerLeave={onLeave}>
+            <div className="h-[420px] md:h-auto md:flex-1 md:min-h-0" onPointerLeave={onLeave}>
               {hydrated && (
                 <LifetimeChart
                   data={data}
@@ -243,6 +228,21 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
                   onSelect={onSelect}
                 />
               )}
+            </div>
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {legend.map((g) => (
+                <button
+                  key={g}
+                  onClick={() => toggleTag(g)}
+                  aria-pressed={!hiddenTags.has(g)}
+                  className={`flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-md border border-border bg-secondary transition cursor-pointer ${
+                    hiddenTags.has(g) ? 'opacity-40 line-through' : 'hover:bg-muted'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colorOf(g) }} />
+                  {g >= 0 ? data.tagNames[g] : 'Untagged'}
+                </button>
+              ))}
             </div>
           </section>
 
