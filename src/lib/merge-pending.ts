@@ -1,6 +1,5 @@
-// Whether approving a log import folds it into same-name neighbours. Kept in a
-// cookie so the choice sticks, and so the calendar can preview the result.
-export const MERGE_PENDING_COOKIE = 'mergePending';
+// Approving a log import always folds it into same-name neighbours; this
+// works out how, so the calendar can preview the result.
 
 interface Mergeable {
   id: number;
@@ -56,7 +55,7 @@ export function planPendingMerge(events: Mergeable[]): { newEnds: Map<number, st
 }
 
 /**
- * The calendar as it will look once approved with merging on. An approved
+ * The calendar as it will look once approved. An approved
  * event that grows is shown as pending, since approving is what changes it.
  */
 export function previewPendingMerge<T extends Mergeable>(events: T[]): T[] {
