@@ -25,6 +25,7 @@ import {
   deleteTagAction,
   archiveTagAction,
   unarchiveTagAction,
+  restoreTagAction,
   reorderTagsAction,
   stageLogAction,
   linkDiscordAction,
@@ -49,6 +50,7 @@ import {
 import type { BuildInfo } from '@/lib/version';
 import DateInput from '@/app/components/DateInput';
 import { useConfirm } from '@/app/components/ConfirmDialog';
+import { useUndo } from '@/app/components/UndoToast';
 
 interface Tag {
   id: number;
@@ -93,6 +95,7 @@ interface SettingsClientProps {
 export default function SettingsClient({ initialTags, buildInfo, weekStart, discordLinks }: SettingsClientProps) {
   const router = useRouter();
   const { confirm } = useConfirm();
+  const { raiseUndo } = useUndo();
   const searchParams = useSearchParams();
 
   // --- ICS import result ---
@@ -272,6 +275,13 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     if (ok) {
       await archiveTagAction(tagId);
       router.refresh();
+      raiseUndo({
+        message: `Archived “${name}”`,
+        undo: async () => {
+          await unarchiveTagAction(tagId);
+          router.refresh();
+        },
+      });
     }
   };
 
@@ -302,8 +312,16 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
       destructive: true,
     });
     if (ok) {
-      await deleteTagAction(tagId);
+      const snapshot = await deleteTagAction(tagId);
       router.refresh();
+      raiseUndo({
+        message: `Deleted “${name}”`,
+        undo: async () => {
+          const res = await restoreTagAction(snapshot);
+          router.refresh();
+          if (res.error) raiseUndo({ message: res.error, undo: null });
+        },
+      });
     }
   };
 
