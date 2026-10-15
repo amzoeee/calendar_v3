@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { users, tags, events, taskBoards } from '@/db/schema';
+import { users, tags, events, taskBoards, taskTags } from '@/db/schema';
 import { eq, and, asc, desc, sql, ne } from 'drizzle-orm';
 import {
   hashPassword,
@@ -240,11 +240,15 @@ export async function deleteTagAction(id: number) {
     .set({ tag: null })
     .where(and(eq(events.tag, tag.name), eq(events.userId, session.userId)));
 
+  // Task links reference the tag row, so they have to go first.
+  await db.delete(taskTags).where(eq(taskTags.tagId, id));
+
   // Delete tag
   await db.delete(tags).where(eq(tags.id, id));
 
   revalidatePath('/settings');
   revalidatePath('/calendar', 'layout');
+  revalidatePath('/tasks', 'layout');
 }
 
 export async function archiveTagAction(id: number) {
