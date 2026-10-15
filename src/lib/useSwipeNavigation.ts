@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { track } from '@/lib/track';
 
 // A gesture has to travel this far horizontally before it counts as a swipe —
 // keeps taps and the small drags that come with scrolling from navigating.
@@ -88,6 +89,7 @@ export function useSwipeNavigation<T extends HTMLElement>({
       if (Math.abs(dx) < MIN_DISTANCE_PX) return;
       if (Math.abs(dy) > Math.abs(dx) * MAX_OFF_AXIS_RATIO) return;
 
+      track('nav.swipe');
       if (dx < 0) callbacks.current.onSwipeLeft();
       else callbacks.current.onSwipeRight();
     };

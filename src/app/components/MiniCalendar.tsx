@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DEFAULT_WEEK_START, weekdayOrder, type WeekStart } from '@/lib/week';
+import { track } from '@/lib/track';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toDateStr = (d: Date) =>
@@ -139,7 +140,10 @@ export default function MiniCalendar({ weekStart = DEFAULT_WEEK_START }: { weekS
     }
     pickerRef.current?.querySelector<HTMLButtonElement>(`[data-month="${next}"]`)?.focus();
   };
-  const handleDayClick = (d: Date) => router.push(`/${view}/${toDateStr(d)}`);
+  const handleDayClick = (d: Date) => {
+    track('nav.mini_calendar');
+    router.push(`/${view}/${toDateStr(d)}`);
+  };
 
   return (
     <div className="px-4 pt-4">

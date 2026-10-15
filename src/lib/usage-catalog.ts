@@ -9,11 +9,10 @@ export const USAGE_CATALOG = {
   'view.settings': { group: 'Views', label: 'Settings' },
 
   'nav.mini_calendar': { group: 'Navigation', label: 'Mini calendar' },
-  'nav.date_jump': { group: 'Navigation', label: 'Date jump input' },
-  'nav.keyboard': { group: 'Navigation', label: 'Arrow keys / PageUp / PageDown' },
+  'nav.keyboard': { group: 'Navigation', label: 'Arrow keys between days/weeks' },
   'nav.swipe': { group: 'Navigation', label: 'Swipe between days/weeks' },
-  'nav.zoom_key': { group: 'Navigation', label: 'Zoom with + / -' },
-  'nav.zoom_reset': { group: 'Navigation', label: 'Zoom reset with 0' },
+  'nav.zoom_key': { group: 'Navigation', label: 'Zoom with Cmd/Ctrl + / -' },
+  'nav.zoom_reset': { group: 'Navigation', label: 'Zoom reset with Cmd/Ctrl 0' },
   'nav.pinch_zoom': { group: 'Navigation', label: 'Pinch zoom' },
   'nav.search': { group: 'Navigation', label: 'Event search (opened a result)' },
 
