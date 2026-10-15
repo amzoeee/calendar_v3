@@ -243,7 +243,7 @@ against it once instead.
 |---|---|
 | Daily & weekly views | Switch between day and week timelines; zoom in/out with Cmd+/Cmd- |
 | Stats page | Weekday breakdown chart and per-tag daily averages over a custom date range, with presets, a weekdays-only toggle, and an active-day count |
-| Lifetime view | Every event you've logged on one chart (day × time of day), colored by tag. Zoom and pan the dates; hover or click an event to highlight others with the same name or a shared part (titles split on `/ + & , and`), with stats like average length, usual start time, streaks and hours per month. Click an event, then rename or retag every match at once |
+| Lifetime view | Every event you've logged on one chart (day × time of day), colored by tag. Zoom and pan the dates; hover or click an event to highlight others with the same name or a shared part (how titles split is set under Settings → Name matching), with stats like average length, usual start time, streaks and hours per month. Click an event, then rename or retag every match at once |
 | Recurring events | Create repeating events; edit/delete a single occurrence or the whole series |
 | Event search | Search for events from the view header and jump straight to them |
 | Tags | Color-coded labels; drag to reorder; archive old ones |
