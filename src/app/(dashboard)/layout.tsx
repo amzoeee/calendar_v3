@@ -11,6 +11,7 @@ import TimezoneSync from '@/app/components/TimezoneSync';
 import { ConfirmProvider } from '@/app/components/ConfirmDialog';
 import PendingSync from '@/app/components/PendingSync';
 import MergePendingToggle from '@/app/components/MergePendingToggle';
+import PendingReview from '@/app/components/PendingReview';
 import { getMergePending } from '@/lib/server-merge-pending';
 import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
@@ -146,6 +147,8 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              <PendingReview />
+
               {/* Approve All */}
               <form action={approveAllPendingAction} className="flex items-center gap-2">
                 <MergePendingToggle initial={mergePending} />
