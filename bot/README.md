@@ -69,7 +69,8 @@ it stopped at was posted, since that marks the end of the previous event. With
 no marker it falls back to the day you posted the oldest line it took.
 `/fetch date:2026-09-19` overrides all of these.
 
-`merge:true` collapses back-to-back lines with the same name into one event.
+By default back-to-back lines with the same name collapse into one event
+(`merge:false` keeps them separate).
 A line's time is when that activity ended, so the last of the run is kept:
 `1400 study` then `1500 study` becomes one study event ending at 1500. Names
 match ignoring case.
