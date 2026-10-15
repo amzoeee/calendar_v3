@@ -672,7 +672,7 @@ export default function StatsClient({
         {/* Stacked Bar Chart */}
         {/* Fixed height on lg so the chart doesn't stretch to match a long tag
             list beside it; it must stay definite for the plot's `h-full`. */}
-        <div className="flex-1 lg:self-start lg:h-[400px] bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
+        <div className="flex-1 min-w-0 lg:self-start lg:h-[400px] bg-card rounded-xl border border-border p-4 md:p-6 flex flex-col justify-between min-h-[400px]">
           <div>
             <h2 className="text-lg font-bold">Event Hours by Weekday</h2>
             <p className="text-xs text-muted-foreground mt-1">
@@ -681,10 +681,10 @@ export default function StatsClient({
             </p>
           </div>
 
-          {/* Grid Chart — horizontally scrollable on mobile since 7 bars don't
-              fit a phone width at a legible size (see the fixed inner width below) */}
-          <div ref={weekdayHoursScrollRef} className="flex-1 mt-8 overflow-x-auto md:overflow-visible">
-            <div className="relative h-full w-[460px] md:w-full">
+          {/* Grid Chart — scrolls horizontally whenever the card is narrower
+              than 7 legible bars (phones, and the lg two-column row) */}
+          <div ref={weekdayHoursScrollRef} className="flex-1 mt-6 pt-2 pb-3 overflow-x-auto">
+            <div className="relative h-full w-full min-w-[460px]">
 
             {/* Y Axis Guide Lines */}
             <div className="absolute left-10 right-0 top-0 bottom-8 flex flex-col justify-between pointer-events-none select-none">
