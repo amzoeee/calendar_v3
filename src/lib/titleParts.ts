@@ -1,7 +1,7 @@
 // Splits an event title into the activities it names, so "get ready + drive"
 // and "drive" can be recognised as related. Bracketed context
-// ("[train, bus] rr") counts as parts too; parenthesised qualifiers
-// ("yt (long form)") are dropped.
+// ("[train, bus] rr") and parenthesised qualifiers ("yt (long form)") are
+// dropped.
 
 export const normalizeTitle = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -26,11 +26,7 @@ export function titleParts(title: string): string[] {
   let t = normalizeTitle(title);
   const parts: string[] = [];
 
-  t = t.replace(/\[([^\]]*)\]/g, (_, inner: string) => {
-    parts.push(...splitList(inner));
-    return ' ';
-  });
-  t = t.replace(/\([^)]*\)/g, ' ');
+  t = t.replace(/\[[^\]]*\]|\([^)]*\)/g, ' ');
   t = t.replace(EMOTICON_RE, '$1');
   t = t.replace(/\bw\//g, 'with ');
   t = normalizeTitle(t);
