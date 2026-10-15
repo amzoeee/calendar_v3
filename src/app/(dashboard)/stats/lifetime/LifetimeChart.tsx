@@ -151,7 +151,7 @@ export default function LifetimeChart({
     const firstVisible = firstDay + Math.floor(v.start);
     const lastVisible = firstDay + Math.ceil(v.end);
 
-    // Hour grid, every 4 hours from the 4am column start.
+    // Hour grid, every 4 hours.
     ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'right';

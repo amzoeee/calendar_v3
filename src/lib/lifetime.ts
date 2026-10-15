@@ -3,8 +3,8 @@
 
 import { normalizeTitle, titleParts } from './titleParts';
 
-// Columns run 4am to 4am, so a late night stays in the day it belongs to.
-export const DAY_START_HOUR = 4;
+// Hour each column starts at.
+export const DAY_START_HOUR = 0;
 export const MINUTES_PER_DAY = 1440;
 const MS_PER_MIN = 60_000;
 const MS_PER_DAY = 86_400_000;
