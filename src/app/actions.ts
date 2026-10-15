@@ -2,7 +2,7 @@
 
 import { db } from '@/db';
 import { users, tags, events, taskBoards } from '@/db/schema';
-import { eq, and, asc, desc, sql, ne } from 'drizzle-orm';
+import { eq, and, asc, desc, sql, ne, inArray } from 'drizzle-orm';
 import {
   hashPassword,
   verifyPassword,
@@ -21,6 +21,7 @@ import { getMergePending } from '@/lib/server-merge-pending';
 import { isTagScope, type TagScope } from '@/lib/tags';
 import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
 import { markStagesApproved } from '@/lib/discord-markers';
+import { replaceInTitle } from '@/lib/titleParts';
 
 // ==========================================
 // Authentication Actions
@@ -419,6 +420,82 @@ export async function updateRecurringSeriesAction(
   const session = await requireAuth();
   await updateRecurringSeries(recurrenceId, session.userId, data.title, data.description, data.tag);
   revalidatePath('/calendar', 'layout');
+}
+
+export interface BulkEditInput {
+  renameIds: number[];
+  // Null replaces each whole title; otherwise only this text inside it.
+  renameFrom: string | null;
+  renameMode: 'word' | 'substring';
+  renameTo: string | null;
+  retagIds: number[];
+  // Undefined keeps each event's tag; null clears it.
+  tag?: string | null;
+}
+
+const BULK_CHUNK = 500;
+
+/** Renames and/or retags many events at once, from the lifetime view. */
+export async function bulkEditEventsAction(input: BulkEditInput) {
+  const session = await requireAuth();
+  const renameTo = input.renameTo?.trim() || null;
+  let renamed = 0;
+  let retagged = 0;
+
+  if (input.tag !== undefined && input.tag !== null) {
+    const [owned] = await db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(eq(tags.userId, session.userId), eq(tags.name, input.tag)));
+    if (!owned) return { error: 'That tag no longer exists.' };
+  }
+
+  db.transaction((tx) => {
+    if (renameTo) {
+      for (let i = 0; i < input.renameIds.length; i += BULK_CHUNK) {
+        const rows = tx
+          .select({ id: events.id, title: events.title })
+          .from(events)
+          .where(
+            and(
+              eq(events.userId, session.userId),
+              eq(events.isPending, 0),
+              inArray(events.id, input.renameIds.slice(i, i + BULK_CHUNK)),
+            ),
+          )
+          .all();
+        for (const row of rows) {
+          const title = input.renameFrom
+            ? replaceInTitle(row.title, input.renameFrom, renameTo, input.renameMode)
+            : renameTo;
+          if (title === row.title) continue;
+          tx.update(events).set({ title }).where(eq(events.id, row.id)).run();
+          renamed++;
+        }
+      }
+    }
+
+    if (input.tag !== undefined) {
+      for (let i = 0; i < input.retagIds.length; i += BULK_CHUNK) {
+        const res = tx
+          .update(events)
+          .set({ tag: input.tag })
+          .where(
+            and(
+              eq(events.userId, session.userId),
+              eq(events.isPending, 0),
+              inArray(events.id, input.retagIds.slice(i, i + BULK_CHUNK)),
+            ),
+          )
+          .run();
+        retagged += res.changes;
+      }
+    }
+  });
+
+  revalidatePath('/calendar', 'layout');
+  revalidatePath('/stats', 'layout');
+  return { renamed, retagged };
 }
 
 // ==========================================
