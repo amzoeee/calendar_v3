@@ -435,14 +435,25 @@ export interface BulkEditInput {
 
 const BULK_CHUNK = 500;
 
-/** Renames and/or retags many events at once, from the lifetime view. */
+export interface EventSnapshot {
+  id: number;
+  title: string;
+  tag: string | null;
+}
+
+/**
+ * Renames and/or retags many events at once, from the lifetime view. Returns
+ * the previous title and tag of every event it changed, for Undo.
+ */
 export async function bulkEditEventsAction(input: BulkEditInput) {
   const session = await requireAuth();
   const renameTo = input.renameTo?.trim() || null;
+  const retag = input.tag !== undefined;
   let renamed = 0;
   let retagged = 0;
+  const previous: EventSnapshot[] = [];
 
-  if (input.tag !== undefined && input.tag !== null) {
+  if (input.tag) {
     const [owned] = await db
       .select({ id: tags.id })
       .from(tags)
@@ -450,52 +461,58 @@ export async function bulkEditEventsAction(input: BulkEditInput) {
     if (!owned) return { error: 'That tag no longer exists.' };
   }
 
+  const renameSet = new Set(renameTo ? input.renameIds : []);
+  const retagSet = new Set(retag ? input.retagIds : []);
+  const ids = [...new Set([...renameSet, ...retagSet])];
+
   db.transaction((tx) => {
-    if (renameTo) {
-      for (let i = 0; i < input.renameIds.length; i += BULK_CHUNK) {
-        const rows = tx
-          .select({ id: events.id, title: events.title })
-          .from(events)
-          .where(
-            and(
-              eq(events.userId, session.userId),
-              eq(events.isPending, 0),
-              inArray(events.id, input.renameIds.slice(i, i + BULK_CHUNK)),
-            ),
-          )
-          .all();
-        for (const row of rows) {
-          const title = input.renameFrom
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      const rows = tx
+        .select({ id: events.id, title: events.title, tag: events.tag })
+        .from(events)
+        .where(
+          and(
+            eq(events.userId, session.userId),
+            eq(events.isPending, 0),
+            inArray(events.id, ids.slice(i, i + BULK_CHUNK)),
+          ),
+        )
+        .all();
+      for (const row of rows) {
+        let title = row.title;
+        if (renameTo && renameSet.has(row.id)) {
+          title = input.renameFrom
             ? replaceInTitle(row.title, input.renameFrom, renameTo, input.renameMode)
             : renameTo;
-          if (title === row.title) continue;
-          tx.update(events).set({ title }).where(eq(events.id, row.id)).run();
-          renamed++;
         }
-      }
-    }
-
-    if (input.tag !== undefined) {
-      for (let i = 0; i < input.retagIds.length; i += BULK_CHUNK) {
-        const res = tx
-          .update(events)
-          .set({ tag: input.tag })
-          .where(
-            and(
-              eq(events.userId, session.userId),
-              eq(events.isPending, 0),
-              inArray(events.id, input.retagIds.slice(i, i + BULK_CHUNK)),
-            ),
-          )
-          .run();
-        retagged += res.changes;
+        const tag = retag && retagSet.has(row.id) ? (input.tag ?? null) : row.tag;
+        if (title === row.title && tag === row.tag) continue;
+        tx.update(events).set({ title, tag }).where(eq(events.id, row.id)).run();
+        if (title !== row.title) renamed++;
+        if (tag !== row.tag) retagged++;
+        previous.push(row);
       }
     }
   });
 
   revalidatePath('/calendar', 'layout');
   revalidatePath('/stats', 'layout');
-  return { renamed, retagged };
+  return { renamed, retagged, previous };
+}
+
+/** Puts back titles and tags captured by bulkEditEventsAction. */
+export async function restoreEventsAction(snapshots: EventSnapshot[]) {
+  const session = await requireAuth();
+  db.transaction((tx) => {
+    for (const s of snapshots) {
+      tx.update(events)
+        .set({ title: s.title, tag: s.tag })
+        .where(and(eq(events.id, s.id), eq(events.userId, session.userId)))
+        .run();
+    }
+  });
+  revalidatePath('/calendar', 'layout');
+  revalidatePath('/stats', 'layout');
 }
 
 // ==========================================
