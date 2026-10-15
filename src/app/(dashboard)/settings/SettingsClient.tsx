@@ -49,6 +49,8 @@ import {
 import type { BuildInfo } from '@/lib/version';
 import DateInput from '@/app/components/DateInput';
 import { useConfirm } from '@/app/components/ConfirmDialog';
+import NameMatchingSettings from './NameMatchingSettings';
+import type { NameMatching } from '@/lib/titleParts';
 
 interface Tag {
   id: number;
@@ -88,9 +90,10 @@ interface SettingsClientProps {
   buildInfo: BuildInfo;
   weekStart: WeekStart;
   discordLinks: DiscordLinkView[];
+  nameMatching: NameMatching;
 }
 
-export default function SettingsClient({ initialTags, buildInfo, weekStart, discordLinks }: SettingsClientProps) {
+export default function SettingsClient({ initialTags, buildInfo, weekStart, discordLinks, nameMatching }: SettingsClientProps) {
   const router = useRouter();
   const { confirm } = useConfirm();
   const searchParams = useSearchParams();
@@ -751,6 +754,8 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
           />
         </div>
       </section>
+
+      <NameMatchingSettings initial={nameMatching} />
 
       {/* Account */}
       <section className="bg-card rounded-xl border border-border p-4 lg:p-6 space-y-6">

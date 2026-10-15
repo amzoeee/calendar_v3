@@ -7,6 +7,7 @@ import { getBuildInfo } from '@/lib/version';
 import SettingsClient from './SettingsClient';
 import { getWeekStart } from '@/lib/server-week';
 import { getLinksForUser } from '@/lib/discord-link';
+import { getNameMatching } from '@/lib/server-name-matching';
 
 export default async function SettingsPage() {
   const session = await getSession();
@@ -27,6 +28,7 @@ export default async function SettingsPage() {
       buildInfo={getBuildInfo()}
       weekStart={await getWeekStart()}
       discordLinks={await getLinksForUser(session.userId)}
+      nameMatching={await getNameMatching(session.userId)}
     />
   );
 }
