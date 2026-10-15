@@ -9,6 +9,7 @@ import MobileTabBar from '@/app/components/MobileTabBar';
 import MobileProfileMenu from '@/app/components/MobileProfileMenu';
 import TimezoneSync from '@/app/components/TimezoneSync';
 import { ConfirmProvider } from '@/app/components/ConfirmDialog';
+import { UndoProvider } from '@/app/components/UndoToast';
 import PendingSync from '@/app/components/PendingSync';
 import MergePendingToggle from '@/app/components/MergePendingToggle';
 import { getMergePending } from '@/lib/server-merge-pending';
@@ -190,7 +191,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto relative flex flex-col min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
-          <ConfirmProvider>{children}</ConfirmProvider>
+          <ConfirmProvider>
+            <UndoProvider>{children}</UndoProvider>
+          </ConfirmProvider>
         </main>
       </div>
 
