@@ -67,6 +67,9 @@ import {
   toggleTaskCompletionAction,
   setTaskCompletionAction,
   deleteTaskAction,
+  restoreTasksAction,
+  restoreBoardAction,
+  type TaskSnapshot,
   setTaskStarredAction,
   moveTaskToBoardAction,
   createBoardAction,
@@ -555,7 +558,22 @@ export default function TasksClient({
   const removeTask = (id: number) => {
     setSelectedId(null);
     setLocalRows((prev) => prev.filter((r) => r.id !== id && r.parentId !== id));
-    run(() => deleteTaskAction(id));
+    run(async () => {
+      const snapshot = await deleteTaskAction(id);
+      const root = snapshot.tasks.find((t) => t.id === id);
+      const subs = snapshot.tasks.length - 1;
+      raiseUndo({
+        message: `Deleted “${root ? displayTitle(root.title, root.counterValue) : 'task'}”${
+          subs > 0 ? ` and ${subs} subtask${subs === 1 ? '' : 's'}` : ''
+        }`,
+        undo: () => run(() => restoreTasks(snapshot)),
+      });
+    });
+  };
+
+  const restoreTasks = async (snapshot: TaskSnapshot) => {
+    const res = await restoreTasksAction(snapshot);
+    if (res.error) raiseUndo({ message: `Couldn’t undo: ${res.error.toLowerCase()}`, undo: null });
   };
 
   const handlers: ColumnHandlers = {
@@ -1011,6 +1029,7 @@ function BoardColumn({
   const [renaming, setRenaming] = useState(false);
   const [pasting, setPasting] = useState(false);
   const { confirm, choose } = useConfirm();
+  const { raiseUndo } = useUndo();
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
 
@@ -1703,7 +1722,19 @@ function BoardColumn({
                       confirmLabel: 'Delete',
                       destructive: true,
                     });
-                    if (ok) handlers.run(() => deleteCompletedTasksAction(board.id));
+                    if (!ok) return;
+                    handlers.run(async () => {
+                      const snapshot = await deleteCompletedTasksAction(board.id);
+                      const n = snapshot.tasks.length;
+                      raiseUndo({
+                        message: `Deleted ${n} completed task${n === 1 ? '' : 's'}`,
+                        undo: () =>
+                          handlers.run(async () => {
+                            const res = await restoreTasksAction(snapshot);
+                            if (res.error) raiseUndo({ message: `Couldn’t undo: ${res.error.toLowerCase()}`, undo: null });
+                          }),
+                      });
+                    });
                   }}
                   disabled={completedCount === 0}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1731,7 +1762,15 @@ function BoardColumn({
                           });
                     if (!choice) return;
                     handlers.run(async () => {
-                      await deleteBoardAction(board.id, choice === 'move' ? others[0].id : null);
+                      const snapshot = await deleteBoardAction(board.id, choice === 'move' ? others[0].id : null);
+                      raiseUndo({
+                        message: `Deleted “${board.name}”`,
+                        undo: () =>
+                          handlers.run(async () => {
+                            await restoreBoardAction(snapshot);
+                            onPickBoard(board.id);
+                          }),
+                      });
                     });
                     onPickBoard(others[0].id);
                   }}
