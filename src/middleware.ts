@@ -11,7 +11,8 @@ export function middleware(request: NextRequest) {
     path.startsWith('/calendar') ||
     path.startsWith('/weekly') ||
     path.startsWith('/stats') ||
-    path.startsWith('/settings');
+    path.startsWith('/settings') ||
+    path.startsWith('/admin');
 
   const sessionCookie = request.cookies.get('calendar_session');
   // Mirrored from the browser by <TimezoneSync>; absent on a user's very
@@ -42,5 +43,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/login', '/register', '/calendar/:path*', '/weekly/:path*', '/stats/:path*', '/settings/:path*'],
+  matcher: ['/', '/login', '/register', '/calendar/:path*', '/weekly/:path*', '/stats/:path*', '/settings/:path*', '/admin/:path*'],
 };

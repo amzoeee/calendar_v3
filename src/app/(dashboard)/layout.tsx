@@ -1,8 +1,10 @@
 import { getSession } from '@/lib/auth';
+import { isAdmin } from '@/lib/admin';
 import { db } from '@/db';
 import { events, tasks } from '@/db/schema';
 import { eq, and, sql, isNotNull, isNull, lte } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import MiniCalendar from '@/app/components/MiniCalendar';
 import SidebarNav from '@/app/components/SidebarNav';
 import MobileTabBar from '@/app/components/MobileTabBar';
@@ -22,6 +24,7 @@ import {
   Check,
   Trash2,
   CalendarDays,
+  Shield,
 } from 'lucide-react';
 import {
   approveAllPendingAction,
@@ -115,6 +118,15 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               <p className="text-sm font-semibold truncate">{session.username}</p>
             </div>
           </div>
+          {isAdmin(session.username) && (
+            <Link
+              href="/admin"
+              className="w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-foreground hover:bg-secondary transition-all gap-3"
+            >
+              <Shield className="h-5 w-5 text-muted-foreground" />
+              Admin
+            </Link>
+          )}
           <form action={logoutAction}>
             <button
               type="submit"
@@ -135,7 +147,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             <CalendarDays className="h-5 w-5 text-foreground" />
             <span className="font-extrabold text-sm tracking-wider text-foreground">CALENDAR</span>
           </div>
-          <MobileProfileMenu username={session.username} logoutAction={logoutAction} />
+          <MobileProfileMenu username={session.username} isAdmin={isAdmin(session.username)} logoutAction={logoutAction} />
         </div>
 
         {/* Pending Import Banner */}

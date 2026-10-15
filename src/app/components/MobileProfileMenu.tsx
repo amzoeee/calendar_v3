@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { LogOut, Settings as SettingsIcon, Shield } from 'lucide-react';
 
 /**
  * Rendered in a portal with fixed positioning so it escapes the dashboard
@@ -12,9 +12,11 @@ import { LogOut, Settings as SettingsIcon } from 'lucide-react';
  */
 export default function MobileProfileMenu({
   username,
+  isAdmin = false,
   logoutAction,
 }: {
   username: string;
+  isAdmin?: boolean;
   logoutAction: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -66,6 +68,16 @@ export default function MobileProfileMenu({
               <SettingsIcon className="h-4 w-4" />
               Settings
             </Link>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setOpen(false)}
+                className="w-full flex items-center px-2 py-2 text-sm font-medium rounded-md text-foreground hover:bg-secondary transition-all gap-2"
+              >
+                <Shield className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
             <form action={logoutAction}>
               <button
                 type="submit"
