@@ -374,10 +374,30 @@ export async function updateEventAction(
   revalidatePath('/calendar', 'layout');
 }
 
-export async function deleteEventAction(id: number) {
+export type EventRow = typeof events.$inferSelect;
+
+/** Returns the deleted row, so Undo can put it back. */
+export async function deleteEventAction(id: number): Promise<EventRow[]> {
   const session = await requireAuth();
 
-  await db.delete(events).where(and(eq(events.id, id), eq(events.userId, session.userId)));
+  const deleted = await db
+    .delete(events)
+    .where(and(eq(events.id, id), eq(events.userId, session.userId)))
+    .returning();
+
+  revalidatePath('/calendar', 'layout');
+  return deleted;
+}
+
+/** Puts back events removed by a delete, under their original ids. */
+export async function reinsertEventsAction(rows: EventRow[]) {
+  const session = await requireAuth();
+  if (rows.length === 0) return;
+
+  await db
+    .insert(events)
+    .values(rows.map((r) => ({ ...r, userId: session.userId })))
+    .onConflictDoNothing();
 
   revalidatePath('/calendar', 'layout');
 }
@@ -406,10 +426,12 @@ export async function copyEventAction(id: number) {
   revalidatePath('/calendar', 'layout');
 }
 
-export async function deleteRecurringSeriesAction(recurrenceId: string) {
+/** Returns the deleted rows, so Undo can put them back. */
+export async function deleteRecurringSeriesAction(recurrenceId: string): Promise<EventRow[]> {
   const session = await requireAuth();
-  await deleteRecurringSeries(recurrenceId, session.userId);
+  const deleted = await deleteRecurringSeries(recurrenceId, session.userId);
   revalidatePath('/calendar', 'layout');
+  return deleted;
 }
 
 export async function updateRecurringSeriesAction(
