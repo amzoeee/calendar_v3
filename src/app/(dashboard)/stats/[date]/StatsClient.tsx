@@ -6,6 +6,7 @@ import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import DateInput from '@/app/components/DateInput';
+import StatsViewSwitch from '@/app/components/StatsViewSwitch';
 import { weekdayOrder, type WeekStart } from '@/lib/week';
 
 interface Tag {
@@ -426,9 +427,7 @@ export default function StatsClient({
                 Weekdays Only
               </span>
             </label>
-            <span className="hidden md:inline-block px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
-              Stats
-            </span>
+            <StatsViewSwitch active="range" rangeHref={buildUrl(activeRange.start, activeRange.end)} />
           </div>
         </div>
 
