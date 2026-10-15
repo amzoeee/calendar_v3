@@ -76,8 +76,8 @@ export function UndoProvider({ children }: { children: React.ReactNode }) {
       {toast && (
         <div
           role="status"
-          className="fixed left-1/2 -translate-x-1/2 z-[70] flex items-center gap-4 px-4 py-3 rounded-lg bg-card border border-border shadow-2xl max-w-[calc(100vw-2rem)]"
-          style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
+          // Mobile clears the tab bar; desktop has none.
+          className="fixed left-1/2 -translate-x-1/2 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-4 z-[70] flex items-center gap-4 px-4 py-3 rounded-lg bg-card border border-border shadow-2xl max-w-[calc(100vw-2rem)]"
         >
           <span className="text-sm text-foreground truncate">{toast.message}</span>
           {toast.undo && (
