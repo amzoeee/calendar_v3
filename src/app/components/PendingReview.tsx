@@ -277,16 +277,6 @@ export default function PendingReview() {
         </div>
 
         <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-border space-y-2 bg-secondary/30">
-          {notice && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="flex-1">{notice.text}</span>
-              {notice.previous && notice.previous.length > 0 && (
-                <button onClick={undo} disabled={busy} className="font-semibold text-foreground hover:underline cursor-pointer disabled:opacity-50">
-                  Undo
-                </button>
-              )}
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <span className="text-sm text-foreground shrink-0">
               {selected.size ? `${selected.size} selected` : 'None selected'}
@@ -302,6 +292,16 @@ export default function PendingReview() {
               Apply tag
             </button>
           </div>
+          {notice && (
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <span className="flex-1">{notice.text}</span>
+              {notice.previous && notice.previous.length > 0 && (
+                <button onClick={undo} disabled={busy} className="font-semibold text-foreground hover:underline cursor-pointer disabled:opacity-50">
+                  Undo
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
