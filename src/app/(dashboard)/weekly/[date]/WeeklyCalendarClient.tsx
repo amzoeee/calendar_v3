@@ -160,8 +160,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   const [addStartTime, setAddStartTime] = useState('09:00');
   const [addEndDate, setAddEndDate] = useState(date);
   const [addEndTime, setAddEndTime] = useState('10:00');
-  const [addRecur, setAddRecur] = useState('');
-  const [addRecurEnd, setAddRecurEnd] = useState('');
 
   // Get week dates (7 dates from the given first day of the week)
   const getWeekDates = (first: string): Date[] => {
@@ -603,16 +601,12 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
       tag: addTag,
       startDatetime: `${addStartDate}T${addStartTime}`,
       endDatetime: `${addEndDate}T${addEndTime}`,
-      recurrence: addRecur,
-      recurrenceEndDate: addRecurEnd,
       timeZone: getBrowserTimeZone(),
     });
     // Reset inputs
     setAddTitle('');
     setAddDesc('');
     setAddTag('');
-    setAddRecur('');
-    setAddRecurEnd('');
     setShowAddModal(false);
   };
 

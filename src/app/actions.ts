@@ -13,7 +13,7 @@ import {
 } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
+import { deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
 import { stageLogForUser, recalculatePendingEventsDate, mergePendingIntoNeighbours, discardPendingForUser } from '@/lib/discord-log';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 import { todayForViewer } from '@/lib/server-timezone';
@@ -376,8 +376,6 @@ export async function addEventAction(data: {
   tag: string;
   startDatetime: string;
   endDatetime: string;
-  recurrence: string;
-  recurrenceEndDate: string;
   timeZone: string;
 }) {
   const session = await requireAuth();
@@ -396,27 +394,15 @@ export async function addEventAction(data: {
     endStr = addHoursToDbString(startStr, 1); // default 1 hour
   }
 
-  if (data.recurrence) {
-    const rruleParts = [`FREQ=${data.recurrence}`];
-    if (data.recurrenceEndDate) {
-      const untilDt = new Date(data.recurrenceEndDate);
-      const pad = (n: number) => String(n).padStart(2, '0');
-      rruleParts.push(`UNTIL=${untilDt.getFullYear()}${pad(untilDt.getMonth() + 1)}${pad(untilDt.getDate())}`);
-    }
-    const rrule = rruleParts.join(';');
-
-    await createRecurringEvent(startStr, endStr, title, description, tag || '', session.userId, rrule);
-  } else {
-    await db.insert(events).values({
-      startDatetime: startStr,
-      endDatetime: endStr,
-      title,
-      description,
-      tag,
-      userId: session.userId,
-      isPending: 0,
-    });
-  }
+  await db.insert(events).values({
+    startDatetime: startStr,
+    endDatetime: endStr,
+    title,
+    description,
+    tag,
+    userId: session.userId,
+    isPending: 0,
+  });
 
   revalidatePath('/calendar', 'layout');
 }
