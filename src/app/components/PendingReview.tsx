@@ -41,6 +41,7 @@ export default function PendingReview() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ text: string; previous?: EventSnapshot[] } | null>(null);
   const anchor = useRef<number | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const load = async () => setData(await listPendingEventsAction());
 
@@ -56,6 +57,8 @@ export default function PendingReview() {
 
   useEffect(() => {
     if (!open) return;
+    // Skipped on touch, where focusing opens the keyboard over the list.
+    if (window.matchMedia('(pointer: fine)').matches) searchRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
@@ -177,7 +180,7 @@ export default function PendingReview() {
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <input
-                autoFocus
+                ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
