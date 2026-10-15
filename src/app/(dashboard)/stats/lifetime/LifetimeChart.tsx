@@ -419,7 +419,7 @@ export default function LifetimeChart({
       {view && (
         <button
           onClick={() => setView(null)}
-          className="absolute top-2 right-3 px-2.5 py-1 text-xs font-semibold rounded-md border border-border bg-secondary/90 text-muted-foreground hover:text-foreground hover:bg-muted transition cursor-pointer"
+          className="absolute top-3 right-3 px-2.5 py-1 text-xs font-semibold rounded-md border border-border bg-secondary/90 text-muted-foreground hover:text-foreground hover:bg-muted transition cursor-pointer"
         >
           Fit all
         </button>
