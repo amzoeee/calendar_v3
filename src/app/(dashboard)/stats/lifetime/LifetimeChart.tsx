@@ -193,6 +193,8 @@ export default function LifetimeChart({
     }
 
     const barW = colW >= 2 ? Math.max(1, colW * 0.8) : Math.max(colW, 1);
+    // Bars sit centred in their column, under the day's tick.
+    const barX = (day: number) => xOf(day) + (colW - barW) / 2;
     const drawPass = (level: number | null, alpha: number) => {
       ctx.globalAlpha = alpha;
       for (let s = 0; s < segments.length; s++) {
@@ -204,7 +206,7 @@ export default function LifetimeChart({
         ctx.fillStyle = colorOf(e);
         const y = MARGIN.top + segments.y0[s] * pxPerMin;
         const h = Math.max((segments.y1[s] - segments.y0[s]) * pxPerMin, MIN_BAR_HEIGHT);
-        ctx.fillRect(xOf(day), y, barW, h);
+        ctx.fillRect(barX(day), y, barW, h);
       }
     };
 
@@ -226,7 +228,7 @@ export default function LifetimeChart({
         if (segments.event[s] !== target) continue;
         const y = MARGIN.top + segments.y0[s] * pxPerMin;
         const h = Math.max((segments.y1[s] - segments.y0[s]) * pxPerMin, MIN_BAR_HEIGHT);
-        ctx.strokeRect(xOf(segments.day[s]) - 1.5, y - 1.5, barW + 3, h + 3);
+        ctx.strokeRect(barX(segments.day[s]) - 1.5, y - 1.5, barW + 3, h + 3);
       }
     }
     ctx.restore();
