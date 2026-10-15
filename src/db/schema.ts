@@ -8,6 +8,15 @@ export const users = sqliteTable('users', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
+// Per-user preferences that should follow the account rather than the browser
+// (unlike the cookie-backed ones such as week start). One row per user,
+// created on first save.
+export const userPreferences = sqliteTable('user_preferences', {
+  userId: integer('user_id').primaryKey().references(() => users.id),
+  // JSON for NameMatching (src/lib/titleParts.ts); read via parseNameMatching.
+  nameMatching: text('name_matching'),
+});
+
 export const tags = sqliteTable('tags', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),

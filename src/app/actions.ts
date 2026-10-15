@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { users, tags, events, taskBoards } from '@/db/schema';
+import { users, tags, events, taskBoards, userPreferences } from '@/db/schema';
 import { eq, and, asc, desc, sql, ne, inArray } from 'drizzle-orm';
 import {
   hashPassword,
@@ -21,7 +21,7 @@ import { getMergePending } from '@/lib/server-merge-pending';
 import { isTagScope, type TagScope } from '@/lib/tags';
 import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
 import { markStagesApproved } from '@/lib/discord-markers';
-import { replaceInTitle } from '@/lib/titleParts';
+import { replaceInTitle, parseNameMatching, type NameMatching } from '@/lib/titleParts';
 
 // ==========================================
 // Authentication Actions
@@ -513,6 +513,19 @@ export async function restoreEventsAction(snapshots: EventSnapshot[]) {
   });
   revalidatePath('/calendar', 'layout');
   revalidatePath('/stats', 'layout');
+}
+
+/** Saves how lifetime titles are split and matched; returns what was stored. */
+export async function saveNameMatchingAction(rules: NameMatching): Promise<NameMatching> {
+  const session = await requireAuth();
+  const clean = parseNameMatching(rules);
+  const json = JSON.stringify(clean);
+  await db
+    .insert(userPreferences)
+    .values({ userId: session.userId, nameMatching: json })
+    .onConflictDoUpdate({ target: userPreferences.userId, set: { nameMatching: json } });
+  revalidatePath('/stats', 'layout');
+  return clean;
 }
 
 // ==========================================
