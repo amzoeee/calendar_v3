@@ -426,6 +426,9 @@ export interface BulkEditInput {
   renameIds: number[];
   // Null replaces each whole title; otherwise only this text inside it.
   renameFrom: string | null;
+  // Same-name events. Their whole title is replaced when `renameFrom` isn't
+  // found in it, since parsing can strip text ("SLEEP!! :D yippee").
+  exactIds: number[];
   renameMode: 'word' | 'substring';
   renameTo: string | null;
   retagIds: number[];
@@ -462,6 +465,7 @@ export async function bulkEditEventsAction(input: BulkEditInput) {
   }
 
   const renameSet = new Set(renameTo ? input.renameIds : []);
+  const exactSet = new Set(input.exactIds);
   const retagSet = new Set(retag ? input.retagIds : []);
   const ids = [...new Set([...renameSet, ...retagSet])];
 
@@ -484,6 +488,7 @@ export async function bulkEditEventsAction(input: BulkEditInput) {
           title = input.renameFrom
             ? replaceInTitle(row.title, input.renameFrom, renameTo, input.renameMode)
             : renameTo;
+          if (title === row.title && exactSet.has(row.id)) title = renameTo;
         }
         const tag = retag && retagSet.has(row.id) ? (input.tag ?? null) : row.tag;
         if (title === row.title && tag === row.tag) continue;
