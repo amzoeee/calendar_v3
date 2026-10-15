@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Pencil } from 'lucide-react';
 import Select from '@/app/components/Select';
 import { useConfirm } from '@/app/components/ConfirmDialog';
 import { bulkEditEventsAction, type EventSnapshot } from '@/app/actions';
@@ -35,16 +34,17 @@ interface BulkEditProps {
   target: BulkTarget;
   tags: Tag[];
   onApplied: (result: BulkResult) => void;
+  onClose: () => void;
 }
 
 const KEEP = '\u0000keep';
 
 const plural = (n: number) => `${n.toLocaleString()} event${n === 1 ? '' : 's'}`;
 
-export default function BulkEdit({ target, tags, onApplied }: BulkEditProps) {
+export default function BulkEdit({ target, tags, onApplied, onClose }: BulkEditProps) {
   const { confirm } = useConfirm();
-  const [open, setOpen] = useState(false);
-  const [includeRelated, setIncludeRelated] = useState(false);
+  // A substring search often has no exact matches at all.
+  const [includeRelated, setIncludeRelated] = useState(target.exactIds.length === 0);
   const [name, setName] = useState(target.label);
   const [tag, setTag] = useState(KEEP);
   const [busy, setBusy] = useState(false);
@@ -59,25 +59,6 @@ export default function BulkEdit({ target, tags, onApplied }: BulkEditProps) {
   const newName = name.trim();
   const renaming = newName !== '' && newName !== target.label;
   const retagging = tag !== KEEP;
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => {
-          setName(target.label);
-          setTag(KEEP);
-          // A substring search often has no exact matches at all.
-          setIncludeRelated(target.exactIds.length === 0);
-          setError(null);
-          setOpen(true);
-        }}
-        className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
-      >
-        <Pencil className="h-3.5 w-3.5" />
-        Rename or retag
-      </button>
-    );
-  }
 
   const apply = async () => {
     const lines: string[] = [];
@@ -119,7 +100,7 @@ export default function BulkEdit({ target, tags, onApplied }: BulkEditProps) {
         setError(res.error ?? 'Something went wrong.');
         return;
       }
-      setOpen(false);
+      onClose();
       onApplied({
         newName: renaming ? newName : null,
         renamed: res.renamed,
@@ -194,7 +175,7 @@ export default function BulkEdit({ target, tags, onApplied }: BulkEditProps) {
 
       <div className="flex justify-end gap-2">
         <button
-          onClick={() => setOpen(false)}
+          onClick={onClose}
           className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
         >
           Cancel
