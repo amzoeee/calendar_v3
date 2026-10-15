@@ -40,7 +40,7 @@ function shorthandTimeInZone(date, timeZone) {
 }
 
 const mergeOption = (option) =>
-  option.setName('merge').setDescription('merge back-to-back lines with the same name into one event');
+  option.setName('merge').setDescription('merge back-to-back lines with the same name into one event. defaults to true.');
 
 const militaryOption = (option) =>
   option.setName('military').setDescription('read times with a leading 0 (like 0145) as 24h. defaults to true.');
@@ -240,7 +240,7 @@ async function handleFetch(interaction) {
     interaction.channel,
     interaction.user.id,
   );
-  const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
+  const lines = (interaction.options.getBoolean('merge') ?? true) ? mergeRepeats(scraped) : scraped;
 
   if (lines.length === 0) {
     await interaction.editReply(
@@ -326,7 +326,7 @@ async function handleDebugFetch(interaction) {
     interaction.channel,
     target ? target.id : null,
   );
-  const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
+  const lines = (interaction.options.getBoolean('merge') ?? true) ? mergeRepeats(scraped) : scraped;
   const warning = capWarning(markerFound, hitCap, messagesScanned);
   const source = target ? `<@${target.id}>'s lines` : "everyone's lines";
 
@@ -494,7 +494,7 @@ async function handleManualFetch(interaction) {
     interaction.channel,
     interaction.user.id,
   );
-  const lines = interaction.options.getBoolean('merge') ? mergeRepeats(scraped) : scraped;
+  const lines = (interaction.options.getBoolean('merge') ?? true) ? mergeRepeats(scraped) : scraped;
 
   const warning = capWarning(markerFound, hitCap, messagesScanned);
 
