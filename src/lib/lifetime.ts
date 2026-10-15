@@ -1,7 +1,7 @@
 // Client-side model for the lifetime chart: one column per day, events split
 // into per-day segments, plus title matching and the per-name stats.
 
-import { normalizeTitle, titleParts } from './titleParts';
+import { normalizeTitle, titleParts, type NameMatching } from './titleParts';
 
 // Hour each column starts at.
 export const DAY_START_HOUR = 0;
@@ -103,9 +103,9 @@ export interface MatchIndex {
   eventsByTitle: number[][];
 }
 
-export function buildMatchIndex(data: LifetimeEvents): MatchIndex {
+export function buildMatchIndex(data: LifetimeEvents, rules: NameMatching): MatchIndex {
   const keys = data.titles.map(normalizeTitle);
-  const parts = data.titles.map(titleParts);
+  const parts = data.titles.map((t) => titleParts(t, rules));
   const signatures = parts.map((ps) => [...ps].sort().join('\u0000'));
   const titlesByPart = new Map<string, number[]>();
   parts.forEach((ps, t) => {
