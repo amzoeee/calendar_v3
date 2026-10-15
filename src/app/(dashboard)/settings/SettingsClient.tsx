@@ -186,7 +186,8 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // --- ICS Export State ---
-  const [exportTagId, setExportTagId] = useState('');
+  // Tag ids to export. Null means every tag, so newly added tags are included.
+  const [exportTagIds, setExportTagIds] = useState<Set<number> | null>(null);
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
 
@@ -399,11 +400,19 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     setPasswordResult({ kind: 'success', text: 'Password changed.' });
   };
 
+  const exportSelected = exportTagIds ?? new Set(tagsList.map((t) => t.id));
+  const toggleExportTag = (id: number) => {
+    const next = new Set(exportSelected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setExportTagIds(next.size === tagsList.length ? null : next);
+  };
+
   // Export handler
   const handleExport = () => {
     let url = '/api/export-ics?';
     const params = [];
-    if (exportTagId) params.push(`tag=${exportTagId}`);
+    if (exportTagIds) params.push(`tags=${[...exportTagIds].join(',')}`);
     if (exportStartDate) params.push(`start_date=${exportStartDate}`);
     if (exportEndDate) params.push(`end_date=${exportEndDate}`);
     url += params.join('&');
@@ -707,22 +716,51 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
           <h2 className="text-xl font-bold tracking-tight">Export Calendar</h2>
         </div>
         <p className="text-xs text-muted-foreground">
-          Export events as <code className="bg-secondary px-1 rounded text-primary">.ics</code> files. Select "All Events" to download a ZIP archive containing separate files for each tag.
+          Export events as <code className="bg-secondary px-1 rounded text-primary">.ics</code> files, one per tag. Picking one tag downloads its file; picking several downloads a ZIP.
         </p>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase">Filter by Tag</label>
-            <Select
-              value={exportTagId}
-              onChange={setExportTagId}
-              className="mt-1 w-full bg-secondary border border-border rounded px-3 py-2 text-xs text-foreground cursor-pointer"
-              options={[
-                { value: '', label: 'All Events (ZIP)' },
-                ...tagsList.map((t) => ({ value: String(t.id), label: t.name })),
-              ]}
-            />
+        <div>
+          <div className="flex items-center gap-3">
+            <span className="block text-xs font-semibold text-muted-foreground uppercase">Tags</span>
+            <button
+              type="button"
+              onClick={() => setExportTagIds(null)}
+              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setExportTagIds(new Set())}
+              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              None
+            </button>
           </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {tagsList.map((t) => {
+              const on = exportSelected.has(t.id);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleExportTag(t.id)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition cursor-pointer ${
+                    on
+                      ? 'bg-secondary border-primary text-foreground'
+                      : 'bg-transparent border-border text-muted-foreground/60 hover:text-muted-foreground'
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color, opacity: on ? 1 : 0.4 }} />
+                  {t.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase">Start Date <span className="font-normal text-muted-foreground">(optional)</span></label>
             <DateInput
@@ -743,9 +781,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
         
         <button
           onClick={handleExport}
-          className="px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+          disabled={exportSelected.size === 0}
+          className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
         >
-          Export ICS File
+          {exportSelected.size === 0
+            ? 'Pick a tag to export'
+            : exportSelected.size === 1
+              ? 'Export .ics'
+              : `Export ZIP (${exportSelected.size} tags)`}
         </button>
       </section>
 
