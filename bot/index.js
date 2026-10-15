@@ -568,16 +568,24 @@ async function handleClearButton(interaction) {
 
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton() && interaction.customId === CLEAR_BUTTON_ID) {
+    api.reportUsage(interaction.user.id, 'clear-button');
     await handleClearButton(interaction);
     return;
   }
   if (interaction.isButton() && interaction.customId.startsWith(DELETE_LOG_PREFIX)) {
+    api.reportUsage(interaction.user.id, 'delete-log-button');
     await handleDeleteLogButton(interaction);
     return;
   }
   if (!interaction.isChatInputCommand()) return;
   const handler = handlers[interaction.commandName];
   if (!handler) return;
+
+  api.reportUsage(
+    interaction.user.id,
+    interaction.commandName,
+    interaction.options.data.map((option) => option.name),
+  );
 
   // Replies are ephemeral by default: a link code is a secret, and someone
   // else's staged day is nobody's business in a shared channel.

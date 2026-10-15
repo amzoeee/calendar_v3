@@ -39,12 +39,17 @@ const listApprovedMarkers = () => call('/api/discord/markers');
 
 const acknowledgeMarkers = (ids) => call('/api/discord/markers', { method: 'POST', body: { ids } });
 
+// Fire-and-forget: a failed report must never affect the command itself.
+const reportUsage = (discordUserId, command, options = []) =>
+  call('/api/discord/usage', { method: 'POST', body: { discordUserId, command, options } }).catch(() => {});
+
 module.exports = {
   acknowledgeMarkers,
   clearStaged,
   createLinkCode,
   getLinkStatus,
   listApprovedMarkers,
+  reportUsage,
   setMarkerPreference,
   stageLog,
 };
