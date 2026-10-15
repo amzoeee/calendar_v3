@@ -90,7 +90,7 @@ export default function LifetimePanel({
   if (!focus) {
     return (
       <p className="text-sm text-muted-foreground">
-        Hover over an event for a moment, or click or tap it, to see everything else with the same name.
+        Hover or click an event to see others like it.
       </p>
     );
   }
