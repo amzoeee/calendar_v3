@@ -6,7 +6,6 @@ import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { track } from '@/lib/track';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
-import DateInput from '@/app/components/DateInput';
 import StatsViewSwitch from '@/app/components/StatsViewSwitch';
 import { weekdayOrder, type WeekStart } from '@/lib/week';
 
@@ -45,15 +44,6 @@ const shiftRange = (r: Range, days: number): Range => ({
   start: toDateStr(addDays(new Date(r.start + 'T00:00:00'), days)),
   end: toDateStr(addDays(new Date(r.end + 'T00:00:00'), days)),
 });
-
-// A well-formed YYYY-MM-DD that is also a real calendar date with a sensible
-// (4-digit) year. Guards against partial entries like "0202-08-15" that the
-// native date input can momentarily emit while the year is still being typed.
-const isSensibleDate = (s: string) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const d = new Date(s + 'T00:00:00');
-  return !isNaN(d.getTime()) && d.getFullYear() >= 1000;
-};
 
 function Stat({
   label,
@@ -142,14 +132,13 @@ export default function StatsClient({
   };
 
   // Preset ranges (keep the current end, extend the start into the past).
-  const oneMonthStart = addDays(
-    new Date(activeEnd.getFullYear(), activeEnd.getMonth() - 1, activeEnd.getDate()),
-    1
-  );
+  const monthsBack = (n: number) =>
+    toDateStr(addDays(new Date(activeEnd.getFullYear(), activeEnd.getMonth() - n, activeEnd.getDate()), 1));
   const presets: { label: string; start: string; active: boolean }[] = [
     { label: '1 Week', start: toDateStr(addDays(activeEnd, -6)), active: rangeLen === 7 },
     { label: '2 Weeks', start: toDateStr(addDays(activeEnd, -13)), active: rangeLen === 14 },
-    { label: '1 Month', start: toDateStr(oneMonthStart), active: activeRange.start === toDateStr(oneMonthStart) },
+    { label: '1 Month', start: monthsBack(1), active: activeRange.start === monthsBack(1) },
+    { label: '3 Months', start: monthsBack(3), active: activeRange.start === monthsBack(3) },
   ];
 
   // Header date display.
@@ -298,44 +287,6 @@ export default function StatsClient({
   // once on a phone, so it collapses into a bottom sheet behind this toggle.
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
-  // Local copies of the range inputs so typing doesn't navigate mid-entry
-  // (which used to reset the field after a single digit). We only commit — and
-  // navigate — on blur or Enter, mirroring the event add/edit forms.
-  // Tracked against the *active* range, so paging with the arrow keys carries
-  // the inputs along with the header instead of leaving them a page behind.
-  const [localStart, setLocalStart] = useState(startDate);
-  const [localEnd, setLocalEnd] = useState(endDate);
-  const [prevRange, setPrevRange] = useState({ start: startDate, end: endDate });
-  if (prevRange.start !== activeRange.start || prevRange.end !== activeRange.end) {
-    setPrevRange({ start: activeRange.start, end: activeRange.end });
-    setLocalStart(activeRange.start);
-    setLocalEnd(activeRange.end);
-  }
-
-  const commitStart = () => {
-    if (!isSensibleDate(localStart)) {
-      setLocalStart(activeRange.start); // revert an incomplete/nonsensical entry
-      return;
-    }
-    if (localStart === activeRange.start) return;
-    // Keep the end no earlier than the new start.
-    const newEnd = localStart > activeRange.end ? localStart : activeRange.end;
-    track('stats.custom_range');
-    navigateTo({ start: localStart, end: newEnd });
-  };
-
-  const commitEnd = () => {
-    if (!isSensibleDate(localEnd)) {
-      setLocalEnd(activeRange.end); // revert an incomplete/nonsensical entry
-      return;
-    }
-    if (localEnd === activeRange.end) return;
-    // Keep the start no later than the new end.
-    const newStart = localEnd < activeRange.start ? localEnd : activeRange.start;
-    track('stats.custom_range');
-    navigateTo({ start: newStart, end: localEnd });
-  };
-
   // Keyboard arrow navigation — shifts by the range length.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -437,7 +388,7 @@ export default function StatsClient({
           </div>
         </div>
 
-        {/* Row 2: presets + custom range pickers (desktop only — see the mobile filter sheet below) */}
+        {/* Row 2: presets (desktop only — see the mobile filter sheet below) */}
         <div className="hidden md:flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
             {presets.map((p) => (
@@ -458,39 +409,13 @@ export default function StatsClient({
             ))}
           </div>
 
-          <div className="h-5 w-px bg-border" />
-
-          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-            <span className="uppercase tracking-wider">From</span>
-            <DateInput
-              value={localStart}
-              max={localEnd}
-              onChange={(e) => setLocalStart(e.target.value)}
-              onBlur={commitStart}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur();
-              }}
-              className="bg-secondary border border-border px-2 py-1 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <span className="uppercase tracking-wider">To</span>
-            <DateInput
-              value={localEnd}
-              min={localStart}
-              onChange={(e) => setLocalEnd(e.target.value)}
-              onBlur={commitEnd}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur();
-              }}
-              className="bg-secondary border border-border px-2 py-1 rounded text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <span className="text-muted-foreground/70 normal-case tracking-normal">
-              ({rangeLen} day{rangeLen === 1 ? '' : 's'})
-            </span>
-          </div>
+          <span className="text-xs text-muted-foreground/70">
+            {rangeLen} day{rangeLen === 1 ? '' : 's'}
+          </span>
         </div>
       </div>
 
-      {/* MOBILE FILTERS SHEET — presets, custom range, weekdays-only toggle */}
+      {/* MOBILE FILTERS SHEET — presets, weekdays-only toggle */}
       {showMobileFilters && (
         <div className="md:hidden fixed inset-0 z-50 flex items-end">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileFilters(false)} />
@@ -527,35 +452,6 @@ export default function StatsClient({
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Custom range</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">From</label>
-                  <DateInput
-                    value={localStart}
-                    max={localEnd}
-                    onChange={(e) => setLocalStart(e.target.value)}
-                    onBlur={commitStart}
-                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-muted-foreground mb-1">To</label>
-                  <DateInput
-                    value={localEnd}
-                    min={localStart}
-                    onChange={(e) => setLocalEnd(e.target.value)}
-                    onBlur={commitEnd}
-                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground/70 mt-2">
-                {rangeLen} day{rangeLen === 1 ? '' : 's'}
-              </p>
             </div>
 
             <label className="flex items-center gap-2 cursor-pointer select-none">
