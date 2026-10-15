@@ -42,8 +42,8 @@ export const USAGE_CATALOG = {
   'bot.delete_log_button': { group: 'Discord bot', label: 'Delete log button' },
 
   'ics.import': { group: 'Import / export', label: 'Google Calendar import' },
-  'ics.export': { group: 'Import / export', label: 'Single calendar export' },
-  'ics.export_zip': { group: 'Import / export', label: 'Export everything (ZIP)' },
+  'ics.export': { group: 'Import / export', label: 'Export one tag (.ics)' },
+  'ics.export_zip': { group: 'Import / export', label: 'Export several tags (ZIP)' },
 
   'tag.create': { group: 'Tags', label: 'Create tag' },
   'tag.edit': { group: 'Tags', label: 'Edit tag' },

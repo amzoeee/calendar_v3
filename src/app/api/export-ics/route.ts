@@ -100,26 +100,27 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const tagIdParam = searchParams.get('tag');
   const startDate = searchParams.get('start_date');
   const endDate = searchParams.get('end_date');
 
-  let tagFilterName: string | null = null;
   const userTags = await db
     .select()
     .from(tags)
     .where(eq(tags.userId, session.userId))
     .orderBy(tags.orderIndex);
 
-  if (tagIdParam) {
-    const tagId = parseInt(tagIdParam, 10);
-    const selectedTag = userTags.find((t) => t.id === tagId);
-    if (selectedTag) {
-      tagFilterName = selectedTag.name;
-    }
+  // `tags=1,2,3`, or the older single `tag=1`. Neither means every tag.
+  const requested = (searchParams.get('tags') ?? searchParams.get('tag') ?? '')
+    .split(',')
+    .map((id) => parseInt(id, 10))
+    .filter((id) => !Number.isNaN(id));
+  const selectedTags = requested.length ? userTags.filter((t) => requested.includes(t.id)) : userTags;
+  if (selectedTags.length === 0) {
+    return new NextResponse('No tags selected', { status: 400 });
   }
+  const tagFilterName = selectedTags.length === 1 ? selectedTags[0].name : null;
 
-  track(session.userId, tagFilterName ? 'ics.export' : 'ics.export_zip');
+  track(session.userId, tagFilterName ? 'ics.export' : 'ics.export_zip', { tags: selectedTags.length });
 
   // Single tag export
   if (tagFilterName) {
@@ -140,11 +141,11 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Multiple tags export -> Zip file
+  // Several tags -> one .ics per tag in a ZIP
   const zip = new JSZip();
   let hasContent = false;
 
-  for (const tag of userTags) {
+  for (const tag of selectedTags) {
     const rawEvents = await db
       .select()
       .from(events)
@@ -167,7 +168,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(blob, {
     headers: {
       'Content-Type': 'application/zip',
-      'Content-Disposition': 'attachment; filename="calendar-all-tags.zip"',
+      'Content-Disposition': `attachment; filename="${selectedTags.length === userTags.length ? 'calendar-all-tags' : 'calendar-tags'}.zip"`,
     },
   });
 }
