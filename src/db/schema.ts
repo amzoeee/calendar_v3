@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, unique, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, unique, primaryKey, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const users = sqliteTable('users', {
@@ -179,3 +179,21 @@ export const discordStages = sqliteTable('discord_stages', {
   approvedAt: text('approved_at'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
+
+// ==========================================
+// Usage analytics
+// ==========================================
+
+// One row per use of a feature, for the admin page. Records which feature,
+// never what was in it (no titles or log text). `userId` is null for bot
+// commands from unlinked Discord accounts.
+export const usageEvents = sqliteTable('usage_events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  // Small JSON object, e.g. {"mobile":true}.
+  props: text('props'),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (t) => ({
+  createdAtIdx: index('usage_events_created_at_idx').on(t.createdAt),
+}));
