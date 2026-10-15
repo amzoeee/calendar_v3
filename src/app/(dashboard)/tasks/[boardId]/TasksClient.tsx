@@ -115,6 +115,7 @@ import { clampOverlayX } from '@/lib/overlayPosition';
 import DateInput from '@/app/components/DateInput';
 import Select from '@/app/components/Select';
 import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
+import { useUndo } from '@/app/components/UndoToast';
 
 // Every small control in the editor and the composer shares one look. Kept in
 // one place so the three pickers can't drift apart.
@@ -151,14 +152,6 @@ interface TasksClientProps {
   availableTags: TaskTag[];
   tagsByTask: Record<number, number[]>;
   remindersOnly: boolean;
-}
-
-// The Undo toast carries the action that reverses whatever just happened, so
-// each raiser decides what "undo" means for it. `undo: null` renders the
-// message without a button — better than offering one that does nothing.
-interface UndoState {
-  message: string;
-  undo: (() => void) | null;
 }
 
 // Handlers a column needs from its parent. Bundled rather than passed one by
@@ -250,11 +243,10 @@ export default function TasksClient({
   // here, the way the calendar's event overlay does.
   const [editorAt, setEditorAt] = useState<{ x: number; y: number } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [undo, setUndo] = useState<UndoState | null>(null);
+  const { raiseUndo } = useUndo();
   const [confirmParent, setConfirmParent] = useState<{ node: TaskNode; open: number } | null>(null);
   const [newBoardOpen, setNewBoardOpen] = useState(false);
 
-  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Each column's composer, so `n` can aim at the one under the pointer.
   const composers = useRef(new Map<number, HTMLInputElement | null>());
 
@@ -373,23 +365,6 @@ export default function TasksClient({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [focusComposer]);
-
-  // ----- undo toast lifetime -----
-
-  const raiseUndo = (state: UndoState) => {
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-    setUndo(state);
-    undoTimer.current = setTimeout(() => setUndo(null), 7000);
-  };
-
-  const dismissUndo = () => {
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-    setUndo(null);
-  };
-
-  useEffect(() => () => {
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-  }, []);
 
   // ----- mutations -----
 
@@ -971,35 +946,6 @@ export default function TasksClient({
             });
           }}
         />
-      )}
-
-      {/* Undo toast */}
-      {undo && (
-        <div
-          role="status"
-          className="fixed left-1/2 -translate-x-1/2 z-[70] flex items-center gap-4 px-4 py-3 rounded-lg bg-card border border-border shadow-2xl max-w-[calc(100vw-2rem)]"
-          style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
-        >
-          <span className="text-sm text-foreground truncate">{undo.message}</span>
-          {undo.undo && (
-            <button
-              onClick={() => {
-                undo.undo?.();
-                dismissUndo();
-              }}
-              className="text-sm font-semibold text-foreground underline underline-offset-2 hover:opacity-80 shrink-0 cursor-pointer"
-            >
-              Undo
-            </button>
-          )}
-          <button
-            onClick={dismissUndo}
-            aria-label="Dismiss"
-            className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
       )}
     </div>
   );
