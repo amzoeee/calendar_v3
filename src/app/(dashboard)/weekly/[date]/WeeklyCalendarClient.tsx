@@ -43,6 +43,7 @@ import {
   formatEventTimeRange,
 } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
+import TimeInput from '@/app/components/TimeInput';
 import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 import { useUndo } from '@/app/components/UndoToast';
 import { deletedEventsMessage } from '@/lib/undoMessages';
@@ -1298,10 +1299,9 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                   onChange={(e) => setEditStartDate(e.target.value)}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
-                <input
-                  type="time"
+                <TimeInput
                   value={editStartTime}
-                  onChange={(e) => setEditStartTime(e.target.value)}
+                  onChange={setEditStartTime}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
               </div>
@@ -1314,10 +1314,9 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                   onChange={(e) => setEditEndDate(e.target.value)}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
-                <input
-                  type="time"
+                <TimeInput
                   value={editEndTime}
-                  onChange={(e) => setEditEndTime(e.target.value)}
+                  onChange={setEditEndTime}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
               </div>
@@ -1465,10 +1464,9 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                     onChange={(e) => setEditStartDate(e.target.value)}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
-                  <input
-                    type="time"
+                  <TimeInput
                     value={editStartTime}
-                    onChange={(e) => setEditStartTime(e.target.value)}
+                    onChange={setEditStartTime}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
                 </div>
@@ -1481,10 +1479,9 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                     onChange={(e) => setEditEndDate(e.target.value)}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
-                  <input
-                    type="time"
+                  <TimeInput
                     value={editEndTime}
-                    onChange={(e) => setEditEndTime(e.target.value)}
+                    onChange={setEditEndTime}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
                 </div>
@@ -1606,11 +1603,10 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                       onChange={(e) => setAddStartDate(e.target.value)}
                       className="block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
                     />
-                    <input
-                      type="time"
+                    <TimeInput
                       required
                       value={addStartTime}
-                      onChange={(e) => setAddStartTime(e.target.value)}
+                      onChange={setAddStartTime}
                       className="block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
                     />
                   </div>
@@ -1624,11 +1620,10 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                       onChange={(e) => setAddEndDate(e.target.value)}
                       className="block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
                     />
-                    <input
-                      type="time"
+                    <TimeInput
                       required
                       value={addEndTime}
-                      onChange={(e) => setAddEndTime(e.target.value)}
+                      onChange={setAddEndTime}
                       className="block w-full rounded bg-secondary border border-border px-2 py-1 text-foreground"
                     />
                   </div>

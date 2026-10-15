@@ -116,6 +116,7 @@ import {
 import { useTaskDrag, type DropTarget } from './useTaskDrag';
 import { clampOverlayX } from '@/lib/overlayPosition';
 import DateInput from '@/app/components/DateInput';
+import TimeInput from '@/app/components/TimeInput';
 import Select from '@/app/components/Select';
 import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 import { useUndo } from '@/app/components/UndoToast';
@@ -1885,11 +1886,10 @@ function BoardColumn({
                       aria-label="Deadline for the new task"
                       className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
                     />
-                    <input
-                      type="time"
+                    <TimeInput
                       value={draftTime}
                       disabled={!draftDate}
-                      onChange={(e) => setDraftTime(e.target.value)}
+                      onChange={setDraftTime}
                       aria-label="Time of day for the new task"
                       className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
                     />
@@ -2396,13 +2396,12 @@ function SchedulePicker({
               }}
               className={`${field} flex-1 min-w-0 cursor-pointer`}
             />
-            <input
-              type="time"
+            <TimeInput
               value={dueTime}
               disabled={!dueDate}
-              onChange={(e) => {
-                setDueTime(e.target.value);
-                commit({ dueTime: e.target.value });
+              onChange={(v) => {
+                setDueTime(v);
+                commit({ dueTime: v });
               }}
               className={`${field} w-[6.25rem] cursor-pointer disabled:opacity-40`}
             />
@@ -2441,12 +2440,11 @@ function SchedulePicker({
               ]}
             />
             {!dueTime && days != null && (
-              <input
-                type="time"
+              <TimeInput
                 value={remindTime}
-                onChange={(e) => {
-                  setRemindTime(e.target.value);
-                  commit({ remindTime: e.target.value });
+                onChange={(v) => {
+                  setRemindTime(v);
+                  commit({ remindTime: v });
                 }}
                 className={`${field} w-[6.25rem] cursor-pointer`}
               />
