@@ -67,6 +67,9 @@ import {
   toggleTaskCompletionAction,
   setTaskCompletionAction,
   deleteTaskAction,
+  restoreTasksAction,
+  restoreBoardAction,
+  type TaskSnapshot,
   setTaskStarredAction,
   moveTaskToBoardAction,
   createBoardAction,
@@ -115,6 +118,7 @@ import { clampOverlayX } from '@/lib/overlayPosition';
 import DateInput from '@/app/components/DateInput';
 import Select from '@/app/components/Select';
 import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
+import { useUndo } from '@/app/components/UndoToast';
 
 // Every small control in the editor and the composer shares one look. Kept in
 // one place so the three pickers can't drift apart.
@@ -151,14 +155,6 @@ interface TasksClientProps {
   availableTags: TaskTag[];
   tagsByTask: Record<number, number[]>;
   remindersOnly: boolean;
-}
-
-// The Undo toast carries the action that reverses whatever just happened, so
-// each raiser decides what "undo" means for it. `undo: null` renders the
-// message without a button — better than offering one that does nothing.
-interface UndoState {
-  message: string;
-  undo: (() => void) | null;
 }
 
 // Handlers a column needs from its parent. Bundled rather than passed one by
@@ -250,11 +246,10 @@ export default function TasksClient({
   // here, the way the calendar's event overlay does.
   const [editorAt, setEditorAt] = useState<{ x: number; y: number } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [undo, setUndo] = useState<UndoState | null>(null);
+  const { raiseUndo } = useUndo();
   const [confirmParent, setConfirmParent] = useState<{ node: TaskNode; open: number } | null>(null);
   const [newBoardOpen, setNewBoardOpen] = useState(false);
 
-  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Each column's composer, so `n` can aim at the one under the pointer.
   const composers = useRef(new Map<number, HTMLInputElement | null>());
 
@@ -373,23 +368,6 @@ export default function TasksClient({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [focusComposer]);
-
-  // ----- undo toast lifetime -----
-
-  const raiseUndo = (state: UndoState) => {
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-    setUndo(state);
-    undoTimer.current = setTimeout(() => setUndo(null), 7000);
-  };
-
-  const dismissUndo = () => {
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-    setUndo(null);
-  };
-
-  useEffect(() => () => {
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-  }, []);
 
   // ----- mutations -----
 
@@ -580,7 +558,22 @@ export default function TasksClient({
   const removeTask = (id: number) => {
     setSelectedId(null);
     setLocalRows((prev) => prev.filter((r) => r.id !== id && r.parentId !== id));
-    run(() => deleteTaskAction(id));
+    run(async () => {
+      const snapshot = await deleteTaskAction(id);
+      const root = snapshot.tasks.find((t) => t.id === id);
+      const subs = snapshot.tasks.length - 1;
+      raiseUndo({
+        message: `Deleted “${root ? displayTitle(root.title, root.counterValue) : 'task'}”${
+          subs > 0 ? ` and ${subs} subtask${subs === 1 ? '' : 's'}` : ''
+        }`,
+        undo: () => run(() => restoreTasks(snapshot)),
+      });
+    });
+  };
+
+  const restoreTasks = async (snapshot: TaskSnapshot) => {
+    const res = await restoreTasksAction(snapshot);
+    if (res.error) raiseUndo({ message: `Couldn’t undo: ${res.error.toLowerCase()}`, undo: null });
   };
 
   const handlers: ColumnHandlers = {
@@ -972,35 +965,6 @@ export default function TasksClient({
           }}
         />
       )}
-
-      {/* Undo toast */}
-      {undo && (
-        <div
-          role="status"
-          className="fixed left-1/2 -translate-x-1/2 z-[70] flex items-center gap-4 px-4 py-3 rounded-lg bg-card border border-border shadow-2xl max-w-[calc(100vw-2rem)]"
-          style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
-        >
-          <span className="text-sm text-foreground truncate">{undo.message}</span>
-          {undo.undo && (
-            <button
-              onClick={() => {
-                undo.undo?.();
-                dismissUndo();
-              }}
-              className="text-sm font-semibold text-foreground underline underline-offset-2 hover:opacity-80 shrink-0 cursor-pointer"
-            >
-              Undo
-            </button>
-          )}
-          <button
-            onClick={dismissUndo}
-            aria-label="Dismiss"
-            className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -1065,6 +1029,7 @@ function BoardColumn({
   const [renaming, setRenaming] = useState(false);
   const [pasting, setPasting] = useState(false);
   const { confirm, choose } = useConfirm();
+  const { raiseUndo } = useUndo();
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
 
@@ -1757,7 +1722,19 @@ function BoardColumn({
                       confirmLabel: 'Delete',
                       destructive: true,
                     });
-                    if (ok) handlers.run(() => deleteCompletedTasksAction(board.id));
+                    if (!ok) return;
+                    handlers.run(async () => {
+                      const snapshot = await deleteCompletedTasksAction(board.id);
+                      const n = snapshot.tasks.length;
+                      raiseUndo({
+                        message: `Deleted ${n} completed task${n === 1 ? '' : 's'}`,
+                        undo: () =>
+                          handlers.run(async () => {
+                            const res = await restoreTasksAction(snapshot);
+                            if (res.error) raiseUndo({ message: `Couldn’t undo: ${res.error.toLowerCase()}`, undo: null });
+                          }),
+                      });
+                    });
                   }}
                   disabled={completedCount === 0}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1785,7 +1762,15 @@ function BoardColumn({
                           });
                     if (!choice) return;
                     handlers.run(async () => {
-                      await deleteBoardAction(board.id, choice === 'move' ? others[0].id : null);
+                      const snapshot = await deleteBoardAction(board.id, choice === 'move' ? others[0].id : null);
+                      raiseUndo({
+                        message: `Deleted “${board.name}”`,
+                        undo: () =>
+                          handlers.run(async () => {
+                            await restoreBoardAction(snapshot);
+                            onPickBoard(board.id);
+                          }),
+                      });
                     });
                     onPickBoard(others[0].id);
                   }}
