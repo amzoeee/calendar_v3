@@ -17,7 +17,6 @@ import { createRecurringEvent, deleteRecurringSeries, updateRecurringSeries } fr
 import { stageLogForUser, recalculatePendingEventsDate, mergePendingIntoNeighbours, discardPendingForUser } from '@/lib/discord-log';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 import { todayForViewer } from '@/lib/server-timezone';
-import { getMergePending } from '@/lib/server-merge-pending';
 import { isTagScope, type TagScope } from '@/lib/tags';
 import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
 import { markStagesApproved } from '@/lib/discord-markers';
@@ -702,10 +701,9 @@ export async function retagPendingEventsAction(ids: number[], tag: string | null
 
 export async function approveAllPendingAction() {
   const session = await requireAuth();
-  const merge = await getMergePending();
-  track(session.userId, 'import.approve', { merge });
+  track(session.userId, 'import.approve');
 
-  if (merge) await mergePendingIntoNeighbours(session.userId);
+  await mergePendingIntoNeighbours(session.userId);
 
   await db
     .update(events)
