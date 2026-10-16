@@ -646,6 +646,60 @@ export async function stageLogAction(text: string, dateOverride?: string | null,
   return result;
 }
 
+/** Staged events plus the user's tags, for the import review panel. */
+export async function listPendingEventsAction() {
+  const session = await requireAuth();
+  const [pending, userTags] = await Promise.all([
+    db
+      .select({
+        id: events.id,
+        title: events.title,
+        startDatetime: events.startDatetime,
+        endDatetime: events.endDatetime,
+        tag: events.tag,
+      })
+      .from(events)
+      .where(and(eq(events.userId, session.userId), eq(events.isPending, 1)))
+      .orderBy(asc(events.startDatetime)),
+    db
+      .select({ id: tags.id, name: tags.name, color: tags.color, isArchived: tags.isArchived, scope: tags.scope })
+      .from(tags)
+      .where(eq(tags.userId, session.userId))
+      .orderBy(asc(tags.orderIndex)),
+  ]);
+  return { events: pending, tags: userTags };
+}
+
+/** Sets the tag on staged events. Returns their previous values, for Undo. */
+export async function retagPendingEventsAction(ids: number[], tag: string | null) {
+  const session = await requireAuth();
+  if (tag) {
+    const [owned] = await db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(eq(tags.userId, session.userId), eq(tags.name, tag)));
+    if (!owned) return { error: 'That tag no longer exists.' };
+  }
+
+  const previous: EventSnapshot[] = [];
+  db.transaction((tx) => {
+    for (let i = 0; i < ids.length; i += BULK_CHUNK) {
+      const where = and(
+        eq(events.userId, session.userId),
+        eq(events.isPending, 1),
+        inArray(events.id, ids.slice(i, i + BULK_CHUNK)),
+      );
+      previous.push(
+        ...tx.select({ id: events.id, title: events.title, tag: events.tag }).from(events).where(where).all(),
+      );
+      tx.update(events).set({ tag }).where(where).run();
+    }
+  });
+
+  revalidatePath('/calendar', 'layout');
+  return { previous };
+}
+
 export async function approveAllPendingAction() {
   const session = await requireAuth();
   const merge = await getMergePending();
