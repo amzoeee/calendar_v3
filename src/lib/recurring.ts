@@ -218,12 +218,11 @@ export async function createRecurringEvent(
   return { recurrenceId, count: eventsToInsert.length };
 }
 
-export async function deleteRecurringSeries(recurrenceId: string, userId: number): Promise<number> {
-  const result = await db
+export async function deleteRecurringSeries(recurrenceId: string, userId: number) {
+  return db
     .delete(events)
-    .where(and(eq(events.recurrenceId, recurrenceId), eq(events.userId, userId)));
-  
-  return result.changes;
+    .where(and(eq(events.recurrenceId, recurrenceId), eq(events.userId, userId)))
+    .returning();
 }
 
 export async function updateRecurringSeries(

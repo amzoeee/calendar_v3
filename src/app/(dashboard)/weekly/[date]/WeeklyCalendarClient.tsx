@@ -31,6 +31,8 @@ import {
   deleteEventAction,
   copyEventAction,
   deleteRecurringSeriesAction,
+  reinsertEventsAction,
+  type EventRow,
   updateRecurringSeriesAction,
 } from '@/app/actions';
 import {
@@ -42,6 +44,8 @@ import {
 } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
 import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
+import { useUndo } from '@/app/components/UndoToast';
+import { deletedEventsMessage } from '@/lib/undoMessages';
 
 interface Tag {
   id: number;
@@ -84,6 +88,7 @@ interface WeeklyCalendarClientProps {
 
 export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags }: WeeklyCalendarClientProps) {
   const { confirm } = useConfirm();
+  const { raiseUndo } = useUndo();
 
   // --- Zoom & Scroll ---
   const [zoomLevel, setZoomLevel] = useState<number>(60);
@@ -641,19 +646,26 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   const handleDeleteInstance = async (eventId: number) => {
     if (await confirm({ title: 'Delete this event?', confirmLabel: 'Delete', destructive: true })) {
       saveScroll();
-      await deleteEventAction(eventId);
+      const deleted = await deleteEventAction(eventId);
       setActiveOverlayId(null);
       setEditingEvent(null);
       setOverlayCoords(null);
+      raiseUndo({ message: deletedEventsMessage(deleted), undo: () => restoreEvents(deleted) });
     }
   };
 
   const handleDeleteSeries = async (recurrenceId: string) => {
     saveScroll();
-    await deleteRecurringSeriesAction(recurrenceId);
+    const deleted = await deleteRecurringSeriesAction(recurrenceId);
     setActiveOverlayId(null);
     setEditingEvent(null);
     setOverlayCoords(null);
+    raiseUndo({ message: deletedEventsMessage(deleted), undo: () => restoreEvents(deleted) });
+  };
+
+  const restoreEvents = async (rows: EventRow[]) => {
+    saveScroll();
+    await reinsertEventsAction(rows);
   };
 
   const handleCopy = async (eventId: number) => {

@@ -1,12 +1,17 @@
 // Splits an event title into the activities it names, so "get ready + drive"
 // and "drive" can be recognised as related. Bracketed context
-// ("[train, bus] rr") and parenthesised qualifiers ("yt (long form)") are
-// dropped.
+// ("[train, bus] rr"), parenthesised qualifiers ("yt (long form)") and who it
+// was with ("yap w jerry") are dropped.
 
 export const normalizeTitle = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
 // Standalone emoticons: ":>", ":3", ":D", ">:(", ":thumbsup:".
 const EMOTICON_RE = /(^|\s)>?[:;](?:[^\sa-z]+|[dpo]|[a-z_]+:)(?=\s|$)/g;
+
+// "yap w jerry, katherine" / "walk w/ izzie": the company, up to the next "/"
+// or "+", since names are listed with "," and "and" but activities aren't.
+// Kept after verbs where "w" belongs to the activity ("deal w bedding").
+const WITH_RE = /(?<!\b(?:deal|dealing|help|helping))(?:^|\s+)w(?:\/\s*|\s+)[^/+]*/g;
 
 const cleanPart = (s: string) => normalizeTitle(s).replace(/[!?.~]+$/, '');
 
@@ -28,7 +33,7 @@ export function titleParts(title: string): string[] {
 
   t = t.replace(/\[[^\]]*\]|\([^)]*\)/g, ' ');
   t = t.replace(EMOTICON_RE, '$1');
-  t = t.replace(/\bw\//g, 'with ');
+  t = t.replace(WITH_RE, ' ');
   t = normalizeTitle(t);
 
   const m = t.match(PREFIX_RE);

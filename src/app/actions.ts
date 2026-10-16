@@ -1,8 +1,8 @@
 'use server';
 
 import { db } from '@/db';
-import { users, tags, events, taskBoards } from '@/db/schema';
-import { eq, and, asc, desc, sql, ne, inArray } from 'drizzle-orm';
+import { users, tags, events, taskBoards, taskTags, tasks } from '@/db/schema';
+import { eq, and, asc, desc, sql, ne, inArray, isNull } from 'drizzle-orm';
 import {
   hashPassword,
   verifyPassword,
@@ -230,7 +230,14 @@ export async function updateTagAction(
   revalidatePath('/tasks', 'layout');
 }
 
-export async function deleteTagAction(id: number) {
+export interface TagSnapshot {
+  tag: typeof tags.$inferSelect;
+  eventIds: number[];
+  taskIds: number[];
+}
+
+/** Returns what the tag was attached to, so Undo can put it back. */
+export async function deleteTagAction(id: number): Promise<TagSnapshot> {
   const session = await requireAuth();
   track(session.userId, 'tag.delete');
 
@@ -242,17 +249,82 @@ export async function deleteTagAction(id: number) {
 
   if (!tag) throw new Error('Tag not found');
 
+  const tagged = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.tag, tag.name), eq(events.userId, session.userId)));
+  const links = await db
+    .select({ taskId: taskTags.taskId })
+    .from(taskTags)
+    .where(eq(taskTags.tagId, id));
+
   // Set events using this tag to null
   await db
     .update(events)
     .set({ tag: null })
     .where(and(eq(events.tag, tag.name), eq(events.userId, session.userId)));
 
+  // Task links reference the tag row, so they have to go first.
+  await db.delete(taskTags).where(eq(taskTags.tagId, id));
+
   // Delete tag
   await db.delete(tags).where(eq(tags.id, id));
 
   revalidatePath('/settings');
   revalidatePath('/calendar', 'layout');
+  revalidatePath('/tasks', 'layout');
+  return { tag, eventIds: tagged.map((e) => e.id), taskIds: links.map((l) => l.taskId) };
+}
+
+const RESTORE_CHUNK = 500;
+
+/**
+ * Recreates a deleted tag under its old id and reattaches it. Events retagged
+ * since the delete keep their new tag.
+ */
+export async function restoreTagAction(snapshot: TagSnapshot): Promise<{ error?: string }> {
+  const session = await requireAuth();
+  const { tag } = snapshot;
+
+  const [clash] = await db
+    .select({ id: tags.id })
+    .from(tags)
+    .where(and(eq(tags.userId, session.userId), eq(tags.name, tag.name)));
+  if (clash) return { error: `A tag called “${tag.name}” exists again` };
+
+  await db.insert(tags).values({ ...tag, userId: session.userId }).onConflictDoNothing();
+
+  for (let i = 0; i < snapshot.eventIds.length; i += RESTORE_CHUNK) {
+    await db
+      .update(events)
+      .set({ tag: tag.name })
+      .where(
+        and(
+          eq(events.userId, session.userId),
+          isNull(events.tag),
+          inArray(events.id, snapshot.eventIds.slice(i, i + RESTORE_CHUNK)),
+        ),
+      );
+  }
+
+  // Only tasks that still exist and are still this user's.
+  const live = snapshot.taskIds.length
+    ? await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(eq(tasks.userId, session.userId), inArray(tasks.id, snapshot.taskIds)))
+    : [];
+  if (live.length) {
+    await db
+      .insert(taskTags)
+      .values(live.map((t) => ({ taskId: t.id, tagId: tag.id })))
+      .onConflictDoNothing();
+  }
+
+  revalidatePath('/settings');
+  revalidatePath('/calendar', 'layout');
+  revalidatePath('/tasks', 'layout');
+  return {};
 }
 
 export async function archiveTagAction(id: number) {
@@ -387,11 +459,31 @@ export async function updateEventAction(
   revalidatePath('/calendar', 'layout');
 }
 
-export async function deleteEventAction(id: number) {
+export type EventRow = typeof events.$inferSelect;
+
+/** Returns the deleted row, so Undo can put it back. */
+export async function deleteEventAction(id: number): Promise<EventRow[]> {
   const session = await requireAuth();
   track(session.userId, 'event.delete');
 
-  await db.delete(events).where(and(eq(events.id, id), eq(events.userId, session.userId)));
+  const deleted = await db
+    .delete(events)
+    .where(and(eq(events.id, id), eq(events.userId, session.userId)))
+    .returning();
+
+  revalidatePath('/calendar', 'layout');
+  return deleted;
+}
+
+/** Puts back events removed by a delete, under their original ids. */
+export async function reinsertEventsAction(rows: EventRow[]) {
+  const session = await requireAuth();
+  if (rows.length === 0) return;
+
+  await db
+    .insert(events)
+    .values(rows.map((r) => ({ ...r, userId: session.userId })))
+    .onConflictDoNothing();
 
   revalidatePath('/calendar', 'layout');
 }
@@ -421,11 +513,13 @@ export async function copyEventAction(id: number) {
   revalidatePath('/calendar', 'layout');
 }
 
-export async function deleteRecurringSeriesAction(recurrenceId: string) {
+/** Returns the deleted rows, so Undo can put them back. */
+export async function deleteRecurringSeriesAction(recurrenceId: string): Promise<EventRow[]> {
   const session = await requireAuth();
   track(session.userId, 'event.series_delete');
-  await deleteRecurringSeries(recurrenceId, session.userId);
+  const deleted = await deleteRecurringSeries(recurrenceId, session.userId);
   revalidatePath('/calendar', 'layout');
+  return deleted;
 }
 
 export async function updateRecurringSeriesAction(

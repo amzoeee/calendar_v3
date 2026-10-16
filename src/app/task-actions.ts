@@ -157,10 +157,17 @@ export async function setBoardSortAction(id: number, sortMode: string): Promise<
  * it — the caller decides, since silently destroying tasks would be worse than
  * either option.
  */
+export interface BoardSnapshot {
+  board: typeof taskBoards.$inferSelect;
+  // Set when the tasks were moved rather than deleted.
+  movedTaskIds: number[];
+  tasks: TaskSnapshot;
+}
+
 export async function deleteBoardAction(
   id: number,
   moveTasksToBoardId: number | null
-): Promise<void> {
+): Promise<BoardSnapshot> {
   const session = await requireAuth();
   track(session.userId, 'board.delete');
 
@@ -172,10 +179,20 @@ export async function deleteBoardAction(
   if (boards.length <= 1) throw new Error('Your last board cannot be deleted');
   if (!boards.some((b) => b.id === id)) throw new Error('Board not found');
 
+  const [board] = await db.select().from(taskBoards).where(eq(taskBoards.id, id));
+  let movedTaskIds: number[] = [];
+  let snapshot = EMPTY_SNAPSHOT;
+
   if (moveTasksToBoardId != null) {
     if (!boards.some((b) => b.id === moveTasksToBoardId)) {
       throw new Error('Destination board not found');
     }
+    movedTaskIds = (
+      await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(eq(tasks.boardId, id), eq(tasks.userId, session.userId)))
+    ).map((t) => t.id);
     await db
       .update(tasks)
       .set({ boardId: moveTasksToBoardId })
@@ -186,6 +203,7 @@ export async function deleteBoardAction(
       .from(tasks)
       .where(and(eq(tasks.boardId, id), eq(tasks.userId, session.userId)));
     const ids = doomed.map((t) => t.id);
+    snapshot = await snapshotTaskRows(ids, session.userId);
     await deleteTaskRows(ids, session.userId);
   }
 
@@ -194,6 +212,37 @@ export async function deleteBoardAction(
     .where(and(eq(taskBoards.id, id), eq(taskBoards.userId, session.userId)));
 
   refresh();
+  return { board, movedTaskIds, tasks: snapshot };
+}
+
+/** Recreates a deleted list, then moves or reinserts its tasks. */
+export async function restoreBoardAction(snapshot: BoardSnapshot): Promise<{ error?: string }> {
+  const session = await requireAuth();
+
+  // Only one default list: if another took over, this one comes back plain.
+  const [otherDefault] = await db
+    .select({ id: taskBoards.id })
+    .from(taskBoards)
+    .where(and(eq(taskBoards.userId, session.userId), eq(taskBoards.isDefault, 1)));
+  await db
+    .insert(taskBoards)
+    .values({
+      ...snapshot.board,
+      userId: session.userId,
+      isDefault: otherDefault ? 0 : snapshot.board.isDefault,
+    })
+    .onConflictDoNothing();
+
+  if (snapshot.movedTaskIds.length) {
+    await db
+      .update(tasks)
+      .set({ boardId: snapshot.board.id })
+      .where(and(eq(tasks.userId, session.userId), inArray(tasks.id, snapshot.movedTaskIds)));
+  }
+  const res = await insertTaskSnapshot(snapshot.tasks, session.userId);
+
+  refresh();
+  return res;
 }
 
 // ==========================================
@@ -236,6 +285,74 @@ async function deleteTaskRows(ids: number[], userId: number): Promise<void> {
     and(inArray(taskCompletions.taskId, ids), eq(taskCompletions.userId, userId))
   );
   await db.delete(tasks).where(and(inArray(tasks.id, ids), eq(tasks.userId, userId)));
+}
+
+/** Everything deleteTaskRows removes, so Undo can put it back. */
+export interface TaskSnapshot {
+  tasks: (typeof tasks.$inferSelect)[];
+  taskTags: (typeof taskTags.$inferSelect)[];
+  completions: (typeof taskCompletions.$inferSelect)[];
+}
+
+const EMPTY_SNAPSHOT: TaskSnapshot = { tasks: [], taskTags: [], completions: [] };
+
+async function snapshotTaskRows(ids: number[], userId: number): Promise<TaskSnapshot> {
+  if (ids.length === 0) return EMPTY_SNAPSHOT;
+  return {
+    tasks: await db.select().from(tasks).where(and(inArray(tasks.id, ids), eq(tasks.userId, userId))),
+    taskTags: await db.select().from(taskTags).where(inArray(taskTags.taskId, ids)),
+    completions: await db
+      .select()
+      .from(taskCompletions)
+      .where(and(inArray(taskCompletions.taskId, ids), eq(taskCompletions.userId, userId))),
+  };
+}
+
+/** Reinserts a snapshot under its original ids. Its lists must still exist. */
+async function insertTaskSnapshot(snapshot: TaskSnapshot, userId: number): Promise<{ error?: string }> {
+  if (snapshot.tasks.length === 0) return {};
+
+  const boardIds = [...new Set(snapshot.tasks.map((t) => t.boardId))];
+  const boards = await db
+    .select({ id: taskBoards.id })
+    .from(taskBoards)
+    .where(and(eq(taskBoards.userId, userId), inArray(taskBoards.id, boardIds)));
+  if (boards.length !== boardIds.length) return { error: 'Its list has been deleted' };
+
+  const taskIds = new Set(snapshot.tasks.map((t) => t.id));
+  const tagIds = [...new Set(snapshot.taskTags.map((l) => l.tagId))];
+  const ownTags = new Set(
+    tagIds.length
+      ? (
+          await db
+            .select({ id: tags.id })
+            .from(tags)
+            .where(and(eq(tags.userId, userId), inArray(tags.id, tagIds)))
+        ).map((t) => t.id)
+      : []
+  );
+
+  db.transaction((tx) => {
+    // Parents before children.
+    const ordered = [...snapshot.tasks].sort((a, b) => a.depth - b.depth);
+    for (const t of ordered) {
+      tx.insert(tasks).values({ ...t, userId }).onConflictDoNothing().run();
+    }
+    const links = snapshot.taskTags.filter((l) => taskIds.has(l.taskId) && ownTags.has(l.tagId));
+    if (links.length) tx.insert(taskTags).values(links).onConflictDoNothing().run();
+    const done = snapshot.completions.filter((c) => taskIds.has(c.taskId));
+    if (done.length) {
+      tx.insert(taskCompletions).values(done.map((c) => ({ ...c, userId }))).onConflictDoNothing().run();
+    }
+  });
+  return {};
+}
+
+export async function restoreTasksAction(snapshot: TaskSnapshot): Promise<{ error?: string }> {
+  const session = await requireAuth();
+  const res = await insertTaskSnapshot(snapshot, session.userId);
+  refresh();
+  return res;
 }
 
 
@@ -833,16 +950,18 @@ async function applyCompletion(
   }
 }
 
-export async function deleteTaskAction(id: number): Promise<void> {
+export async function deleteTaskAction(id: number): Promise<TaskSnapshot> {
   const session = await requireAuth();
   track(session.userId, 'task.delete');
 
   const ids = await subtreeIds(id, session.userId);
   if (ids.length === 0) throw new Error('Task not found');
 
+  const snapshot = await snapshotTaskRows(ids, session.userId);
   await deleteTaskRows(ids, session.userId);
 
   refresh();
+  return snapshot;
 }
 
 
@@ -1186,7 +1305,7 @@ export async function moveTaskToBoardAction(id: number, boardId: number): Promis
 }
 
 /** Clear out a board's finished tasks. History in task_completions survives. */
-export async function deleteCompletedTasksAction(boardId: number | null): Promise<number> {
+export async function deleteCompletedTasksAction(boardId: number | null): Promise<TaskSnapshot> {
   const session = await requireAuth();
   track(session.userId, 'task.delete_completed');
 
@@ -1200,7 +1319,7 @@ export async function deleteCompletedTasksAction(boardId: number | null): Promis
 
   const done = await db.select({ id: tasks.id }).from(tasks).where(scope);
   const ids = done.map((t) => t.id);
-  if (ids.length === 0) return 0;
+  if (ids.length === 0) return EMPTY_SNAPSHOT;
 
   // Subtasks of a completed parent go too, even if they were left open.
   const all = new Set<number>();
@@ -1209,8 +1328,9 @@ export async function deleteCompletedTasksAction(boardId: number | null): Promis
   }
   const allIds = [...all];
 
+  const snapshot = await snapshotTaskRows(allIds, session.userId);
   await deleteTaskRows(allIds, session.userId);
 
   refresh();
-  return allIds.length;
+  return snapshot;
 }
