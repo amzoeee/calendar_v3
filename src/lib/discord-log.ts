@@ -525,15 +525,20 @@ export async function discardPendingForUser(userId: number): Promise<number> {
   return deleted.length;
 }
 
-/** Applies planPendingMerge to the database: see there for what merges. */
-export async function mergePendingIntoNeighbours(userId: number): Promise<void> {
+/**
+ * Applies planPendingMerge to the database: see there for what merges.
+ * Returns the extended events' previous ends and the absorbed ids, for Undo.
+ */
+export async function mergePendingIntoNeighbours(
+  userId: number,
+): Promise<{ extended: { id: number; endDatetime: string }[]; absorbed: number[] }> {
   const pending = await db
     .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
     .from(events)
     .where(and(eq(events.userId, userId), eq(events.isPending, 1)))
     .orderBy(events.startDatetime);
 
-  if (pending.length === 0) return;
+  if (pending.length === 0) return { extended: [], absorbed: [] };
 
   const previous = await db
     .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
@@ -550,11 +555,14 @@ export async function mergePendingIntoNeighbours(userId: number): Promise<void> 
     )
     .limit(1);
 
-  const { newEnds, absorbed } = planPendingMerge([...previous, ...pending]);
+  const all = [...previous, ...pending];
+  const { newEnds, absorbed } = planPendingMerge(all);
+  const extended = [...newEnds.keys()].map((id) => ({ id, endDatetime: all.find((ev) => ev.id === id)!.endDatetime }));
   for (const [id, endDatetime] of newEnds) {
     await db.update(events).set({ endDatetime }).where(eq(events.id, id));
   }
   for (const id of absorbed) {
     await db.delete(events).where(eq(events.id, id));
   }
+  return { extended, absorbed: [...absorbed] };
 }
