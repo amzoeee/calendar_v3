@@ -52,7 +52,6 @@ export const USAGE_CATALOG = {
   'tag.delete': { group: 'Tags', label: 'Delete tag' },
 
   'stats.preset': { group: 'Stats', label: 'Range preset' },
-  'stats.custom_range': { group: 'Stats', label: 'Custom range' },
   'stats.weekdays_only': { group: 'Stats', label: 'Weekdays-only filter' },
   'lifetime.search': { group: 'Stats', label: 'Lifetime search' },
   'lifetime.bulk_edit': { group: 'Stats', label: 'Lifetime bulk rename / retag' },
