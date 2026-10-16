@@ -105,8 +105,6 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
   const [formStartTime, setFormStartTime] = useState('09:00');
   const [formEndDate, setFormEndDate] = useState(date);
   const [formEndTime, setFormEndTime] = useState('10:00');
-  const [formRecur, setFormRecur] = useState('');
-  const [formRecurEnd, setFormRecurEnd] = useState('');
 
   // --- Edit Form State (for active overlay) ---
   const [editTitle, setEditTitle] = useState('');
@@ -519,16 +517,12 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       tag: formTag,
       startDatetime: `${formStartDate}T${formStartTime}`,
       endDatetime: `${formEndDate}T${formEndTime}`,
-      recurrence: formRecur,
-      recurrenceEndDate: formRecurEnd,
       timeZone: getBrowserTimeZone(),
     });
     // Reset basic input fields
     setFormTitle('');
     setFormDesc('');
     setFormTag('');
-    setFormRecur('');
-    setFormRecurEnd('');
     setShowMobileAddSheet(false);
   };
 
@@ -677,34 +671,6 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
           className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent resize-none"
         />
       </div>
-
-      {/* Repeat / Recurrence */}
-      <div>
-        <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repeat</label>
-        <Select
-          value={formRecur}
-          onChange={setFormRecur}
-          className="mt-1 w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent cursor-pointer"
-          options={[
-            { value: '', label: 'Does not repeat' },
-            { value: 'DAILY', label: 'Daily' },
-            { value: 'WEEKLY', label: 'Weekly' },
-            { value: 'MONTHLY', label: 'Monthly' },
-          ]}
-        />
-      </div>
-
-      {/* Recurrence End Date */}
-      {formRecur && (
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repeat until</label>
-          <DateInput
-            value={formRecurEnd}
-            onChange={(e) => setFormRecurEnd(e.target.value)}
-            className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
-          />
-        </div>
-      )}
 
       <button
         type="submit"
