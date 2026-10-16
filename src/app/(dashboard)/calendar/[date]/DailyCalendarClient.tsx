@@ -34,7 +34,7 @@ import {
   type EventRow,
   updateRecurringSeriesAction,
 } from '@/app/actions';
-import { getBrowserTimeZone, pacificDbStringToDate, formatDateInputValue, formatTimeInputValue } from '@/lib/timezone';
+import { getBrowserTimeZone, pacificDbStringToDate, formatDateInputValue, formatTimeInputValue, formatClockTime } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
 import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 import { useUndo } from '@/app/components/UndoToast';
@@ -419,8 +419,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
         top_position: startMin,
         height: duration,
         duration_minutes: duration,
-        start_time: startDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        end_time: endDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        start_time: formatClockTime(startDt),
+        end_time: formatClockTime(endDt),
         start_datetime_local: `${formatDateInputValue(startDt)}T${formatTimeInputValue(startDt)}`,
         end_datetime_local: `${formatDateInputValue(endDt)}T${formatTimeInputValue(endDt)}`,
         tag_color: tagColor,
