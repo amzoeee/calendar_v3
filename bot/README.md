@@ -12,6 +12,7 @@ the web UI. Nothing it does writes to your calendar directly.
 | `/whoami` | Says which calendar account this Discord account is linked to. |
 | `/fetch [date] [merge] [military]` | Reads back through the channel until it hits a `---` marker, takes your lines that start with a valid time, and stages them. |
 | `/marker on:true\|false` | Choose whether a `---` gets posted in the channel after you approve a staged log. |
+| `/delete-marker` | Deletes the newest `---` in the channel, for when one went up by mistake, so the next `/fetch` reads past it again. |
 | `/log name` | Posts `<current time> name` in the channel as a log line, e.g. `2:30pm study`. |
 | `/manual-fetch [date] [merge]` | Same scan as `/fetch`, but prints the lines back to you instead of staging anything. For copy-pasting somewhere else. |
 | `/debug-fetch [date] [merge] [military] [user]` | Server admins only. Same scan as `/fetch`, but takes lines from `user` (or from everyone if left empty), stages them into **your** calendar, and lists every event it made with its calculated time. Never posts a `---`. |
@@ -60,6 +61,10 @@ drawn under a log you threw away would hide those lines from the next `/fetch`
 for good. Approval happens in a browser, so the bot asks the app every
 `MARKER_POLL_SECONDS` whether anything it staged has been approved since. Set
 `FETCH_POST_MARKER=false` if you would rather post markers yourself.
+
+If a `---` went up too early, `/delete-marker` removes the newest one in the
+channel, whoever it was posted for. Only markers the bot posted can be deleted
+this way; it links you to one someone typed so they can delete it themselves.
 
 `/fetch` won't stage anything while an earlier batch is still waiting;
 approve it, or `/clear` it and fetch again.
