@@ -3,7 +3,6 @@
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Trash2 } from 'lucide-react';
-import MergePendingToggle from '@/app/components/MergePendingToggle';
 import { useUndo } from '@/app/components/UndoToast';
 import {
   approveAllPendingAction,
@@ -15,7 +14,7 @@ import {
 const plural = (n: number) => `${n} event${n === 1 ? '' : 's'}`;
 
 /** Approve All / Discard All for the pending banner, each with Undo. */
-export default function ImportActions({ mergePending }: { mergePending: boolean }) {
+export default function ImportActions() {
   const router = useRouter();
   const { raiseUndo } = useUndo();
   const [busy, startTransition] = useTransition();
@@ -48,18 +47,15 @@ export default function ImportActions({ mergePending }: { mergePending: boolean 
 
   return (
     <>
-      <div className="flex items-center gap-2">
-        <MergePendingToggle initial={mergePending} />
-        <button
-          type="button"
-          onClick={approve}
-          disabled={busy}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs font-semibold shadow transition cursor-pointer"
-        >
-          <Check className="h-3.5 w-3.5" />
-          Approve All
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={approve}
+        disabled={busy}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded text-xs font-semibold shadow transition cursor-pointer"
+      >
+        <Check className="h-3.5 w-3.5" />
+        Approve All
+      </button>
 
       <button
         type="button"

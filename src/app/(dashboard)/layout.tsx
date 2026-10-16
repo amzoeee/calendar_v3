@@ -16,7 +16,6 @@ import { UndoProvider } from '@/app/components/UndoToast';
 import PendingSync from '@/app/components/PendingSync';
 import PendingReview from '@/app/components/PendingReview';
 import ImportActions from '@/app/components/ImportActions';
-import { getMergePending } from '@/lib/server-merge-pending';
 import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
 import { dbStringToUtcMillis, dayStrOfInstant, shiftDateStr } from '@/lib/timezone';
@@ -50,7 +49,6 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const pendingCount = pendingCountResult[0]?.count || 0;
 
   const todayStr = await todayForViewer();
-  const mergePending = await getMergePending();
   const weekStart = await getWeekStart();
 
   // Tasks due today, overdue or ASAP, for the badge on the Tasks tab.
@@ -161,7 +159,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
               <div className="flex flex-wrap items-center gap-3">
                 <PendingReview />
 
-                <ImportActions mergePending={mergePending} />
+                <ImportActions />
 
                 {/* Shift Date */}
                 <form action={overridePendingDateAction} className="flex items-center gap-2">
