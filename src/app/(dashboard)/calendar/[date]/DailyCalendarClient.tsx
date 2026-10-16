@@ -36,6 +36,7 @@ import {
 } from '@/app/actions';
 import { getBrowserTimeZone, pacificDbStringToDate, formatDateInputValue, formatTimeInputValue } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
+import TimeInput from '@/app/components/TimeInput';
 import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
 import { useUndo } from '@/app/components/UndoToast';
 import { deletedEventsMessage } from '@/lib/undoMessages';
@@ -624,11 +625,10 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
             onChange={(e) => setFormStartDate(e.target.value)}
             className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
           />
-          <input
-            type="time"
+          <TimeInput
             required
             value={formStartTime}
-            onChange={(e) => setFormStartTime(e.target.value)}
+            onChange={setFormStartTime}
             className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
           />
         </div>
@@ -644,11 +644,10 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
             onChange={(e) => setFormEndDate(e.target.value)}
             className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
           />
-          <input
-            type="time"
+          <TimeInput
             required
             value={formEndTime}
-            onChange={(e) => setFormEndTime(e.target.value)}
+            onChange={setFormEndTime}
             className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
           />
         </div>
@@ -1029,10 +1028,9 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                   onChange={(e) => setEditStartDate(e.target.value)}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
-                <input
-                  type="time"
+                <TimeInput
                   value={editStartTime}
-                  onChange={(e) => setEditStartTime(e.target.value)}
+                  onChange={setEditStartTime}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
               </div>
@@ -1045,10 +1043,9 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                   onChange={(e) => setEditEndDate(e.target.value)}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
-                <input
-                  type="time"
+                <TimeInput
                   value={editEndTime}
-                  onChange={(e) => setEditEndTime(e.target.value)}
+                  onChange={setEditEndTime}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
               </div>
@@ -1222,10 +1219,9 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                     onChange={(e) => setEditStartDate(e.target.value)}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
-                  <input
-                    type="time"
+                  <TimeInput
                     value={editStartTime}
-                    onChange={(e) => setEditStartTime(e.target.value)}
+                    onChange={setEditStartTime}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
                 </div>
@@ -1238,10 +1234,9 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                     onChange={(e) => setEditEndDate(e.target.value)}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
-                  <input
-                    type="time"
+                  <TimeInput
                     value={editEndTime}
-                    onChange={(e) => setEditEndTime(e.target.value)}
+                    onChange={setEditEndTime}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
                 </div>
