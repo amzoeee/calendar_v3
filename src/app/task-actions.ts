@@ -218,6 +218,7 @@ export async function deleteBoardAction(
 /** Recreates a deleted list, then moves or reinserts its tasks. */
 export async function restoreBoardAction(snapshot: BoardSnapshot): Promise<{ error?: string }> {
   const session = await requireAuth();
+  track(session.userId, 'undo.board');
 
   // Only one default list: if another took over, this one comes back plain.
   const [otherDefault] = await db
@@ -350,6 +351,7 @@ async function insertTaskSnapshot(snapshot: TaskSnapshot, userId: number): Promi
 
 export async function restoreTasksAction(snapshot: TaskSnapshot): Promise<{ error?: string }> {
   const session = await requireAuth();
+  track(session.userId, 'undo.task');
   const res = await insertTaskSnapshot(snapshot, session.userId);
   refresh();
   return res;

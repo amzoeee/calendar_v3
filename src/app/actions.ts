@@ -284,6 +284,7 @@ const RESTORE_CHUNK = 500;
  */
 export async function restoreTagAction(snapshot: TagSnapshot): Promise<{ error?: string }> {
   const session = await requireAuth();
+  track(session.userId, 'undo.tag');
   const { tag } = snapshot;
 
   const [clash] = await db
@@ -478,6 +479,7 @@ export async function deleteEventAction(id: number): Promise<EventRow[]> {
 /** Puts back events removed by a delete, under their original ids. */
 export async function reinsertEventsAction(rows: EventRow[]) {
   const session = await requireAuth();
+  track(session.userId, 'undo.event');
   if (rows.length === 0) return;
 
   await db

@@ -80,6 +80,11 @@ export const USAGE_CATALOG = {
   'board.sort': { group: 'Tasks', label: 'Change list sort mode' },
   'board.delete': { group: 'Tasks', label: 'Delete list' },
 
+  'undo.event': { group: 'Undo', label: 'Undo event delete' },
+  'undo.tag': { group: 'Undo', label: 'Undo tag delete' },
+  'undo.task': { group: 'Undo', label: 'Undo task delete' },
+  'undo.board': { group: 'Undo', label: 'Undo list delete' },
+
   'auth.login': { group: 'Account', label: 'Log in' },
   'auth.register': { group: 'Account', label: 'Register' },
   'account.change_password': { group: 'Account', label: 'Change password' },
