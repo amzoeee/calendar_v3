@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Search, X } from 'lucide-react';
-import { pacificDbStringToDate, formatDateInputValue } from '@/lib/timezone';
+import { pacificDbStringToDate, formatDateInputValue, formatClockTime } from '@/lib/timezone';
 import { track } from '@/lib/track';
 
 interface Tag {
@@ -152,8 +152,7 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
       day: 'numeric',
       year: 'numeric',
     });
-    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${date} · ${time}`;
+    return `${date} · ${formatClockTime(d)}`;
   };
 
   const goTo = (ev: EventResult) => {

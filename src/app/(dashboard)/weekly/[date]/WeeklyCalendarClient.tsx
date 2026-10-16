@@ -41,6 +41,7 @@ import {
   formatDateInputValue,
   formatTimeInputValue,
   formatEventTimeRange,
+  formatClockTime,
 } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
 import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
@@ -504,8 +505,8 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
         top_position: startMin,
         height: duration,
         duration_minutes: duration,
-        start_time: startDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        end_time: endDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        start_time: formatClockTime(startDt),
+        end_time: formatClockTime(endDt),
         time_range: formatEventTimeRange(startDt, endDt),
         start_datetime_local: `${formatDateInputValue(startDt)}T${formatTimeInputValue(startDt)}`,
         end_datetime_local: `${formatDateInputValue(endDt)}T${formatTimeInputValue(endDt)}`,

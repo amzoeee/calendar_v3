@@ -161,6 +161,12 @@ export function formatTimeInputValue(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// "09:30 AM" in the host's local timezone. Locale is pinned so server and
+// client render identical text during hydration.
+export function formatClockTime(d: Date): string {
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
 // Human label for an event's time range, as observed in the host's local
 // timezone. Same-day events read "10:00 PM - 11:30 PM"; events that cross
 // midnight carry a date on each end ("Aug 12 10:00 PM - Aug 13 07:00 AM") so
@@ -168,7 +174,7 @@ export function formatTimeInputValue(d: Date): string {
 // about when it actually starts and ends. No weekday — the agenda row already
 // sits under a day header, so it would only cost width.
 export function formatEventTimeRange(start: Date, end: Date): string {
-  const time = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const time = formatClockTime;
   if (start.toDateString() === end.toDateString()) {
     return `${time(start)} - ${time(end)}`;
   }
