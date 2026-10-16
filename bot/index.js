@@ -13,7 +13,7 @@ const {
 
 const config = require('./config');
 const api = require('./api');
-const { activityOf, collectLogLines, isLogLine, mergeRepeats, sameTime } = require('./log-lines');
+const { activityOf, collectLogLines, isLogLine, isMarker, mergeRepeats, sameTime } = require('./log-lines');
 const { capWarning, chunkLines } = require('./reply');
 
 // en-CA formats as YYYY-MM-DD, the shape the calendar wants.
@@ -58,6 +58,9 @@ const commands = [
     .addBooleanOption((option) =>
       option.setName('on').setDescription('true to post the marker, false to leave the channel alone').setRequired(true),
     ),
+  new SlashCommandBuilder()
+    .setName('delete-marker')
+    .setDescription("delete the newest --- in this channel, so the next /fetch reads past it"),
   new SlashCommandBuilder()
     .setName('log')
     .setDescription('post a log line for something you just finished, stamped with the current time')
@@ -227,6 +230,45 @@ async function handleMarker(interaction) {
       ? 'ok, a `---` will be posted after you approve a staged log.'
       : "ok, no more `---` after approving. you'll want to post your own.",
   );
+}
+
+// Same lookback as /fetch, so it finds the marker /fetch would stop at.
+async function findLatestMarker(channel) {
+  let before;
+  let scanned = 0;
+  while (scanned < config.maxMessages) {
+    const limit = Math.min(100, config.maxMessages - scanned);
+    const page = await channel.messages.fetch({ limit, ...(before ? { before } : {}) });
+    for (const message of page.values()) {
+      if (message.content.split(/\r?\n/).some(isMarker)) return { message, scanned };
+      before = message.id;
+      scanned += 1;
+    }
+    if (page.size < limit) break;
+  }
+  return { message: null, scanned };
+}
+
+async function handleDeleteMarker(interaction) {
+  const { message, scanned } = await findLatestMarker(interaction.channel);
+  if (!message) {
+    await interaction.editReply(`couldn't find a \`---\` in the last ${scanned} messages.`);
+    return;
+  }
+
+  // The bot can only delete its own messages.
+  if (message.author.id !== client.user.id) {
+    await interaction.editReply(
+      message.author.id === interaction.user.id
+        ? `the newest \`---\` is one you posted, so delete it yourself: ${message.url}`
+        : `the newest \`---\` was posted by <@${message.author.id}>, so i can't delete it: ${message.url}`,
+    );
+    return;
+  }
+
+  await message.delete();
+  const posted = Math.floor(message.createdTimestamp / 1000);
+  await interaction.editReply(`deleted the \`---\` from <t:${posted}:f>. the next \`/fetch\` will read past it.`);
 }
 
 async function handleFetch(interaction) {
@@ -544,6 +586,7 @@ const handlers = {
   'manual-fetch': handleManualFetch,
   'debug-fetch': handleDebugFetch,
   clear: handleClear,
+  'delete-marker': handleDeleteMarker,
   log: handleLog,
 };
 
