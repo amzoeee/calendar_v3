@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
+import { track } from '@/lib/track';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import DateInput from '@/app/components/DateInput';
@@ -283,6 +284,7 @@ export default function StatsClient({
   });
 
   const handleToggleWeekdays = () => {
+    track('stats.weekdays_only', { on: !weekdaysOnly });
     // Not a range change — same window, different filter — but it still goes
     // through navigateTo so a page still sitting in the debounce can't land
     // afterwards and undo it.
@@ -318,6 +320,7 @@ export default function StatsClient({
     if (localStart === activeRange.start) return;
     // Keep the end no earlier than the new start.
     const newEnd = localStart > activeRange.end ? localStart : activeRange.end;
+    track('stats.custom_range');
     navigateTo({ start: localStart, end: newEnd });
   };
 
@@ -329,6 +332,7 @@ export default function StatsClient({
     if (localEnd === activeRange.end) return;
     // Keep the start no later than the new end.
     const newStart = localEnd < activeRange.start ? localEnd : activeRange.start;
+    track('stats.custom_range');
     navigateTo({ start: newStart, end: localEnd });
   };
 
@@ -343,9 +347,11 @@ export default function StatsClient({
       if (!isInput && !e.metaKey && !e.ctrlKey) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
+          track('nav.keyboard');
           navigateTo(prevPeriod);
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
+          track('nav.keyboard');
           navigateTo(nextPeriod);
         }
       }
@@ -437,7 +443,10 @@ export default function StatsClient({
             {presets.map((p) => (
               <button
                 key={p.label}
-                onClick={() => navigateTo({ start: p.start, end: activeRange.end })}
+                onClick={() => {
+                  track('stats.preset', { preset: p.label });
+                  navigateTo({ start: p.start, end: activeRange.end });
+                }}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${
                   p.active
                     ? 'bg-primary/20 border-primary text-primary'
@@ -504,7 +513,10 @@ export default function StatsClient({
                 {presets.map((p) => (
                   <button
                     key={p.label}
-                    onClick={() => navigateTo({ start: p.start, end: activeRange.end })}
+                    onClick={() => {
+                  track('stats.preset', { preset: p.label });
+                  navigateTo({ start: p.start, end: activeRange.end });
+                }}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition cursor-pointer ${
                       p.active
                         ? 'bg-primary/20 border-primary text-primary'

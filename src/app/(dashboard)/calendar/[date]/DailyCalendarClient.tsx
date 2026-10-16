@@ -20,6 +20,7 @@ import {
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
 import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
+import { track } from '@/lib/track';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import { usePinchZoom } from '@/lib/usePinchZoom';
 import EventSearch from '@/app/components/EventSearch';
@@ -233,21 +234,26 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
       if (e.metaKey || e.ctrlKey) {
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
+          track('nav.zoom_key');
           changeZoom(15);
         } else if (e.key === '-') {
           e.preventDefault();
+          track('nav.zoom_key');
           changeZoom(-15);
         } else if (e.key === '0') {
           e.preventDefault();
+          track('nav.zoom_reset');
           resetZoom();
         }
       } else if (!isInput) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
+          track('nav.keyboard');
           saveScroll();
           navigateTo(prevDayStr);
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
+          track('nav.keyboard');
           saveScroll();
           navigateTo(nextDayStr);
         } else if ((e.key === 'Delete' || e.key === 'Backspace') && activeOverlayId !== null && editingEvent) {

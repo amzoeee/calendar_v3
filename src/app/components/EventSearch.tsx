@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import { pacificDbStringToDate, formatDateInputValue } from '@/lib/timezone';
+import { track } from '@/lib/track';
 
 interface Tag {
   id: number;
@@ -156,6 +157,7 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
   };
 
   const goTo = (ev: EventResult) => {
+    track('nav.search');
     const dateStr = formatDateInputValue(pacificDbStringToDate(ev.startDatetime));
     setOpen(false);
     setQuery('');

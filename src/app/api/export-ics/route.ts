@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { track } from '@/lib/usage';
 import { db } from '@/db';
 import { events, tags } from '@/db/schema';
 import { eq, and, or, gte, lt } from 'drizzle-orm';
@@ -117,6 +118,8 @@ export async function GET(request: NextRequest) {
       tagFilterName = selectedTag.name;
     }
   }
+
+  track(session.userId, tagFilterName ? 'ics.export' : 'ics.export_zip');
 
   // Single tag export
   if (tagFilterName) {

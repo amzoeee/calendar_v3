@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { track } from '@/lib/track';
 
 const MIN_ZOOM = 30;
 const MAX_ZOOM = 300;
@@ -65,6 +66,7 @@ export function usePinchZoom(
 
     const onTouchEnd = (e: TouchEvent) => {
       if (e.touches.length < 2 && pinchAnchorRef.current) {
+        if (zoomLevelRef.current !== startZoom) track('nav.pinch_zoom');
         pinchAnchorRef.current = null;
         startDist = 0;
       }
