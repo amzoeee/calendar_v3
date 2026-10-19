@@ -559,24 +559,25 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                 className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
+            {/* Own row on mobile: alongside color + button it overflows. */}
+            <div className="w-full lg:w-44 shrink-0">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="new-tag-scope">
+                Use for
+              </label>
+              <Select
+                id="new-tag-scope"
+                value={newTagScope}
+                onChange={setNewTagScope}
+                className="mt-1 w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                options={TAG_SCOPES.map((scope) => ({ value: scope, label: TAG_SCOPE_LABELS[scope] }))}
+              />
+            </div>
             {/* Color + button always share a row (even on mobile) and stay
                 bottom-aligned to each other via this inner items-end, which
                 doesn't depend on the outer row's own breakpoint-gated
                 alignment — that's what kept drifting out of sync with the
                 Discord Log button above. */}
             <div className="flex items-end gap-3 shrink-0">
-              <div className="shrink-0 w-44">
-                <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="new-tag-scope">
-                  Use for
-                </label>
-                <Select
-                  id="new-tag-scope"
-                  value={newTagScope}
-                  onChange={setNewTagScope}
-                  className="mt-1 w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-                  options={TAG_SCOPES.map((scope) => ({ value: scope, label: TAG_SCOPE_LABELS[scope] }))}
-                />
-              </div>
               <div className="shrink-0 w-24">
                 <label className="block text-xs font-semibold text-muted-foreground uppercase">Color</label>
                 <input
