@@ -111,7 +111,9 @@ export default function LifetimePanel({
   const heading =
     focus.kind === 'query'
       ? `“${focus.q}”`
-      : focus.part ?? data.titles[focus.title];
+      : focus.kind === 'part'
+        ? focus.part
+        : focus.part ?? data.titles[focus.title];
   const anchor = focus.kind === 'title' ? focus.event : null;
   const activePart = focus.kind === 'title' ? focus.part : null;
 

@@ -7,24 +7,36 @@ import { Search, X } from 'lucide-react';
 import { normalizeTitle } from '@/lib/titleParts';
 
 const MAX_SUGGESTIONS = 30;
+const MAX_PART_SUGGESTIONS = 5;
 
 interface LifetimeSearchProps {
   titles: string[];
   keys: string[];
   counts: number[];
+  parts: { part: string; count: number }[];
   query: string;
   // Fires on every keystroke, so the chart highlights as you type.
   onQuery: (q: string) => void;
   // The parent sets the box to the picked title.
   onPick: (title: number) => void;
+  onPickPart: (part: string) => void;
 }
 
 /**
  * Same look as EventSearch, but it filters the already-loaded titles instead
  * of querying the server: the first row keeps the typed text as a search,
- * the rest pick one title.
+ * then segments (parts of titles), then whole titles.
  */
-export default function LifetimeSearch({ titles, keys, counts, query, onQuery, onPick }: LifetimeSearchProps) {
+export default function LifetimeSearch({
+  titles,
+  keys,
+  counts,
+  parts,
+  query,
+  onQuery,
+  onPick,
+  onPickPart,
+}: LifetimeSearchProps) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -33,15 +45,27 @@ export default function LifetimeSearch({ titles, keys, counts, query, onQuery, o
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const partSuggestions = useMemo(() => {
+    const q = normalizeTitle(query);
+    if (!q) return [];
+    return parts
+      .filter((p) => p.part.includes(q))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, MAX_PART_SUGGESTIONS);
+  }, [query, parts]);
+
+  // A title that is just a listed segment would pick the same thing.
   const suggestions = useMemo(() => {
     const q = normalizeTitle(query);
     if (!q) return [];
+    const shown = new Set(partSuggestions.map((p) => p.part));
     const hits: number[] = [];
     keys.forEach((k, t) => {
-      if (k.includes(q)) hits.push(t);
+      if (k.includes(q) && !shown.has(k)) hits.push(t);
     });
     return hits.sort((a, b) => counts[b] - counts[a]).slice(0, MAX_SUGGESTIONS);
-  }, [query, keys, counts]);
+  }, [query, keys, counts, partSuggestions]);
+  const rowCount = 1 + partSuggestions.length + suggestions.length;
 
   useEffect(() => {
     if (!open) return;
@@ -74,15 +98,13 @@ export default function LifetimeSearch({ titles, keys, counts, query, onQuery, o
     onQuery(value);
   };
 
-  // Row 0 is the free-text search; rows 1.. are titles.
+  // Row 0 is the free-text search, then segments, then titles.
   const choose = (row: number) => {
-    track('lifetime.search', { suggestion: row > 0 });
+    const isPart = row > 0 && row <= partSuggestions.length;
+    track('lifetime.search', { suggestion: row > 0, segment: isPart });
     setOpen(false);
-    if (row === 0) {
-      inputRef.current?.blur();
-      return;
-    }
-    onPick(suggestions[row - 1]);
+    if (isPart) onPickPart(partSuggestions[row - 1].part);
+    else if (row > 0) onPick(suggestions[row - 1 - partSuggestions.length]);
     inputRef.current?.blur();
   };
 
@@ -95,7 +117,7 @@ export default function LifetimeSearch({ titles, keys, counts, query, onQuery, o
     if (!open) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlight((h) => Math.min(h + 1, suggestions.length));
+      setHighlight((h) => Math.min(h + 1, rowCount - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlight((h) => Math.max(h - 1, 0));
@@ -138,17 +160,35 @@ export default function LifetimeSearch({ titles, keys, counts, query, onQuery, o
                 Everything mentioning “{query.trim()}”
               </span>
             </button>
-            {suggestions.map((t, i) => (
+            {partSuggestions.map(({ part, count }, i) => (
               <button
-                key={t}
+                key={`part:${part}`}
                 onClick={() => choose(i + 1)}
                 onMouseEnter={() => setHighlight(i + 1)}
                 className={rowClass(i + 1)}
               >
-                <span className="min-w-0 flex-1 text-sm font-semibold text-foreground truncate">{titles[t]}</span>
-                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{counts[t]}</span>
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full border border-border bg-secondary text-foreground">
+                    {part}
+                  </span>
+                </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{count}</span>
               </button>
             ))}
+            {suggestions.map((t, i) => {
+              const row = i + 1 + partSuggestions.length;
+              return (
+                <button
+                  key={t}
+                  onClick={() => choose(row)}
+                  onMouseEnter={() => setHighlight(row)}
+                  className={rowClass(row)}
+                >
+                  <span className="min-w-0 flex-1 text-sm font-semibold text-foreground truncate">{titles[t]}</span>
+                  <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{counts[t]}</span>
+                </button>
+              );
+            })}
           </div>,
           document.body,
         )
