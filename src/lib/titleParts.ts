@@ -1,7 +1,7 @@
 // Splits an event title into the activities it names, so "get ready + drive"
-// and "drive" can be recognised as related. Bracketed context
-// ("[train, bus] rr"), parenthesised qualifiers ("yt (long form)") and who it
-// was with ("yap w jerry") are dropped.
+// and "drive" can be recognised as related. Parenthesised text is its own
+// part ("yt (long form)" -> yt, long form); bracketed context ("[train, bus] rr")
+// and who it was with ("yap w jerry") are dropped.
 
 export const normalizeTitle = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -16,7 +16,7 @@ const WITH_RE = /(?<!\b(?:deal|dealing|help|helping))(?:^|\s+)w(?:\/\s*|\s+)[^/+
 const cleanPart = (s: string) => normalizeTitle(s).replace(/[!?.~]+$/, '');
 
 const splitList = (s: string) =>
-  s
+  normalizeTitle(s.replace(WITH_RE, ' '))
     .split(/\s*(?:[/+&,]|\band\b)\s*/)
     .map(cleanPart)
     .filter(Boolean);
@@ -31,10 +31,15 @@ export function titleParts(title: string): string[] {
   let t = normalizeTitle(title);
   const parts: string[] = [];
 
-  t = t.replace(/\[[^\]]*\]|\([^)]*\)/g, ' ');
+  t = t.replace(/\[[^\]]*\]/g, ' ');
+  // Before parens, so ":(" isn't read as an opening one.
   t = t.replace(EMOTICON_RE, '$1');
-  t = t.replace(WITH_RE, ' ');
-  t = normalizeTitle(t);
+  const inner: string[] = [];
+  t = t.replace(/\(([^)]*)\)/g, (_, s: string) => {
+    inner.push(s);
+    return ' ';
+  });
+  t = normalizeTitle(t.replace(WITH_RE, ' '));
 
   const m = t.match(PREFIX_RE);
   if (m && m[1].split(' ').length <= MAX_PREFIX_WORDS) {
@@ -42,6 +47,7 @@ export function titleParts(title: string): string[] {
     t = m[2];
   }
   parts.push(...splitList(t));
+  for (const s of inner) parts.push(...splitList(s));
 
   return [...new Set(parts)];
 }
