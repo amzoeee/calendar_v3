@@ -51,14 +51,18 @@ function Fact({
   value,
   hint,
   compact,
+  className = '',
 }: {
   label: string;
   value: string;
   hint?: string;
   compact?: boolean;
+  className?: string;
 }) {
   return (
-    <div className={`bg-secondary/40 border border-border rounded-lg min-w-0 ${compact ? 'px-2.5 py-1.5' : 'p-2.5'}`}>
+    <div
+      className={`bg-secondary/40 border border-border rounded-lg min-w-0 ${compact ? 'px-2.5 py-1.5' : 'p-2.5'} ${className}`}
+    >
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
       <p className={`font-bold text-foreground tabular-nums truncate ${compact ? 'text-sm' : 'text-base mt-0.5'}`}>
         {value}
@@ -285,6 +289,7 @@ export default function LifetimePanel({
         <p className="text-sm text-muted-foreground">No matching events.</p>
       ) : (
         <>
+          {/* lg:order-* puts Last beside First when the grid is five columns wide. */}
           <div className="grid grid-cols-2 lg:grid-cols-5 xl:grid-cols-2 gap-2">
             <Fact label="Times" value={stats.count.toLocaleString()} />
             <Fact label="Total" value={formatDuration(stats.totalMin)} />
@@ -295,11 +300,12 @@ export default function LifetimePanel({
             />
             <Fact
               label="Longest"
+              className="lg:order-2 xl:order-none"
               value={formatDuration(data.durations[stats.longestEvent])}
               hint={fmtDate(startOf(data, stats.longestEvent))}
             />
             {/* Short facts stack beside the two that carry hints. */}
-            <div className="row-span-2 grid grid-rows-3 gap-2 min-w-0">
+            <div className="row-span-2 grid grid-rows-3 gap-2 min-w-0 lg:order-1 xl:order-none">
               <Fact compact label="First" value={fmtDate(startOf(data, stats.firstEvent))} />
               <Fact
                 compact
@@ -311,15 +317,18 @@ export default function LifetimePanel({
             <Fact label="Last" value={daysAgo(startOf(data, stats.lastEvent))} hint={fmtDate(startOf(data, stats.lastEvent))} />
             <Fact
               label="Busiest day"
+              className="lg:order-1 xl:order-none"
               value={WEEKDAYS[busiest]}
               hint={`${stats.weekdayCounts[busiest]} time${stats.weekdayCounts[busiest] === 1 ? '' : 's'}`}
             />
             <Fact
               label="Longest streak"
+              className="lg:order-3 xl:order-none"
               value={`${stats.longestStreak} day${stats.longestStreak === 1 ? '' : 's'}`}
             />
             <Fact
               label="Longest break"
+              className="lg:order-3 xl:order-none"
               value={`${stats.longestGapDays} day${stats.longestGapDays === 1 ? '' : 's'}`}
             />
           </div>
