@@ -46,36 +46,110 @@ function daysAgo(d: Date): string {
   return n === 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`;
 }
 
-function Fact({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Fact({
+  label,
+  value,
+  hint,
+  compact,
+  className = '',
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  compact?: boolean;
+  className?: string;
+}) {
   return (
-    <div className="bg-secondary/40 border border-border rounded-lg p-2.5 min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="text-base font-bold text-foreground tabular-nums mt-0.5 truncate">{value}</p>
+    <div
+      className={`bg-secondary/40 border border-border rounded-lg min-w-0 ${compact ? 'px-2.5 py-1.5' : 'p-2.5'} ${className}`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
+      <p className={`font-bold text-foreground tabular-nums truncate ${compact ? 'text-sm' : 'text-base mt-0.5'}`}>
+        {value}
+      </p>
       {hint && <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{hint}</p>}
     </div>
   );
 }
 
-function Sparkline({ monthly }: { monthly: NameStats['monthly'] }) {
-  const max = Math.max(...monthly.map((m) => m.hours), 0.01);
+// Rounds up to 1, 2, 4, 6 or 8 × 10ⁿ so the halfway tick is a round number too.
+function niceCeil(x: number): number {
+  const pow = 10 ** Math.floor(Math.log10(x));
+  return ([1, 2, 4, 6, 8, 10].find((f) => f * pow >= x) ?? 10) * pow;
+}
+
+const fmtMonth = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+function MonthlyChart({ monthly }: { monthly: NameStats['monthly'] }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const max = niceCeil(Math.max(...monthly.map((m) => m.hours), 1 / 60));
+  const ticks = [max, max / 2, 0];
+
+  const pick = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const i = Math.floor(((e.clientX - r.left) / r.width) * monthly.length);
+    setHover(Math.min(monthly.length - 1, Math.max(0, i)));
+  };
+
+  const hovered = hover === null ? null : monthly[hover];
+  // Slides the tooltip from left- to right-anchored so it stays inside the chart.
+  const frac = hover === null ? 0 : (hover + 0.5) / monthly.length;
+
   return (
     <div>
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
         Hours per month
       </p>
-      <div className="flex items-end gap-px h-12">
-        {monthly.map((m) => (
+      <div className="flex gap-1.5">
+        <div className="flex flex-col justify-between h-[74px] -mt-[5px] text-[10px] leading-none text-muted-foreground tabular-nums text-right shrink-0">
+          {ticks.map((t) => (
+            <span key={t}>{t === 0 ? '0' : formatDuration(t * 60)}</span>
+          ))}
+        </div>
+        <div className="flex-1 min-w-0">
           <div
-            key={m.month.getTime()}
-            title={`${m.month.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}: ${m.hours.toFixed(1)}h`}
-            className="flex-1 bg-primary/70 rounded-sm min-h-px"
-            style={{ height: `${(m.hours / max) * 100}%`, opacity: m.hours > 0 ? 1 : 0.15 }}
-          />
-        ))}
-      </div>
-      <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-        <span>{monthly[0]?.month.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
-        <span>now</span>
+            className="relative h-16 touch-pan-y"
+            onPointerDown={pick}
+            onPointerMove={pick}
+            onPointerLeave={(e) => e.pointerType === 'mouse' && setHover(null)}
+          >
+            {ticks.map((t) => (
+              <div
+                key={t}
+                className={`absolute inset-x-0 border-t ${t === 0 ? 'border-border' : 'border-dashed border-border/60'}`}
+                style={{ bottom: `${(t / max) * 100}%` }}
+              />
+            ))}
+            <div className="absolute inset-0 flex items-end gap-px">
+              {monthly.map((m, i) => (
+                <div
+                  key={m.month.getTime()}
+                  className={`flex-1 rounded-sm min-h-px ${i === hover ? 'bg-primary' : 'bg-primary/70'}`}
+                  style={{ height: `${(m.hours / max) * 100}%`, opacity: m.hours > 0 || i === hover ? 1 : 0.15 }}
+                />
+              ))}
+            </div>
+            {hovered && (
+              <div
+                className="absolute z-10 pointer-events-none whitespace-nowrap bg-card border border-border rounded-md shadow-lg px-2 py-1 text-[11px]"
+                style={{
+                  left: `${frac * 100}%`,
+                  bottom: `calc(${(hovered.hours / max) * 100}% + 4px)`,
+                  transform: `translateX(-${frac * 100}%)`,
+                }}
+              >
+                <span className="text-muted-foreground">{fmtMonth(hovered.month)}</span>{' '}
+                <span className="font-semibold text-foreground tabular-nums">
+                  {hovered.hours > 0 ? formatDuration(hovered.hours * 60) : 'none'}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span>{monthly[0] && fmtMonth(monthly[0].month)}</span>
+            <span>now</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -217,6 +291,7 @@ export default function LifetimePanel({
         <p className="text-sm text-muted-foreground">No matching events.</p>
       ) : (
         <>
+          {/* lg:order-* puts Last beside First when the grid is five columns wide. */}
           <div className="grid grid-cols-2 lg:grid-cols-5 xl:grid-cols-2 gap-2">
             <Fact label="Times" value={stats.count.toLocaleString()} />
             <Fact label="Total" value={formatDuration(stats.totalMin)} />
@@ -227,26 +302,35 @@ export default function LifetimePanel({
             />
             <Fact
               label="Longest"
+              className="lg:order-2 xl:order-none"
               value={formatDuration(data.durations[stats.longestEvent])}
               hint={fmtDate(startOf(data, stats.longestEvent))}
             />
-            <Fact label="First" value={fmtDate(startOf(data, stats.firstEvent))} />
+            {/* Short facts stack beside the two that carry hints. */}
+            <div className="row-span-2 grid grid-rows-3 gap-2 min-w-0 lg:order-1 xl:order-none">
+              <Fact compact label="First" value={fmtDate(startOf(data, stats.firstEvent))} />
+              <Fact
+                compact
+                label="Usually starts"
+                value={stats.typicalStartMin === null ? 'anytime' : `~${fmtClock(stats.typicalStartMin)}`}
+              />
+              <Fact compact label="Per active week" value={formatDuration(stats.perWeekMin)} />
+            </div>
             <Fact label="Last" value={daysAgo(startOf(data, stats.lastEvent))} hint={fmtDate(startOf(data, stats.lastEvent))} />
             <Fact
-              label="Usually starts"
-              value={stats.typicalStartMin === null ? 'anytime' : `~${fmtClock(stats.typicalStartMin)}`}
-            />
-            <Fact
               label="Busiest day"
+              className="lg:order-1 xl:order-none"
               value={WEEKDAYS[busiest]}
               hint={`${stats.weekdayCounts[busiest]} time${stats.weekdayCounts[busiest] === 1 ? '' : 's'}`}
             />
             <Fact
               label="Longest streak"
+              className="lg:order-3 xl:order-none"
               value={`${stats.longestStreak} day${stats.longestStreak === 1 ? '' : 's'}`}
             />
             <Fact
               label="Longest break"
+              className="lg:order-3 xl:order-none"
               value={`${stats.longestGapDays} day${stats.longestGapDays === 1 ? '' : 's'}`}
             />
           </div>
@@ -261,7 +345,7 @@ export default function LifetimePanel({
             </p>
           )}
 
-          <Sparkline monthly={stats.monthly} />
+          <MonthlyChart monthly={stats.monthly} />
 
           {stats.related.count > 0 && (
             <div>

@@ -2,6 +2,7 @@
 // into per-day segments, plus title matching and the per-name stats.
 
 import { normalizeTitle, titleParts } from './titleParts';
+import type { WeekStart } from './week';
 
 // Hour each column starts at.
 export const DAY_START_HOUR = 0;
@@ -181,6 +182,8 @@ export interface NameStats {
   weekdayCounts: number[];
   longestStreak: number;
   longestGapDays: number;
+  // Averaged over only the weeks it happened in.
+  perWeekMin: number;
   monthly: { month: Date; hours: number }[];
   topTag: { tag: number; share: number } | null;
   // RELATED events, i.e. the name inside combined titles.
@@ -193,6 +196,7 @@ export function computeStats(
   segments: Segments,
   titleLevels: Uint8Array,
   tagTotalMin: Map<number, number>,
+  weekStart: WeekStart,
 ): NameStats | null {
   const exact: number[] = [];
   const related: number[] = [];
@@ -237,6 +241,7 @@ export function computeStats(
     longestStreak = Math.max(longestStreak, run);
     longestGapDays = Math.max(longestGapDays, gap - 1);
   }
+  const weeks = new Set(days.map((d) => d - ((dateOfColumn(d).getDay() - weekStart + 7) % 7)));
 
   // Months from the first event on record, not the first of this name, so
   // sparklines for different names line up.
@@ -285,6 +290,7 @@ export function computeStats(
     weekdayCounts,
     longestStreak,
     longestGapDays,
+    perWeekMin: totalMin / weeks.size,
     monthly,
     topTag,
     related: {
