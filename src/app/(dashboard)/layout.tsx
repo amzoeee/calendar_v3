@@ -15,20 +15,17 @@ import { ConfirmProvider } from '@/app/components/ConfirmDialog';
 import { UndoProvider } from '@/app/components/UndoToast';
 import PendingSync from '@/app/components/PendingSync';
 import PendingReview from '@/app/components/PendingReview';
+import ImportActions from '@/app/components/ImportActions';
 import { todayForViewer, getViewerTimeZone } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
 import { dbStringToUtcMillis, dayStrOfInstant, shiftDateStr } from '@/lib/timezone';
 import {
   LogOut,
   Sparkles,
-  Check,
-  Trash2,
   CalendarDays,
   Shield,
 } from 'lucide-react';
 import {
-  approveAllPendingAction,
-  discardAllPendingAction,
   overridePendingDateAction,
   logoutAction,
 } from '@/app/actions';
@@ -139,76 +136,56 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
       </aside>
 
       {/* Main Content Pane */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile top bar (desktop uses the sidebar logo instead) */}
-        <div className="md:hidden h-14 flex items-center justify-between px-4 border-b border-border shrink-0 glass-panel">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-5 w-5 text-foreground" />
-            <span className="font-extrabold text-sm tracking-wider text-foreground">CALENDAR</span>
+      <UndoProvider>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Mobile top bar (desktop uses the sidebar logo instead) */}
+          <div className="md:hidden h-14 flex items-center justify-between px-4 border-b border-border shrink-0 glass-panel">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-foreground" />
+              <span className="font-extrabold text-sm tracking-wider text-foreground">CALENDAR</span>
+            </div>
+            <MobileProfileMenu username={session.username} isAdmin={isAdmin(session.username)} logoutAction={logoutAction} />
           </div>
-          <MobileProfileMenu username={session.username} isAdmin={isAdmin(session.username)} logoutAction={logoutAction} />
+
+          {/* Pending Import Banner */}
+          {pendingCount > 0 && (
+            <div className="bg-amber-950/30 border-b border-amber-500/30 p-4 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0 glass-panel">
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-5 w-5 text-amber-400 animate-pulse" />
+                <p className="text-sm font-medium text-amber-200">
+                  You have <span className="font-bold underline">{pendingCount}</span> pending events staged from log import.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <PendingReview />
+
+                <ImportActions />
+
+                {/* Shift Date */}
+                <form action={overridePendingDateAction} className="flex items-center gap-2">
+                  <DateInput
+                    name="newDate"
+                    required
+                    defaultValue={todayStr}
+                    className="bg-secondary border border-border px-2 py-1 rounded text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 w-32"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold shadow transition cursor-pointer"
+                  >
+                    Shift Date
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Page Content */}
+          <main className="flex-1 overflow-y-auto relative flex flex-col min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+            <ConfirmProvider>{children}</ConfirmProvider>
+          </main>
         </div>
-
-        {/* Pending Import Banner */}
-        {pendingCount > 0 && (
-          <div className="bg-amber-950/30 border-b border-amber-500/30 p-4 flex flex-col md:flex-row items-center justify-between gap-4 shrink-0 glass-panel">
-            <div className="flex items-center gap-3">
-              <Sparkles className="h-5 w-5 text-amber-400 animate-pulse" />
-              <p className="text-sm font-medium text-amber-200">
-                You have <span className="font-bold underline">{pendingCount}</span> pending events staged from log import.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <PendingReview />
-
-              {/* Approve All */}
-              <form action={approveAllPendingAction} className="flex items-center gap-2">
-                <button
-                  type="submit"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold shadow transition cursor-pointer"
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  Approve All
-                </button>
-              </form>
-              
-              {/* Discard All */}
-              <form action={discardAllPendingAction}>
-                <button
-                  type="submit"
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold shadow transition cursor-pointer"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Discard All
-                </button>
-              </form>
-
-              {/* Shift Date */}
-              <form action={overridePendingDateAction} className="flex items-center gap-2">
-                <DateInput
-                  name="newDate"
-                  required
-                  defaultValue={todayStr}
-                  className="bg-secondary border border-border px-2 py-1 rounded text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 w-32"
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold shadow transition cursor-pointer"
-                >
-                  Shift Date
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto relative flex flex-col min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
-          <ConfirmProvider>
-            <UndoProvider>{children}</UndoProvider>
-          </ConfirmProvider>
-        </main>
-      </div>
+      </UndoProvider>
 
       <MobileTabBar todayStr={todayStr} dueCount={dueCount} />
     </div>
