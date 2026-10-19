@@ -70,3 +70,31 @@ export function tagNestingError(
   }
   return null;
 }
+
+/**
+ * Whether an event tagged with a subtag is drawn in the subtag's color or its
+ * parent's. Kept in a cookie, like weekStart, so pages read it on the server.
+ */
+export const SUBTAG_DISPLAY_COOKIE = 'subtagDisplay';
+export type SubtagDisplay = 'child' | 'parent';
+
+export function parseSubtagDisplay(value: string | undefined): SubtagDisplay {
+  return value === 'parent' ? 'parent' : 'child';
+}
+
+interface ColorTag {
+  id: number;
+  name: string;
+  color: string;
+  parentId: number | null;
+}
+
+/** The color an event tagged `name` is drawn in, or undefined for an unknown tag. */
+export function eventTagColor(tags: ColorTag[], name: string | null, display: SubtagDisplay): string | undefined {
+  const tag = tags.find((t) => t.name === name);
+  if (!tag) return undefined;
+  if (display === 'parent' && tag.parentId != null) {
+    return tags.find((t) => t.id === tag.parentId)?.color ?? tag.color;
+  }
+  return tag.color;
+}
