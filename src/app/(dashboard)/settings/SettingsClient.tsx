@@ -26,7 +26,7 @@ import {
   archiveTagAction,
   unarchiveTagAction,
   restoreTagAction,
-  reorderTagsAction,
+  arrangeTagsAction,
   stageLogAction,
   linkDiscordAction,
   unlinkDiscordAction,
@@ -38,6 +38,7 @@ import {
   TAG_SCOPES,
   TAG_SCOPE_BADGES,
   TAG_SCOPE_LABELS,
+  tagTreeOrder,
   type TagScope,
 } from '@/lib/tags';
 import { getBrowserTimeZone } from '@/lib/timezone';
@@ -59,6 +60,53 @@ interface Tag {
   isArchived: number;
   orderIndex: number;
   scope: string;
+  parentId: number | null;
+}
+
+type DropSpot = { id: number; pos: 'before' | 'after' | 'inside' } | { id: 'end' };
+
+/**
+ * The active list after dropping `dragId` at `drop`, as the arrange action
+ * takes it. `rows` is the list in display order; `isNested` says whether a row
+ * shows under a parent. A parent moves with its subtags.
+ */
+function layoutAfterDrop(
+  rows: Tag[],
+  isNested: (t: Tag) => boolean,
+  dragId: number,
+  drop: DropSpot,
+): { id: number; parentId: number | null }[] {
+  const dragged = rows.find((t) => t.id === dragId)!;
+  const group = isNested(dragged)
+    ? [dragged]
+    : [dragged, ...rows.filter((t) => isNested(t) && t.parentId === dragId)];
+  const rest = rows.filter((t) => !group.includes(t));
+  // Index just past a top-level row's subtags.
+  const groupEnd = (rootId: number) => {
+    let i = rest.findIndex((t) => t.id === rootId) + 1;
+    while (i < rest.length && isNested(rest[i]) && rest[i].parentId === rootId) i++;
+    return i;
+  };
+
+  let at = rest.length;
+  let parentId: number | null = null;
+  if (drop.id !== 'end') {
+    const target = rest.find((t) => t.id === drop.id)!;
+    const nested = isNested(target);
+    if (drop.pos === 'inside') {
+      parentId = target.id;
+      at = groupEnd(target.id);
+    } else if (drop.pos === 'before') {
+      parentId = nested ? target.parentId : null;
+      at = rest.indexOf(target);
+    } else {
+      parentId = nested ? target.parentId : null;
+      at = nested ? rest.indexOf(target) + 1 : groupEnd(target.id);
+    }
+  }
+
+  rest.splice(at, 0, ...group);
+  return rest.map((t) => ({ id: t.id, parentId: t.id === dragId ? parentId : t.parentId }));
 }
 
 /**
@@ -191,38 +239,72 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
 
-  const activeTags = tagsList.filter((t) => !t.isArchived);
+  const activeTags = tagTreeOrder(tagsList.filter((t) => !t.isArchived));
   const archivedTags = tagsList.filter((t) => t.isArchived === 1);
+  const activeIds = new Set(activeTags.map((t) => t.id));
+  // A subtag of an archived tag shows as top-level until its parent is back.
+  const isNested = (t: Tag) => t.parentId != null && activeIds.has(t.parentId);
+  const hasSubtags = (id: number) => tagsList.some((t) => t.parentId === id);
+  const activeGroups = activeTags
+    .filter((t) => !isNested(t))
+    .map((root) => ({ root, children: activeTags.filter((t) => isNested(t) && t.parentId === root.id) }));
 
-  // Drag and Drop reordering logic
-  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  // Drag to reorder, or onto the middle of a top-level tag to nest under it.
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [drop, setDrop] = useState<DropSpot | null>(null);
+  const [arrangeError, setArrangeError] = useState('');
+  const dragged = activeTags.find((t) => t.id === dragId);
 
-  const handleDragStart = (index: number) => {
-    setDraggedIdx(index);
-  };
+  const hasVisibleSubtags = (id: number) => activeTags.some((t) => isNested(t) && t.parentId === id);
+  const dropKey = (d: DropSpot | null) => (d ? ('pos' in d ? `${d.id}:${d.pos}` : 'end') : '');
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = (e: React.DragEvent, target: Tag) => {
+    if (!dragged) return;
+    if (target.id === dragged.id || (isNested(target) && target.parentId === dragged.id)) {
+      setDrop(null);
+      return;
+    }
     e.preventDefault();
-    if (draggedIdx === null || draggedIdx === index) return;
-
-    // Rearrange tags list locally
-    const reordered = [...activeTags];
-    const [draggedItem] = reordered.splice(draggedIdx, 1);
-    reordered.splice(index, 0, draggedItem);
-
-    // Reconstruct full tagsList
-    const otherTags = tagsList.filter((t) => t.isArchived === 1);
-    setTagsList([...reordered, ...otherTags]);
-    setDraggedIdx(index);
+    const canNest = !hasSubtags(dragged.id);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = (e.clientY - rect.top) / rect.height;
+    let next: DropSpot;
+    if (isNested(target)) {
+      // A parent can't land among another tag's subtags, so it goes after that group.
+      next = canNest
+        ? { id: target.id, pos: y < 0.5 ? 'before' : 'after' }
+        : { id: target.parentId!, pos: 'after' };
+    } else if (y < 0.25) {
+      next = { id: target.id, pos: 'before' };
+    } else if (canNest && (y < 0.75 || hasVisibleSubtags(target.id))) {
+      next = { id: target.id, pos: 'inside' };
+    } else {
+      next = { id: target.id, pos: y < 0.5 ? 'before' : 'after' };
+    }
+    if (dropKey(next) !== dropKey(drop)) setDrop(next);
   };
 
-  const handleDragEnd = async () => {
-    setDraggedIdx(null);
-    const activeIds = activeTags.map((t) => t.id);
-    try {
-      await reorderTagsAction(activeIds);
-    } catch (e: any) {
-      console.error('Error saving tag order:', e);
+  const handleDragEnd = () => {
+    setDragId(null);
+    setDrop(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragId === null || !drop) return handleDragEnd();
+    const layout = layoutAfterDrop(activeTags, isNested, dragId, drop);
+    handleDragEnd();
+
+    const previous = tagsList;
+    const position = new Map(layout.map((t, i) => [t.id, { orderIndex: i + 1, parentId: t.parentId }]));
+    setTagsList(tagsList.map((t) => ({ ...t, ...position.get(t.id) })));
+    setArrangeError('');
+    const res = await arrangeTagsAction(layout);
+    if (res.error) {
+      setTagsList(previous);
+      setArrangeError(res.error);
+    } else {
+      router.refresh();
     }
   };
 
@@ -303,12 +385,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
       // Still offer the delete, just without the count.
     }
 
+    const subtags = tagsList.filter((t) => t.parentId === tagId).length;
+    const message = [
+      count > 0 && `It’s used by ${count} event${count === 1 ? '' : 's'}, which will become untagged.`,
+      subtags > 0 && `Its ${subtags === 1 ? 'subtag' : `${subtags} subtags`} will become top-level.`,
+    ].filter(Boolean).join(' ');
     const ok = await confirm({
       title: `Delete tag “${name}”?`,
-      message:
-        count > 0
-          ? `It’s used by ${count} event${count === 1 ? '' : 's'}, which will become untagged.`
-          : undefined,
+      message: message || undefined,
       confirmLabel: 'Delete',
       destructive: true,
     });
@@ -424,6 +508,81 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     setTagsList(initialTags);
   }, [initialTags]);
 
+  const renderActiveRow = (tag: Tag) => {
+    const nested = isNested(tag);
+    const spot = drop && 'pos' in drop && drop.id === tag.id ? drop.pos : null;
+    const isDragged = dragged && (tag.id === dragged.id || (nested && tag.parentId === dragged.id));
+    return (
+      <div
+        key={tag.id}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', tag.name);
+          setDragId(tag.id);
+        }}
+        onDragOver={(e) => handleDragOver(e, tag)}
+        onDrop={handleDrop}
+        onDragEnd={handleDragEnd}
+        className={`relative flex items-center justify-between p-3 rounded-lg border cursor-grab active:cursor-grabbing transition-all select-none ${
+          nested ? 'ml-6 lg:ml-8' : ''
+        } ${
+          spot === 'inside'
+            ? 'bg-primary/15 border-primary'
+            : 'bg-secondary/35 border-border/40 hover:bg-secondary/55'
+        } ${isDragged ? 'opacity-50' : ''}`}
+      >
+        {spot === 'before' && (
+          <div className="absolute inset-x-0 -top-1 h-0.5 rounded bg-primary pointer-events-none" />
+        )}
+        {/* A top-level tag's 'after' line is drawn under its whole group. */}
+        {spot === 'after' && nested && (
+          <div className="absolute inset-x-0 -bottom-1 h-0.5 rounded bg-primary pointer-events-none" />
+        )}
+        <div className="flex items-center gap-3 truncate">
+          <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
+          <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }}></span>
+          <span className="text-sm font-semibold truncate text-foreground">{tag.name}</span>
+          {tag.scope !== 'both' && (
+            <span className="shrink-0 px-1.5 py-0.5 rounded bg-secondary border border-border text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {TAG_SCOPE_BADGES[tag.scope as keyof typeof TAG_SCOPE_BADGES]}
+            </span>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
+          <button
+            onClick={() => handleOpenEditModal(tag)}
+            aria-label="Edit tag"
+            title="Edit"
+            className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-foreground cursor-pointer transition flex items-center gap-1"
+          >
+            <Edit2 className="h-3 w-3" />
+            <span className="hidden lg:inline">Edit</span>
+          </button>
+          <button
+            onClick={() => handleArchive(tag.id, tag.name)}
+            aria-label="Archive tag"
+            title="Archive"
+            className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-amber-400 cursor-pointer transition flex items-center gap-1"
+          >
+            <Archive className="h-3 w-3" />
+            <span className="hidden lg:inline">Archive</span>
+          </button>
+          <button
+            onClick={() => handleDeleteTag(tag.id, tag.name)}
+            aria-label="Delete tag"
+            title="Delete"
+            className="p-1.5 lg:px-2 lg:py-1 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 text-xs rounded font-semibold text-red-400 cursor-pointer transition flex items-center gap-1"
+          >
+            <Trash2 className="h-3 w-3" />
+            <span className="hidden lg:inline">Delete</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     // Settings scrolls in its own container rather than letting the layout's
     // <main> scroll, matching every other page. On a phone a viewport-filling
@@ -443,59 +602,35 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
         {/* Active tag list */}
         <div className="space-y-2">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Active Tags</h3>
+          <p className="text-xs text-muted-foreground">
+            Drag to reorder. Drop a tag onto another to make it a subtag.
+          </p>
           <div className="space-y-1.5" id="tag-list">
-            {activeTags.map((tag, idx) => (
-              <div
-                key={tag.id}
-                draggable
-                onDragStart={() => handleDragStart(idx)}
-                onDragOver={(e) => handleDragOver(e, idx)}
-                onDragEnd={handleDragEnd}
-                className="flex items-center justify-between p-3 bg-secondary/35 rounded-lg border border-border/40 cursor-grab active:cursor-grabbing hover:bg-secondary/55 transition-all select-none"
-              >
-                <div className="flex items-center gap-3 truncate">
-                  <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
-                  <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }}></span>
-                  <span className="text-sm font-semibold truncate text-foreground">{tag.name}</span>
-                  {tag.scope !== 'both' && (
-                    <span className="shrink-0 px-1.5 py-0.5 rounded bg-secondary border border-border text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {TAG_SCOPE_BADGES[tag.scope as keyof typeof TAG_SCOPE_BADGES]}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
-                  <button
-                    onClick={() => handleOpenEditModal(tag)}
-                    aria-label="Edit tag"
-                    title="Edit"
-                    className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-foreground cursor-pointer transition flex items-center gap-1"
-                  >
-                    <Edit2 className="h-3 w-3" />
-                    <span className="hidden lg:inline">Edit</span>
-                  </button>
-                  <button
-                    onClick={() => handleArchive(tag.id, tag.name)}
-                    aria-label="Archive tag"
-                    title="Archive"
-                    className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-amber-400 cursor-pointer transition flex items-center gap-1"
-                  >
-                    <Archive className="h-3 w-3" />
-                    <span className="hidden lg:inline">Archive</span>
-                  </button>
-                  <button
-                    onClick={() => handleDeleteTag(tag.id, tag.name)}
-                    aria-label="Delete tag"
-                    title="Delete"
-                    className="p-1.5 lg:px-2 lg:py-1 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 text-xs rounded font-semibold text-red-400 cursor-pointer transition flex items-center gap-1"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    <span className="hidden lg:inline">Delete</span>
-                  </button>
-                </div>
+            {activeGroups.map(({ root, children }) => (
+              <div key={root.id} className="relative space-y-1.5">
+                {renderActiveRow(root)}
+                {children.map((child) => renderActiveRow(child))}
+                {drop && 'pos' in drop && drop.id === root.id && drop.pos === 'after' && (
+                  <div className="absolute inset-x-0 -bottom-1 h-0.5 rounded bg-primary pointer-events-none" />
+                )}
               </div>
             ))}
+            {dragged && (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (drop?.id !== 'end') setDrop({ id: 'end' });
+                }}
+                onDrop={handleDrop}
+                className={`p-3 rounded-lg border border-dashed text-xs text-center transition ${
+                  drop?.id === 'end' ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted-foreground'
+                }`}
+              >
+                Drop here to move to the end as a top-level tag
+              </div>
+            )}
           </div>
+          {arrangeError && <p className="text-xs text-red-400">{arrangeError}</p>}
         </div>
 
         {/* Collapsible Archived Tags */}
