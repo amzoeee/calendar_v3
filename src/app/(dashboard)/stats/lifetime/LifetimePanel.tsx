@@ -46,11 +46,23 @@ function daysAgo(d: Date): string {
   return n === 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`;
 }
 
-function Fact({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Fact({
+  label,
+  value,
+  hint,
+  compact,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  compact?: boolean;
+}) {
   return (
-    <div className="bg-secondary/40 border border-border rounded-lg p-2.5 min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="text-base font-bold text-foreground tabular-nums mt-0.5 truncate">{value}</p>
+    <div className={`bg-secondary/40 border border-border rounded-lg min-w-0 ${compact ? 'px-2.5 py-1.5' : 'p-2.5'}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
+      <p className={`font-bold text-foreground tabular-nums truncate ${compact ? 'text-sm' : 'text-base mt-0.5'}`}>
+        {value}
+      </p>
       {hint && <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{hint}</p>}
     </div>
   );
@@ -286,12 +298,17 @@ export default function LifetimePanel({
               value={formatDuration(data.durations[stats.longestEvent])}
               hint={fmtDate(startOf(data, stats.longestEvent))}
             />
-            <Fact label="First" value={fmtDate(startOf(data, stats.firstEvent))} />
+            {/* Short facts stack beside the two that carry hints. */}
+            <div className="row-span-2 grid grid-rows-3 gap-2 min-w-0">
+              <Fact compact label="First" value={fmtDate(startOf(data, stats.firstEvent))} />
+              <Fact
+                compact
+                label="Usually starts"
+                value={stats.typicalStartMin === null ? 'anytime' : `~${fmtClock(stats.typicalStartMin)}`}
+              />
+              <Fact compact label="Per active week" value={formatDuration(stats.perWeekMin)} />
+            </div>
             <Fact label="Last" value={daysAgo(startOf(data, stats.lastEvent))} hint={fmtDate(startOf(data, stats.lastEvent))} />
-            <Fact
-              label="Usually starts"
-              value={stats.typicalStartMin === null ? 'anytime' : `~${fmtClock(stats.typicalStartMin)}`}
-            />
             <Fact
               label="Busiest day"
               value={WEEKDAYS[busiest]}

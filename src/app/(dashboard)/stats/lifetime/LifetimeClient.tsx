@@ -13,6 +13,7 @@ import {
   type LifetimeEvents,
 } from '@/lib/lifetime';
 import StatsViewSwitch from '@/app/components/StatsViewSwitch';
+import type { WeekStart } from '@/lib/week';
 import LifetimeChart from './LifetimeChart';
 import LifetimePanel from './LifetimePanel';
 import LifetimeSearch from './LifetimeSearch';
@@ -33,6 +34,7 @@ interface LifetimeClientProps {
   data: LifetimeEvents;
   tags: Tag[];
   todayStr: string;
+  weekStart: WeekStart;
 }
 
 const UNTAGGED_COLOR = '#6b7280';
@@ -42,7 +44,7 @@ const MS_PER_MIN = 60_000;
 
 const noopSubscribe = () => () => {};
 
-export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientProps) {
+export default function LifetimeClient({ data, tags, todayStr, weekStart }: LifetimeClientProps) {
   // Columns and times depend on the browser's timezone, so the chart only
   // renders on the client.
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
@@ -143,8 +145,8 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
     [data, titleLevels],
   );
   const stats = useMemo(
-    () => (hydrated && titleLevels ? computeStats(data, index, segments, titleLevels, tagTotalMin) : null),
-    [hydrated, data, index, segments, titleLevels, tagTotalMin],
+    () => (hydrated && titleLevels ? computeStats(data, index, segments, titleLevels, tagTotalMin, weekStart) : null),
+    [hydrated, data, index, segments, titleLevels, tagTotalMin, weekStart],
   );
 
   // Chips only help when the title splits into something other than itself.
