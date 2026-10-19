@@ -50,6 +50,15 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
   const segments = useMemo(() => buildSegments(data), [data]);
   const index = useMemo(() => buildMatchIndex(data), [data]);
   const counts = useMemo(() => index.eventsByTitle.map((es) => es.length), [index]);
+  // Parts found outside a title of their own, so searchable on their own.
+  const searchParts = useMemo(() => {
+    const list: { part: string; count: number }[] = [];
+    index.titlesByPart.forEach((ts, part) => {
+      if (ts.every((t) => index.keys[t] === part)) return;
+      list.push({ part, count: ts.reduce((n, t) => n + index.eventsByTitle[t].length, 0) });
+    });
+    return list;
+  }, [index]);
 
   const tagColors = useMemo(
     () => data.tagNames.map((n) => tags.find((t) => t.name === n)?.color ?? UNTAGGED_COLOR),
@@ -170,6 +179,9 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
       const q = normalizeTitle(focus.q);
       return { label: q, exactIds, relatedIds, renameFrom: q, renameMode: 'substring' };
     }
+    if (focus.kind === 'part') {
+      return { label: focus.part, exactIds, relatedIds, renameFrom: focus.part, renameMode: 'word' };
+    }
     const ps = index.parts[focus.title];
     const from = focus.part ?? (ps.length === 1 ? ps[0] : null);
     return { label: from ?? data.titles[focus.title], exactIds, relatedIds, renameFrom: from, renameMode: 'word' };
@@ -248,6 +260,7 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
               titles={data.titles}
               keys={index.keys}
               counts={counts}
+              parts={searchParts}
               query={query}
               onQuery={(q) => {
                 setQuery(q);
@@ -256,6 +269,10 @@ export default function LifetimeClient({ data, tags, todayStr }: LifetimeClientP
               onPick={(t) => {
                 setQuery(data.titles[t]);
                 setPinned({ kind: 'title', title: t, part: null, event: null });
+              }}
+              onPickPart={(part) => {
+                setQuery(part);
+                setPinned({ kind: 'part', part });
               }}
             />
             <StatsViewSwitch active="lifetime" rangeHref={`/stats/${todayStr}`} />

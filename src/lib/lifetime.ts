@@ -122,7 +122,8 @@ export function buildMatchIndex(data: LifetimeEvents): MatchIndex {
 
 export type Focus =
   | { kind: 'title'; title: number; part: string | null; event: number | null }
-  | { kind: 'query'; q: string };
+  | { kind: 'query'; q: string }
+  | { kind: 'part'; part: string };
 
 export const EXACT = 2;
 export const RELATED = 1;
@@ -152,6 +153,7 @@ export function matchTitles(index: MatchIndex, focus: Focus): Uint8Array {
     }
     return levels;
   }
+  if (focus.kind === 'part') return levels;
 
   markParts(index.parts[focus.title]);
   const sig = index.signatures[focus.title];
