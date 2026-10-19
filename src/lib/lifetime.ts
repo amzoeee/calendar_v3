@@ -124,14 +124,16 @@ export function buildMatchIndex(data: LifetimeEvents): MatchIndex {
 export type Focus =
   | { kind: 'title'; title: number; part: string | null; event: number | null }
   | { kind: 'query'; q: string }
-  | { kind: 'part'; part: string };
+  | { kind: 'part'; part: string }
+  // `members` is the tag plus its subtags.
+  | { kind: 'tag'; tag: number; members: number[] };
 
 export const EXACT = 2;
 export const RELATED = 1;
 
 // Per-title match level: EXACT for the name itself, RELATED for titles that
 // share one of its parts.
-export function matchTitles(index: MatchIndex, focus: Focus): Uint8Array {
+function matchTitles(index: MatchIndex, focus: Exclude<Focus, { kind: 'tag' }>): Uint8Array {
   const levels = new Uint8Array(index.keys.length);
   const markParts = (ps: string[]) => {
     for (const p of ps) for (const t of index.titlesByPart.get(p) ?? []) levels[t] = RELATED;
@@ -167,6 +169,17 @@ export function matchTitles(index: MatchIndex, focus: Focus): Uint8Array {
   return levels;
 }
 
+// Per-event match level. Tags belong to events, not titles, so they can't go
+// through matchTitles.
+export function matchEvents(data: LifetimeEvents, index: MatchIndex, focus: Focus): Uint8Array {
+  if (focus.kind === 'tag') {
+    const members = new Set(focus.members);
+    return Uint8Array.from(data.tagIdx, (g) => (members.has(g) ? EXACT : 0));
+  }
+  const titleLevels = matchTitles(index, focus);
+  return Uint8Array.from(data.titleIdx, (t) => titleLevels[t]);
+}
+
 // ---- Stats ----------------------------------------------------------------
 
 export interface NameStats {
@@ -192,17 +205,16 @@ export interface NameStats {
 
 export function computeStats(
   data: LifetimeEvents,
-  index: MatchIndex,
   segments: Segments,
-  titleLevels: Uint8Array,
+  eventLevels: Uint8Array,
   tagTotalMin: Map<number, number>,
   weekStart: WeekStart,
 ): NameStats | null {
   const exact: number[] = [];
   const related: number[] = [];
-  titleLevels.forEach((lvl, t) => {
-    if (lvl === EXACT) exact.push(...index.eventsByTitle[t]);
-    else if (lvl === RELATED) related.push(...index.eventsByTitle[t]);
+  eventLevels.forEach((lvl, e) => {
+    if (lvl === EXACT) exact.push(e);
+    else if (lvl === RELATED) related.push(e);
   });
   // A substring search can match only combined titles; describe those then.
   const basis = exact.length > 0 ? exact : related;
