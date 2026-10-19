@@ -202,6 +202,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
   const [editTagName, setEditTagName] = useState('');
   const [editTagColor, setEditTagColor] = useState('');
   const [editTagScope, setEditTagScope] = useState<TagScope>('both');
+  const [editTagParent, setEditTagParent] = useState<number | null>(null);
   const [editTagError, setEditTagError] = useState('');
 
   // --- Import/Export States ---
@@ -330,6 +331,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     setEditTagName(tag.name);
     setEditTagColor(tag.color);
     setEditTagScope((tag.scope as TagScope) ?? 'both');
+    setEditTagParent(tag.parentId);
     setEditTagError('');
     setShowEditModal(true);
   };
@@ -339,7 +341,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     if (!editingTag) return;
     setEditTagError('');
     try {
-      await updateTagAction(editingTag.id, editTagName, editTagColor, editTagScope);
+      await updateTagAction(editingTag.id, editTagName, editTagColor, editTagScope, editTagParent);
       setShowEditModal(false);
       setEditingTag(null);
       router.refresh();
@@ -1133,6 +1135,35 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                   Keeps the tag out of the other picker. Anything already tagged with it stays
                   tagged.
                 </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="edit-tag-parent">
+                  Subtag of
+                </label>
+                <Select<number>
+                  id="edit-tag-parent"
+                  value={editTagParent ?? 0}
+                  onChange={(v) => setEditTagParent(v || null)}
+                  disabled={hasSubtags(editingTag.id)}
+                  className="mt-1 w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                  options={[
+                    { value: 0, label: 'None (top-level)' },
+                    ...tagTreeOrder(tagsList)
+                      .filter(
+                        (t) =>
+                          t.id !== editingTag.id &&
+                          t.parentId == null &&
+                          (!t.isArchived || t.id === editingTag.parentId),
+                      )
+                      .map((t) => ({ value: t.id, label: t.isArchived ? `${t.name} (archived)` : t.name })),
+                  ]}
+                />
+                {hasSubtags(editingTag.id) && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    This tag has subtags, so it can’t be nested itself.
+                  </p>
+                )}
               </div>
 
               {editTagError && <p className="text-xs text-red-400 mt-1">{editTagError}</p>}
