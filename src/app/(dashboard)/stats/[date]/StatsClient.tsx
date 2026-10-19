@@ -14,6 +14,7 @@ interface Tag {
   name: string;
   color: string;
   isArchived: number;
+  parentId: number | null;
 }
 
 // The window the page is showing: `date` route param + `end` search param.
@@ -225,6 +226,27 @@ export default function StatsClient({
     const totalHours = visibleDays.reduce((sum, d) => sum + (d.hours[tag] || 0), 0);
     tagAverages[tag] = activeDaysWithData > 0 ? totalHours / activeDaysWithData : 0;
   });
+
+  // Subtags list under their parent, with a total line for the group.
+  const parentName = (name: string) => {
+    const parentId = tags.find((t) => t.name === name)?.parentId;
+    return parentId == null ? undefined : tags.find((t) => t.id === parentId)?.name;
+  };
+  const averageGroups = Object.values(
+    allTags.reduce<Record<string, { root: string; members: string[]; total: number }>>((acc, tag) => {
+      const root = parentName(tag) ?? tag;
+      const group = (acc[root] ??= { root, members: [], total: 0 });
+      group.members.push(tag);
+      group.total += tagAverages[tag] || 0;
+      return acc;
+    }, {}),
+  )
+    .map((g) => ({
+      ...g,
+      hasSubtags: g.members.some((m) => m !== g.root),
+      members: g.members.sort((a, b) => (tagAverages[b] || 0) - (tagAverages[a] || 0)),
+    }))
+    .sort((a, b) => b.total - a.total);
 
   // ---- Task completions ------------------------------------------------
   //
@@ -672,26 +694,38 @@ export default function StatsClient({
           </div>
 
           <div className="space-y-3">
-            {allTags.length > 0 ? (
-              allTags
-                .map((tag) => ({
-                  name: tag,
-                  color: getTagColor(tag),
-                  average: tagAverages[tag] || 0,
-                }))
-                // Sort by average descending
-                .sort((a, b) => b.average - a.average)
-                .map((tag) => (
-                  <div key={tag.name} className="flex items-center justify-between p-3 bg-secondary/35 rounded-lg border border-border/40">
-                    <div className="flex items-center gap-3 truncate">
-                      <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }}></span>
-                      <span className="text-sm font-semibold truncate text-foreground">{tag.name}</span>
+            {averageGroups.length > 0 ? (
+              averageGroups.map((group) => (
+                <div key={group.root} className="space-y-1.5">
+                  {group.hasSubtags && (
+                    <div className="flex items-center justify-between p-3 bg-secondary/60 rounded-lg border border-border">
+                      <div className="flex items-center gap-3 truncate">
+                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTagColor(group.root) }}></span>
+                        <span className="text-sm font-bold truncate text-foreground">{group.root} (total)</span>
+                      </div>
+                      <span className="text-sm font-extrabold text-primary shrink-0">
+                        {group.total.toFixed(1)}h / day
+                      </span>
                     </div>
-                    <span className="text-sm font-extrabold text-primary">
-                      {tag.average.toFixed(1)}h / day
-                    </span>
-                  </div>
-                ))
+                  )}
+                  {group.members.map((name) => (
+                    <div
+                      key={name}
+                      className={`flex items-center justify-between p-3 bg-secondary/35 rounded-lg border border-border/40 ${
+                        group.hasSubtags ? 'ml-6' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 truncate">
+                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTagColor(name) }}></span>
+                        <span className="text-sm font-semibold truncate text-foreground">{name}</span>
+                      </div>
+                      <span className="text-sm font-extrabold text-primary shrink-0">
+                        {(tagAverages[name] || 0).toFixed(1)}h / day
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))
             ) : (
               <div className="text-center py-12 border border-dashed border-border rounded-lg">
                 <p className="text-sm text-muted-foreground">No events logged in this range.</p>

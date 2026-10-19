@@ -25,3 +25,48 @@ export function isTagScope(value: string): value is TagScope {
 export function scopeAllows(scope: string, kind: 'event' | 'task'): boolean {
   return scope === 'both' || scope === kind;
 }
+
+interface TreeTag {
+  id: number;
+  orderIndex: number;
+  parentId: number | null;
+}
+
+/**
+ * Parents in orderIndex order, each followed by its own subtags. A subtag whose
+ * parent is missing from `tags` is placed as a top-level tag.
+ */
+export function tagTreeOrder<T extends TreeTag>(tags: T[]): T[] {
+  const ids = new Set(tags.map((t) => t.id));
+  const byOrder = [...tags].sort((a, b) => a.orderIndex - b.orderIndex || a.id - b.id);
+  const isRoot = (t: T) => t.parentId == null || !ids.has(t.parentId);
+  const out: T[] = [];
+  for (const root of byOrder.filter(isRoot)) {
+    out.push(root, ...byOrder.filter((t) => !isRoot(t) && t.parentId === root.id));
+  }
+  return out;
+}
+
+/**
+ * Why `parents` (tag id → parent id, for every tag the user has) breaks the
+ * one-level rule, or null when it doesn't.
+ */
+export function tagNestingError(
+  parents: Map<number, number | null>,
+  nameOf: (id: number) => string,
+): string | null {
+  for (const [id, parentId] of parents) {
+    if (parentId == null) continue;
+    if (parentId === id) return `“${nameOf(id)}” can’t be its own subtag`;
+    if (!parents.has(parentId)) return 'Parent tag not found';
+    if (parents.get(parentId) != null) {
+      return `“${nameOf(parentId)}” is already a subtag, so it can’t have subtags`;
+    }
+    for (const [childId, childParent] of parents) {
+      if (childParent === id) {
+        return `“${nameOf(id)}” has subtags (“${nameOf(childId)}”), so it can’t be a subtag`;
+      }
+    }
+  }
+  return null;
+}

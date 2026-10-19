@@ -18,6 +18,9 @@ export const tags = sqliteTable('tags', {
   // Which pickers this tag appears in: event | task | both. Existing tags
   // default to 'both' so nothing disappears when tasks arrive.
   scope: text('scope').notNull().default('both'),
+  // Subtags: one level only — a tag with a parent can't have children. Enforced
+  // in actions (assertTagNesting), not the schema, like tasks.parentId.
+  parentId: integer('parent_id'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 }, (t) => ({
   nameUserUnique: unique().on(t.name, t.userId),
