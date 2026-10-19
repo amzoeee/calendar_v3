@@ -1,294 +1,460 @@
 'use client';
 
-import React, { useRef } from 'react';
-import { flushSync } from 'react-dom';
+import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal, flushSync } from 'react-dom';
+import { X } from 'lucide-react';
+import { parseWeekStart, WEEK_START_COOKIE } from '@/lib/week';
+import CalendarMonth from './CalendarMonth';
 
 /**
- * A native date input that accepts a date with the year left blank: leave the
- * year showing `----`, press Enter, and it fills in the current year.
+ * Replacement for `<input type="date">`. Value is 'YYYY-MM-DD' or ''.
  *
- * The browser gives us nothing to read here — `value` is '' until every
- * segment is filled, and there's no API for the half-typed one — so the month
- * and day come from two places:
+ * Typing works like TimeInput: parts follow the locale's order, a digit that
+ * can't start a two-digit number moves on, ← → move between parts, ↑ ↓ step,
+ * Backspace clears. Leave the year blank and press Enter (or leave the field)
+ * to get the current year.
  *
- *  - the digits, followed as they're typed — but only when we know which
- *    segment typing began in, since a click can start it anywhere; and
- *  - the last complete date the field itself held, which is what's still on
- *    screen when only the year has been cleared.
+ * Clicking opens a month calendar under the field (Alt+↓ from the keyboard).
+ * On touch screens the keyboard stays down and a calendar sheet opens instead,
+ * like the native picker.
  *
- * The second is what makes this work on a pre-filled field, where clearing the
- * year is how you get to `09/07/----` in the first place. It's only trusted
- * while nothing has been typed since — once digits land in a segment we can't
- * identify, we'd rather fill nothing than fill the wrong thing.
+ * Controlled with `value`/`onChange`, or uncontrolled with `defaultValue` and
+ * `name` for plain form posts.
  */
 
-type Segment = 'year' | 'month' | 'day';
+type Field = 'month' | 'day' | 'year';
 
-interface MonthDay {
-  month: number;
-  day: number;
-}
-
-/** Segment layout follows the locale: en-US shows MM/DD/YYYY, much of Europe DD/MM/YYYY. */
-function segmentOrder(): Segment[] {
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-    .formatToParts(new Date())
-    .map((p) => p.type)
-    .filter((t): t is Segment => t === 'year' || t === 'month' || t === 'day');
-}
-
-/**
- * The smallest first digit that leaves no room for a second one, so the
- * browser moves to the next segment: "9" can only be September, while "1"
- * waits to see whether it's January or December.
- */
-const ADVANCES_ON: Record<Segment, number> = { month: 2, day: 4, year: Infinity };
-
-interface Entry {
-  index: number;
-  digits: string;
+interface Parts {
   month: number | null;
   day: number | null;
-  /** Set once a digit lands in the year, so a half-typed year isn't overwritten. */
-  yearTouched: boolean;
-  /** Any digit typed since the field last held a complete date. */
-  typed: boolean;
-  /** Whether `index` is trustworthy — false after a click into the middle of the field. */
-  indexKnown: boolean;
-  /** A key changed a segment to something we can't read — stop guessing. */
-  blind: boolean;
+  year: number | null;
 }
 
-const emptyEntry = (): Entry => ({
-  index: 0,
-  digits: '',
-  month: null,
-  day: null,
-  yearTouched: false,
-  typed: false,
-  indexKnown: true,
-  blind: false,
-});
-
-const pad = (n: number) => String(n).padStart(2, '0');
-
-/** A real calendar date — rejects the 02/30s that pass a range check. */
-function isRealDate(year: number, month: number, day: number): boolean {
-  const d = new Date(year, month - 1, day);
-  return d.getMonth() === month - 1 && d.getDate() === day;
+interface Props
+  extends Omit<React.ComponentPropsWithoutRef<'input'>, 'value' | 'onChange' | 'type' | 'defaultValue'> {
+  value?: string;
+  defaultValue?: string;
+  onChange?: (value: string) => void;
 }
 
-/**
- * Whether a click landed in the field's first segment, which is the only way
- * to know where typing is about to start. Measured against the input's own
- * font: a click past the first separator could be any segment, and guessing
- * would mean filling in a date the field never showed.
- *
- * The browser pads each segment's box a little, so this underestimates the
- * first one — erring towards "don't know", which only costs the fill.
- */
-let measureCtx: CanvasRenderingContext2D | null = null;
+const LENGTH: Record<Field, number> = { month: 2, day: 2, year: 4 };
+const PLACEHOLDER: Record<Field, string> = { month: 'mm', day: 'dd', year: 'yyyy' };
+const EMPTY: Parts = { month: null, day: null, year: null };
 
-function clickedFirstSegment(el: HTMLInputElement, clientX: number): boolean {
-  const ctx = (measureCtx ??= document.createElement('canvas').getContext('2d'));
-  if (!ctx) return false;
+const pad = (n: number, len = 2) => String(n).padStart(len, '0');
+const daysIn = (year: number | null, month: number | null) =>
+  month === null ? 31 : new Date(year ?? 2000, month, 0).getDate();
 
-  const style = getComputedStyle(el);
-  const rect = el.getBoundingClientRect();
-  const inset =
-    parseFloat(style.paddingLeft || '0') + parseFloat(style.borderLeftWidth || '0');
-  const x = clientX - rect.left - inset;
-  if (x < 0) return false;
-
-  ctx.font = style.font || `${style.fontSize} ${style.fontFamily}`;
-  return x <= ctx.measureText('00').width + ctx.measureText('/').width / 2;
+const DEFAULT_LAYOUT = { order: ['month', 'day', 'year'] as Field[], sep: '/' };
+let layoutCache: typeof DEFAULT_LAYOUT | null = null;
+/** Part order and separator follow the locale: en-US is MM/DD/YYYY, en-GB DD/MM/YYYY. */
+function localeLayout() {
+  if (layoutCache) return layoutCache;
+  const parts = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(new Date(2000, 0, 2));
+  const order = parts.map((p) => p.type).filter((t): t is Field => t === 'year' || t === 'month' || t === 'day');
+  const sep = parts.find((p) => p.type === 'literal')?.value.trim().charAt(0) || '/';
+  layoutCache = order.length === 3 ? { order, sep } : DEFAULT_LAYOUT;
+  return layoutCache;
 }
 
-/** Roughly where the browser draws the calendar button, at the trailing edge. */
-const PICKER_BUTTON_WIDTH = 28;
+const subscribeNever = () => () => {};
+const COARSE = '(pointer: coarse)';
+const subscribeCoarse = (cb: () => void) => {
+  const mq = window.matchMedia(COARSE);
+  mq.addEventListener('change', cb);
+  return () => mq.removeEventListener('change', cb);
+};
 
-function clickedPickerButton(el: HTMLInputElement, clientX: number): boolean {
-  const style = getComputedStyle(el);
-  const rect = el.getBoundingClientRect();
-  const inset =
-    parseFloat(style.paddingRight || '0') + parseFloat(style.borderRightWidth || '0');
-  return clientX >= rect.right - inset - PICKER_BUTTON_WIDTH;
+function fromValue(value: string): Parts {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return EMPTY;
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
 }
 
-function monthDayOf(value: string): MonthDay | null {
-  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(value);
-  return match ? { month: Number(match[1]), day: Number(match[2]) } : null;
+/** Null while incomplete; '' once every part is cleared. */
+function toValue(p: Parts): string | null {
+  if (p.month === null && p.day === null && p.year === null) return '';
+  if (p.month === null || p.day === null || p.year === null) return null;
+  return `${pad(p.year, 4)}-${pad(p.month)}-${pad(p.day)}`;
 }
 
-/**
- * Write a value the way a keystroke would. React installs its own setter on
- * the node to track changes, so assigning `el.value` leaves it believing
- * nothing happened and `onChange` never fires — the prototype's setter is the
- * one that goes through.
- */
-function setNativeValue(el: HTMLInputElement, value: string) {
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(el, value);
-  el.dispatchEvent(new Event('input', { bubbles: true }));
+function readWeekStart() {
+  return parseWeekStart(new RegExp(`(?:^|; )${WEEK_START_COOKIE}=(\\d)`).exec(document.cookie)?.[1]);
 }
 
-export default function DateInput(props: React.ComponentPropsWithoutRef<'input'>) {
-  const { onKeyDown, onFocus, onMouseDown, ...rest } = props;
-  const entry = useRef<Entry>(emptyEntry());
-  const lastComplete = useRef<MonthDay | null>(null);
-  // Where the click that is about to focus the field landed. Null when focus
-  // arrives some other way — tab or script, which both start at the first
-  // segment.
-  const pendingIndexKnown = useRef<boolean | null>(null);
+export default function DateInput({
+  value: valueProp,
+  defaultValue,
+  onChange,
+  onBlur,
+  onFocus,
+  onKeyDown,
+  className,
+  name,
+  ...rest
+}: Props) {
+  const { order, sep } = useSyncExternalStore(subscribeNever, localeLayout, () => DEFAULT_LAYOUT);
+  const coarse = useSyncExternalStore(subscribeCoarse, () => window.matchMedia(COARSE).matches, () => false);
 
-  const order = useRef<Segment[] | null>(null);
-  const getOrder = () => (order.current ??= segmentOrder());
+  const [inner, setInner] = useState(defaultValue ?? '');
+  const value = valueProp ?? inner;
+  const commit = (v: string) => {
+    if (valueProp === undefined) setInner(v);
+    onChange?.(v);
+  };
 
-  /** Feed one digit through the same segment-advancing rules the field itself uses. */
-  const takeDigit = (digit: string) => {
-    const state = entry.current;
-    state.typed = true;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [parts, setParts] = useState<Parts>(() => fromValue(value));
+  const [active, setActive] = useState(0);
+  const [buffer, setBuffer] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
 
-    const segment = state.indexKnown ? getOrder()[state.index] : undefined;
-    if (!segment) return;
-    if (segment === 'year') {
-      state.yearTouched = true;
+  // Follow the value when it changes to something other than what's on screen.
+  const [prev, setPrev] = useState(value);
+  if (prev !== value) {
+    setPrev(value);
+    if (toValue(parts) !== value) {
+      setParts(fromValue(value));
+      setBuffer('');
+    }
+  }
+
+  const field = order[active];
+  const last = order.length - 1;
+
+  const emit = (next: Parts) => {
+    // An out-of-range day (Feb 30) snaps to the month's last day.
+    if (next.day !== null && next.month !== null && next.day > daysIn(next.year, next.month)) {
+      next = { ...next, day: daysIn(next.year, next.month) };
+    }
+    setParts(next);
+    const v = toValue(next);
+    if (v !== null && v !== value) commit(v);
+  };
+
+  /** Writes a half-typed part if it's valid on its own; drops it otherwise. */
+  const flush = (p: Parts = parts): Parts => {
+    if (!buffer) return p;
+    const n = Number(buffer);
+    setBuffer('');
+    if (field === 'year') {
+      if (buffer.length === 4) return { ...p, year: n };
+      if (buffer.length <= 2) return { ...p, year: 2000 + n };
+      return p;
+    }
+    if (n >= 1 && n <= (field === 'month' ? 12 : 31)) return { ...p, [field]: n };
+    return p;
+  };
+
+  /** Month and day without a year mean this year. */
+  const withYear = (p: Parts): Parts =>
+    p.month !== null && p.day !== null && p.year === null ? { ...p, year: new Date().getFullYear() } : p;
+
+  const move = (to: number) => {
+    emit(flush());
+    setActive(Math.max(0, Math.min(last, to)));
+  };
+
+  const typeDigit = (d: number) => {
+    if (field === 'year') {
+      const next = buffer + d;
+      if (next.length < 4) return setBuffer(next);
+      setBuffer('');
+      emit({ ...parts, year: Number(next) });
+      if (active < last) setActive(active + 1);
       return;
     }
-
-    state.digits += digit;
-    const value = Number(state.digits);
-    if (state.digits.length < 2 && value < ADVANCES_ON[segment]) return;
-
-    if (segment === 'month') state.month = value;
-    else state.day = value;
-    state.index += 1;
-    state.digits = '';
-  };
-
-  /** Commit whatever is half-typed and move on, the way `/` or → does in the field. */
-  const nextSegment = () => {
-    const state = entry.current;
-    if (state.digits !== '') {
-      const segment = getOrder()[state.index];
-      const value = Number(state.digits);
-      if (segment === 'month') state.month = value;
-      if (segment === 'day') state.day = value;
-      state.digits = '';
-    }
-    state.index = Math.min(state.index + 1, getOrder().length - 1);
-  };
-
-  /** Forget the segment the caret is on — it's about to be blank on screen too. */
-  const clearSegment = () => {
-    const state = entry.current;
-    const segment = getOrder()[state.index];
-    state.digits = '';
-    if (segment === 'month') state.month = null;
-    if (segment === 'day') state.day = null;
-    if (segment === 'year') state.yearTouched = false;
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const el = e.currentTarget;
-
-    // A complete date on screen beats anything inferred: remember it and start
-    // the digit tracking over from it.
-    if (el.value !== '') {
-      lastComplete.current = monthDayOf(el.value);
-      entry.current = emptyEntry();
-    }
-    const state = entry.current;
-
-    if (e.key === 'Enter') {
-      if (el.value === '' && !state.blind) {
-        const typedParts =
-          state.indexKnown && state.month != null && state.day != null && !state.yearTouched
-            ? { month: state.month, day: state.day }
-            : null;
-        // Nothing typed since the field went incomplete, so what it showed
-        // before is still on screen apart from the segment that was cleared.
-        const remembered = state.typed ? null : lastComplete.current;
-        const parts = typedParts ?? remembered;
-        const year = new Date().getFullYear();
-
-        if (parts && isRealDate(year, parts.month, parts.day)) {
-          // Flushed synchronously: a consumer's own Enter handler runs right
-          // after this one and often reads the value back (commit on blur), so
-          // it has to see the date we just wrote rather than the empty field.
-          const filled = `${year}-${pad(parts.month)}-${pad(parts.day)}`;
-          flushSync(() => setNativeValue(el, filled));
-          lastComplete.current = parts;
-          entry.current = emptyEntry();
-        }
-      }
-    } else if (/^\d$/.test(e.key)) {
-      takeDigit(e.key);
-    } else if (['/', '-', '.', ' ', 'ArrowRight'].includes(e.key)) {
-      nextSegment();
-    } else if (e.key === 'ArrowLeft') {
-      state.digits = '';
-      state.index = Math.max(state.index - 1, 0);
-    } else if (e.key === 'Backspace' || e.key === 'Delete') {
-      clearSegment();
-    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      // These set the segment to something we never see. Anything we'd fill in
-      // from here would be a guess.
-      state.blind = true;
-    }
-
-    onKeyDown?.(e);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLInputElement>) => {
-    const el = e.currentTarget;
-
-    // An empty field is about to be typed from the start, so put the caret
-    // there rather than wherever the click landed — otherwise the digits we
-    // follow don't line up with the segments they go into, and we'd have to
-    // sit the fill out. Clicks on the calendar button open the picker as
-    // usual, and a field that already has a date is left alone: clicking a
-    // segment to correct it is the whole point of clicking there.
-    if (
-      el.value === '' &&
-      document.activeElement !== el &&
-      !clickedPickerButton(el, e.clientX)
-    ) {
-      e.preventDefault();
-      el.focus();
-      onMouseDown?.(e);
+    const max = field === 'month' ? 12 : 31;
+    const next = Number(buffer + d);
+    if (buffer && next >= 1 && next <= max) {
+      setBuffer('');
+      emit({ ...parts, [field]: next });
+      if (active < last) setActive(active + 1);
       return;
     }
-
-    const known = clickedFirstSegment(el, e.clientX);
-    if (document.activeElement === el) {
-      // Moving the caret inside a field that's already focused fires no focus
-      // event, so the reset has to happen here.
-      entry.current = emptyEntry();
-      entry.current.indexKnown = known;
-      lastComplete.current = monthDayOf(el.value) ?? lastComplete.current;
+    // A fresh first digit: nothing typed yet, or the two don't make a valid number.
+    if (d * 10 > max) {
+      setBuffer('');
+      if (d >= 1) emit({ ...parts, [field]: d });
+      if (active < last) setActive(active + 1);
     } else {
-      pendingIndexKnown.current = known;
+      setBuffer(String(d));
     }
-    onMouseDown?.(e);
   };
+
+  const step = (dir: 1 | -1) => {
+    const p = flush();
+    const today = new Date();
+    if (field === 'month') {
+      emit({ ...p, month: p.month === null ? today.getMonth() + 1 : ((p.month - 1 + dir + 12) % 12) + 1 });
+    } else if (field === 'day') {
+      const dim = daysIn(p.year, p.month);
+      emit({ ...p, day: p.day === null ? today.getDate() : ((p.day - 1 + dir + dim) % dim) + 1 });
+    } else {
+      emit({ ...p, year: (p.year ?? today.getFullYear()) + (p.year === null ? 0 : dir) });
+    }
+  };
+
+  const clear = () => {
+    if (buffer) return setBuffer('');
+    if (parts[field] === null) {
+      if (active > 0) setActive(active - 1);
+      return;
+    }
+    emit({ ...parts, [field]: null });
+  };
+
+  const paste = (text: string) => {
+    const iso = /^\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*$/.exec(text);
+    const nums = iso ? [iso[2], iso[3], iso[1]] : text.match(/\d+/g);
+    if (!nums || nums.length < 2) return;
+    const byField = iso
+      ? { month: Number(nums[0]), day: Number(nums[1]), year: Number(nums[2]) }
+      : Object.fromEntries(order.map((f, i) => [f, nums[i] === undefined ? null : Number(nums[i])]));
+    const p = { ...EMPTY, ...byField } as Parts;
+    if (p.year !== null && p.year < 100) p.year += 2000;
+    if (!p.month || p.month > 12 || !p.day || p.day > 31) return;
+    setBuffer('');
+    emit(withYear(p));
+  };
+
+  // Every edit goes through here; the DOM value is never edited directly.
+  const handlers = useRef({ typeDigit, move, clear, paste, active });
+  useLayoutEffect(() => {
+    handlers.current = { typeDigit, move, clear, paste, active };
+  });
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const onBeforeInput = (e: InputEvent) => {
+      e.preventDefault();
+      const h = handlers.current;
+      if (e.inputType.startsWith('delete')) return h.clear();
+      const data = e.data ?? e.dataTransfer?.getData('text') ?? '';
+      if (e.inputType === 'insertFromPaste' || data.length > 1) return h.paste(data);
+      if (/\d/.test(data)) h.typeDigit(Number(data));
+      else if (/[/.\-\s]/.test(data)) h.move(h.active + 1);
+    };
+    el.addEventListener('beforeinput', onBeforeInput);
+    return () => el.removeEventListener('beforeinput', onBeforeInput);
+  }, []);
+
+  // ---- Display ---------------------------------------------------------
+
+  const segText = (f: Field) => {
+    if (f === field && buffer) return buffer.padStart(LENGTH[f], '0');
+    const n = parts[f];
+    return n === null ? PLACEHOLDER[f] : pad(n, LENGTH[f]);
+  };
+  const empty = parts.month === null && parts.day === null && parts.year === null && !buffer;
+  const display = empty ? '' : order.map(segText).join(sep);
+  const starts = order.map((_, i) => order.slice(0, i).reduce((sum, f) => sum + LENGTH[f] + 1, 0));
+  const segAt = (pos: number) => {
+    const i = starts.findIndex((s, j) => pos <= s + LENGTH[order[j]]);
+    return i === -1 ? last : i;
+  };
+
+  // Keep the active part highlighted, as a native date input does.
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el || !focused || coarse || document.activeElement !== el || !display) return;
+    el.setSelectionRange(starts[active], starts[active] + LENGTH[order[active]]);
+  });
+
+  // ---- Picker ----------------------------------------------------------
+
+  const openPicker = () => {
+    if (rest.disabled) return;
+    setAnchor(inputRef.current?.getBoundingClientRect() ?? null);
+    setOpen(true);
+  };
+
+  const pick = (dateStr: string) => {
+    setBuffer('');
+    emit(fromValue(dateStr));
+    setOpen(false);
+    if (coarse) inputRef.current?.blur();
+    else inputRef.current?.focus();
+  };
+
+  // Close the desktop popover on outside clicks. Its own mousedowns are
+  // stopped below, so this only ever sees clicks elsewhere.
+  useEffect(() => {
+    if (!open || coarse) return;
+    const onDown = (e: MouseEvent) => {
+      if (e.target !== inputRef.current) setOpen(false);
+    };
+    const onScroll = () => setAnchor(inputRef.current?.getBoundingClientRect() ?? null);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('resize', onScroll);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, coarse]);
+
+  // Clicks inside the picker shouldn't count as outside clicks for whatever
+  // popup this field lives in, nor (on desktop) take focus from the field.
+  const pickerRefCallback = (el: HTMLDivElement | null) => {
+    popoverRef.current = el;
+    if (!el || el.dataset.bound) return;
+    el.dataset.bound = '1';
+    el.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      if (!coarse && !(e.target as Element).closest('[data-month]')) e.preventDefault();
+    });
+  };
+
+  const required = rest.required;
+  const weekStart = open ? readWeekStart() : undefined;
+  const selected = toValue(parts) || null;
+
+  const popover =
+    open && !coarse && anchor
+      ? createPortal(
+          <div
+            ref={pickerRefCallback}
+            style={{
+              position: 'fixed',
+              left: Math.max(8, Math.min(anchor.left, window.innerWidth - 248)),
+              ...(window.innerHeight - anchor.bottom < 300
+                ? { bottom: window.innerHeight - anchor.top + 4 }
+                : { top: anchor.bottom + 4 }),
+            }}
+            className="w-60 z-[100] bg-card border border-border rounded-lg shadow-2xl p-3"
+            onFocus={() => setFocused(true)}
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget) && e.relatedTarget !== inputRef.current) setOpen(false);
+            }}
+          >
+            <CalendarMonth selected={selected} onSelect={pick} weekStart={weekStart} />
+          </div>,
+          document.body
+        )
+      : null;
+
+  const sheet =
+    open && coarse
+      ? createPortal(
+          <div ref={pickerRefCallback} className="fixed inset-0 z-[100] flex items-end md:items-center md:justify-center">
+            <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={rest['aria-label'] ?? 'Pick a date'}
+              className="relative w-full md:w-96 bg-card border-t md:border border-border rounded-t-2xl md:rounded-2xl p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4"
+            >
+              <div className="w-9 h-1 rounded-full bg-muted mx-auto md:hidden" />
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold tracking-tight">{rest['aria-label'] ?? 'Pick a date'}</h2>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div>
+                <CalendarMonth selected={selected} onSelect={pick} weekStart={weekStart} size="lg" />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => pick(new Date().toLocaleDateString('en-CA'))}
+                  className="flex-1 px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold cursor-pointer"
+                >
+                  Today
+                </button>
+                {!required && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBuffer('');
+                      emit(EMPTY);
+                      setOpen(false);
+                    }}
+                    className="flex-1 px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
-    <input
-      {...rest}
-      type="date"
-      onMouseDown={handleMouseDown}
-      onFocus={(e) => {
-        entry.current = emptyEntry();
-        entry.current.indexKnown = pendingIndexKnown.current ?? true;
-        pendingIndexKnown.current = null;
-        lastComplete.current = monthDayOf(e.currentTarget.value);
-        onFocus?.(e);
-      }}
-      onKeyDown={handleKeyDown}
-    />
+    <>
+      <input
+        {...rest}
+        ref={inputRef}
+        type="text"
+        // Touch screens get the calendar sheet rather than a keyboard.
+        inputMode={coarse ? 'none' : 'numeric'}
+        autoComplete="off"
+        spellCheck={false}
+        placeholder={order.map((f) => PLACEHOLDER[f]).join(sep)}
+        value={display}
+        onChange={() => {}}
+        className={`tabular-nums ${className ?? ''}`}
+        onFocus={(e) => {
+          setFocused(true);
+          if (!open) setActive(0);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          if (popoverRef.current?.contains(e.relatedTarget)) return;
+          if (!coarse) setOpen(false);
+          const p = withYear(flush());
+          if (toValue(p) === null) setParts(fromValue(value));
+          else emit(p);
+          onBlur?.(e);
+        }}
+        onClick={() => {
+          if (coarse || !open) openPicker();
+        }}
+        onMouseUp={(e) => {
+          if (coarse) return;
+          const seg = segAt(e.currentTarget.selectionStart ?? 0);
+          if (seg !== active) move(seg);
+          else if (display) e.currentTarget.setSelectionRange(starts[seg], starts[seg] + LENGTH[order[seg]]);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' && e.altKey) {
+            e.preventDefault();
+            openPicker();
+          } else if (e.key === 'Escape' && open) {
+            setOpen(false);
+          } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            move(active + (e.key === 'ArrowRight' ? 1 : -1));
+          } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            step(e.key === 'ArrowUp' ? 1 : -1);
+          } else if (e.key === 'Enter') {
+            // Flushed so a consumer's own Enter handler reads the filled-in date.
+            const p = withYear(flush());
+            flushSync(() => emit(p));
+            setOpen(false);
+          }
+          onKeyDown?.(e);
+        }}
+      />
+      {popover}
+      {sheet}
+      {name && <input type="hidden" name={name} value={value} />}
+    </>
   );
 }

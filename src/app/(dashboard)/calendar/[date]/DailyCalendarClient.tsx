@@ -616,7 +616,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
           <DateInput
             required
             value={formStartDate}
-            onChange={(e) => setFormStartDate(e.target.value)}
+            onChange={setFormStartDate}
             className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
           />
           <TimeInput
@@ -635,7 +635,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
           <DateInput
             required
             value={formEndDate}
-            onChange={(e) => setFormEndDate(e.target.value)}
+            onChange={setFormEndDate}
             className="block w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent"
           />
           <TimeInput
@@ -991,7 +991,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               <div className="mt-1 grid grid-cols-2 gap-1">
                 <DateInput
                   value={editStartDate}
-                  onChange={(e) => setEditStartDate(e.target.value)}
+                  onChange={setEditStartDate}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
                 <TimeInput
@@ -1006,7 +1006,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
               <div className="mt-1 grid grid-cols-2 gap-1">
                 <DateInput
                   value={editEndDate}
-                  onChange={(e) => setEditEndDate(e.target.value)}
+                  onChange={setEditEndDate}
                   className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
                 />
                 <TimeInput
@@ -1182,7 +1182,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                 <div className="grid grid-cols-2 gap-2">
                   <DateInput
                     value={editStartDate}
-                    onChange={(e) => setEditStartDate(e.target.value)}
+                    onChange={setEditStartDate}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
                   <TimeInput
@@ -1197,7 +1197,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
                 <div className="grid grid-cols-2 gap-2">
                   <DateInput
                     value={editEndDate}
-                    onChange={(e) => setEditEndDate(e.target.value)}
+                    onChange={setEditEndDate}
                     className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
                   />
                   <TimeInput

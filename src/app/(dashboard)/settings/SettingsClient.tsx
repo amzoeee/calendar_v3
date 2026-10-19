@@ -673,7 +673,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
               </label>
               <DateInput
                 value={logDateOverride}
-                onChange={(e) => setLogDateOverride(e.target.value)}
+                onChange={setLogDateOverride}
                 className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
               />
             </div>
@@ -727,7 +727,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
             <label className="block text-xs font-semibold text-muted-foreground uppercase">Start Date <span className="font-normal text-muted-foreground">(optional)</span></label>
             <DateInput
               value={exportStartDate}
-              onChange={(e) => setExportStartDate(e.target.value)}
+              onChange={setExportStartDate}
               className="mt-1 block w-full bg-secondary border border-border rounded px-3 py-1.5 text-xs text-foreground"
             />
           </div>
@@ -735,7 +735,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
             <label className="block text-xs font-semibold text-muted-foreground uppercase">End Date <span className="font-normal text-muted-foreground">(optional)</span></label>
             <DateInput
               value={exportEndDate}
-              onChange={(e) => setExportEndDate(e.target.value)}
+              onChange={setExportEndDate}
               className="mt-1 block w-full bg-secondary border border-border rounded px-3 py-1.5 text-xs text-foreground"
             />
           </div>

@@ -1882,7 +1882,7 @@ function BoardColumn({
                   <>
                     <DateInput
                       value={draftDate}
-                      onChange={(e) => setDraftDate(e.target.value)}
+                      onChange={setDraftDate}
                       aria-label="Deadline for the new task"
                       className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
                     />
@@ -2390,9 +2390,9 @@ function SchedulePicker({
           <div className="flex gap-1.5">
             <DateInput
               value={dueDate}
-              onChange={(e) => {
-                setDueDate(e.target.value);
-                commit({ dueDate: e.target.value });
+              onChange={(v) => {
+                setDueDate(v);
+                commit({ dueDate: v });
               }}
               className={`${field} flex-1 min-w-0 cursor-pointer`}
             />
@@ -2782,7 +2782,7 @@ function PasteListDialog({
             {mode !== 'none' && (
               <DateInput
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={setStartDate}
                 className={`${field} cursor-pointer`}
               />
             )}
