@@ -58,7 +58,11 @@ function Fact({
   compact?: boolean;
 }) {
   return (
-    <div className={`bg-secondary/40 border border-border rounded-lg min-w-0 ${compact ? 'px-2.5 py-1.5' : 'p-2.5'}`}>
+    <div
+      className={`bg-secondary/40 border border-border rounded-lg min-w-0 ${
+        compact ? 'px-2.5 py-1.5 lg:bg-transparent lg:border-transparent xl:bg-secondary/40 xl:border-border' : 'p-2.5'
+      }`}
+    >
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
       <p className={`font-bold text-foreground tabular-nums truncate ${compact ? 'text-sm' : 'text-base mt-0.5'}`}>
         {value}
@@ -298,8 +302,9 @@ export default function LifetimePanel({
               value={formatDuration(data.durations[stats.longestEvent])}
               hint={fmtDate(startOf(data, stats.longestEvent))}
             />
-            {/* Short facts stack beside the two that carry hints. */}
-            <div className="row-span-2 grid grid-rows-3 gap-2 min-w-0">
+            {/* Short facts stack beside the two that carry hints. In the
+                five-column layout they share one box, which can't straddle a row gap. */}
+            <div className="row-span-2 grid grid-rows-3 gap-2 lg:gap-0 xl:gap-2 min-w-0 rounded-lg lg:bg-secondary/40 lg:border lg:border-border xl:bg-transparent xl:border-0">
               <Fact compact label="First" value={fmtDate(startOf(data, stats.firstEvent))} />
               <Fact
                 compact
