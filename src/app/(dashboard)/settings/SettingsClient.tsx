@@ -746,13 +746,11 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                   type="button"
                   aria-pressed={on}
                   onClick={() => toggleExportTag(t.id)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition cursor-pointer ${
-                    on
-                      ? 'bg-secondary border-primary text-foreground'
-                      : 'bg-transparent border-border text-muted-foreground/60 hover:text-muted-foreground'
+                  className={`flex items-center gap-1.5 px-2 py-1 text-xs font-semibold rounded-md border border-border bg-secondary transition cursor-pointer ${
+                    on ? 'hover:bg-muted' : 'opacity-40 line-through'
                   }`}
                 >
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color, opacity: on ? 1 : 0.4 }} />
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
                   {t.name}
                 </button>
               );
