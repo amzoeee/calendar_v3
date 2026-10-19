@@ -701,7 +701,7 @@ export default function StatsClient({
                     <div className="flex items-center justify-between p-3 bg-secondary/60 rounded-lg border border-border">
                       <div className="flex items-center gap-3 truncate">
                         <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTagColor(group.root) }}></span>
-                        <span className="text-sm font-bold truncate text-foreground">Total {group.root}</span>
+                        <span className="text-sm font-bold truncate text-foreground">{group.root} (total)</span>
                       </div>
                       <span className="text-sm font-extrabold text-primary shrink-0">
                         {group.total.toFixed(1)}h / day
