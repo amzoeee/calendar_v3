@@ -28,6 +28,7 @@ import EventEditor from '@/features/events/components/EventEditor';
 import EventBlock from '@/features/events/components/EventBlock';
 import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
 import { useTimelineZoom } from '@/features/events/useTimelineZoom';
+import type { SubtagDisplay } from '@/lib/tags';
 
 interface Tag {
   id: number;
@@ -35,15 +36,17 @@ interface Tag {
   color: string;
   isArchived: number;
   scope: string;
+  parentId: number | null;
 }
 
 interface DailyCalendarClientProps {
   date: string;
   initialEvents: any[];
   tags: Tag[];
+  subtagDisplay: SubtagDisplay;
 }
 
-export default function DailyCalendarClient({ date, initialEvents, tags }: DailyCalendarClientProps) {
+export default function DailyCalendarClient({ date, initialEvents, tags, subtagDisplay }: DailyCalendarClientProps) {
   // --- Popovers & Modals ---
   // Mobile-only: the always-visible desktop "Add Event" panel becomes a FAB +
   // bottom sheet on small screens (there's no room for a persistent side panel).
@@ -149,8 +152,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags }: Daily
 
   // Positions are in minutes, not pixels, so zooming doesn't recompute them.
   const positionedEvents = useMemo(
-    () => positionEventsForDay(initialEvents, new Date(date + 'T00:00:00'), tags),
-    [date, initialEvents, tags]
+    () => positionEventsForDay(initialEvents, new Date(date + 'T00:00:00'), tags, subtagDisplay),
+    [date, initialEvents, tags, subtagDisplay]
   );
 
   // Tag color lookup

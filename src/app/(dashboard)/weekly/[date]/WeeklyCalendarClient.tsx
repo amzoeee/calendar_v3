@@ -32,6 +32,7 @@ import EventEditor from '@/features/events/components/EventEditor';
 import EventBlock from '@/features/events/components/EventBlock';
 import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
 import { useTimelineZoom } from '@/features/events/useTimelineZoom';
+import type { SubtagDisplay } from '@/lib/tags';
 
 interface Tag {
   id: number;
@@ -39,6 +40,7 @@ interface Tag {
   color: string;
   isArchived: number;
   scope: string;
+  parentId: number | null;
 }
 
 // The two ways mobile can read a week, and where the choice is remembered.
@@ -70,9 +72,10 @@ interface WeeklyCalendarClientProps {
   weekStart: WeekStart;
   initialEvents: any[];
   tags: Tag[];
+  subtagDisplay: SubtagDisplay;
 }
 
-export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags }: WeeklyCalendarClientProps) {
+export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags, subtagDisplay }: WeeklyCalendarClientProps) {
 
   // --- Zoom & Scroll ---
   const timelineContainerRef = useRef<HTMLDivElement>(null);
@@ -242,9 +245,9 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   const positionedEventsByDay = useMemo(
     () =>
       weekDates.map((day) =>
-        positionEventsForDay(initialEvents, day, tags).sort((a, b) => (a.top_position || 0) - (b.top_position || 0))
+        positionEventsForDay(initialEvents, day, tags, subtagDisplay).sort((a, b) => (a.top_position || 0) - (b.top_position || 0))
       ),
-    [weekDates, initialEvents, tags]
+    [weekDates, initialEvents, tags, subtagDisplay]
   );
 
   const editor = useEventEditor({ beforeMutate: saveScroll });
