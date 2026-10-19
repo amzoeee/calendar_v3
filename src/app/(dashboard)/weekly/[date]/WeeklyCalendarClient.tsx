@@ -16,27 +16,22 @@ import {
   List,
   CalendarRange,
 } from 'lucide-react';
-import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
+import type { PositionedEvent } from '@/lib/overlap';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { track } from '@/lib/track';
-import { usePinchZoom } from '@/lib/usePinchZoom';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import EventSearch from '@/app/components/EventSearch';
 import { addEventAction } from '@/app/actions';
-import {
-  getBrowserTimeZone,
-  pacificDbStringToDate,
-  formatDateInputValue,
-  formatTimeInputValue,
-  formatEventTimeRange,
-  formatClockTime,
-} from '@/lib/timezone';
+import { getBrowserTimeZone } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
 import TimeInput from '@/app/components/TimeInput';
 import { isInsideModal } from '@/app/components/ConfirmDialog';
 import { useEventEditor } from '@/features/events/useEventEditor';
 import { useEditorPlacement } from '@/features/events/useEditorPlacement';
 import EventEditor from '@/features/events/components/EventEditor';
+import EventBlock from '@/features/events/components/EventBlock';
+import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
+import { useTimelineZoom } from '@/features/events/useTimelineZoom';
 
 interface Tag {
   id: number;
@@ -80,8 +75,8 @@ interface WeeklyCalendarClientProps {
 export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags }: WeeklyCalendarClientProps) {
 
   // --- Zoom & Scroll ---
-  const [zoomLevel, setZoomLevel] = useState<number>(60);
   const timelineContainerRef = useRef<HTMLDivElement>(null);
+  const { zoomLevel, changeZoom, resetZoom } = useTimelineZoom(timelineContainerRef);
 
   // --- Mobile week grid ---
   // Mobile can read the week two ways: the agenda list (the default) and a
@@ -140,9 +135,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
 
   // Load state
   useEffect(() => {
-    const savedZoom = localStorage.getItem('calendarZoomLevel');
-    if (savedZoom) setZoomLevel(parseInt(savedZoom, 10));
-
     const savedScroll = localStorage.getItem('calendarScrollPos');
     if (savedScroll && timelineContainerRef.current) {
       timelineContainerRef.current.scrollTop = parseInt(savedScroll, 10);
@@ -154,14 +146,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     const savedMobileZoom = Number(localStorage.getItem(MOBILE_ZOOM_KEY));
     if (Number.isFinite(savedMobileZoom) && savedMobileZoom > 0) setMobileZoom(savedMobileZoom);
   }, []);
-
-  const changeZoom = (delta: number) => {
-    setZoomLevel((prev) => Math.max(30, Math.min(300, prev + delta)));
-  };
-
-  const resetZoom = () => {
-    setZoomLevel(60);
-  };
 
   // The zoom at which 24 hours exactly fill the grid's viewport. Measured
   // rather than assumed, since it depends on the device height, the header and
@@ -198,25 +182,8 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     });
   };
 
-  // Persist the zoom level as an effect rather than from inside the setState
-  // updater — updaters must be pure (React may invoke them more than once).
-  // Writes are ~0.006ms, so doing this per change costs nothing measurable.
-  const zoomHydratedRef = useRef(false);
-  useEffect(() => {
-    // Skip the first run so the default 60 can't clobber the stored value
-    // before the load effect above has applied it.
-    if (!zoomHydratedRef.current) {
-      zoomHydratedRef.current = true;
-      return;
-    }
-    localStorage.setItem('calendarZoomLevel', String(zoomLevel));
-  }, [zoomLevel]);
-
-  // --- Pinch-to-zoom (desktop timeline) ---
-  usePinchZoom(timelineContainerRef, zoomLevel, setZoomLevel);
-
-  // Same first-run skip as above, so the defaults can't overwrite what the
-  // load effect is about to restore.
+  // Skip the first run so the defaults can't overwrite what the load effect
+  // is about to restore.
   const mobilePrefsHydratedRef = useRef(false);
   useEffect(() => {
     if (!mobilePrefsHydratedRef.current) {
@@ -230,7 +197,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     else localStorage.setItem(MOBILE_ZOOM_KEY, String(mobileZoom));
   }, [mobileView, mobileZoom]);
 
-  // Keyboard zoom (Cmd/Ctrl + '=', '-', '0'), arrow key navigation, and edit overlay shortcuts
+  // Arrow keys page between weeks (zoom keys live in useTimelineZoom)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isInsideModal(e.target)) return;
@@ -242,21 +209,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
         e.target instanceof HTMLTextAreaElement ||
         select !== null;
 
-      if (e.metaKey || e.ctrlKey) {
-        if (e.key === '=' || e.key === '+') {
-          e.preventDefault();
-          track('nav.zoom_key');
-          changeZoom(15);
-        } else if (e.key === '-') {
-          e.preventDefault();
-          track('nav.zoom_key');
-          changeZoom(-15);
-        } else if (e.key === '0') {
-          e.preventDefault();
-          track('nav.zoom_reset');
-          resetZoom();
-        }
-      } else if (!isInput) {
+      if (!e.metaKey && !e.ctrlKey && !isInput) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
           track('nav.keyboard');
@@ -281,59 +234,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     }
   };
 
-  // Process events for a single day
-  const getPositionedEventsForDay = (day: Date): PositionedEvent[] => {
-    const processed: PositionedEvent[] = [];
-    const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).getTime();
-    const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59).getTime();
-
-    for (const ev of initialEvents) {
-      const startDt = pacificDbStringToDate(ev.startDatetime);
-      const endDt = pacificDbStringToDate(ev.endDatetime);
-
-      const clippedStart = Math.max(startDt.getTime(), dayStart);
-      const clippedEnd = Math.min(endDt.getTime(), dayEnd);
-
-      if (clippedStart >= dayEnd || clippedEnd <= dayStart) {
-        continue;
-      }
-
-      const startMin = new Date(clippedStart).getHours() * 60 + new Date(clippedStart).getMinutes();
-      const endMin = new Date(clippedEnd).getHours() * 60 + new Date(clippedEnd).getMinutes();
-      const duration = endMin - startMin;
-
-      const tagColor = tags.find((t) => t.name === ev.tag)?.color || '#6b7280';
-
-      processed.push({
-        id: ev.id,
-        startDatetime: ev.startDatetime,
-        endDatetime: ev.endDatetime,
-        title: ev.title,
-        description: ev.description,
-        tag: ev.tag,
-        userId: ev.userId,
-        recurrenceId: ev.recurrenceId,
-        rrule: ev.rrule,
-        originalStart: ev.originalStart,
-        isPending: ev.isPending,
-        top_position: startMin,
-        height: duration,
-        duration_minutes: duration,
-        start_time: formatClockTime(startDt),
-        end_time: formatClockTime(endDt),
-        time_range: formatEventTimeRange(startDt, endDt),
-        start_datetime_local: `${formatDateInputValue(startDt)}T${formatTimeInputValue(startDt)}`,
-        end_datetime_local: `${formatDateInputValue(endDt)}T${formatTimeInputValue(endDt)}`,
-        tag_color: tagColor,
-        multi_day: startDt.toDateString() !== endDt.toDateString(),
-        continues_before: startDt.getTime() < dayStart,
-        continues_after: endDt.getTime() > dayEnd,
-      });
-    }
-
-    return calculateOverlapColumns(processed);
-  };
-
   // Positions here are in *minutes*, not pixels — zoom is applied at render
   // time — so this survives zooming unchanged. Memoizing it keeps a zoom
   // keystroke from re-deriving every event's dates 14 times over (7 days x
@@ -342,9 +242,8 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   const positionedEventsByDay = useMemo(
     () =>
       weekDates.map((day) =>
-        getPositionedEventsForDay(day).sort((a, b) => (a.top_position || 0) - (b.top_position || 0))
+        positionEventsForDay(initialEvents, day, tags).sort((a, b) => (a.top_position || 0) - (b.top_position || 0))
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [weekDates, initialEvents, tags]
   );
 
@@ -838,14 +737,13 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
           {/* Hour labels sidebar */}
           <div className="w-16 h-full border-r border-border bg-card/30 shrink-0 select-none relative z-10">
             {Array.from({ length: 24 }).map((_, hour) => {
-              const displayHour = hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
               return (
                 <div
                   key={hour}
                   className="absolute right-3 text-[10px] font-bold text-muted-foreground"
                   style={{ top: `${hour * zoomLevel}px`, transform: 'translateY(-50%)' }}
                 >
-                  {displayHour}
+                  {hourLabel(hour)}
                 </div>
               );
             })}
@@ -886,74 +784,9 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
 
                   {/* Event Blocks Container */}
                   <div className="absolute inset-0 pointer-events-none">
-                    {dayEvents.map((ev) => {
-                      const widthPercent = 100 / (ev.overlap_total || 1);
-                      const leftPercent = (ev.overlap_column || 0) * widthPercent;
-
-                      const topPx = ((ev.top_position || 0) / 60) * zoomLevel;
-                      const heightPx = ((ev.height || 0) / 60) * zoomLevel;
-
-                      const isOverlayOpen = activeOverlayId === ev.id;
-
-                      const getContrastClass = (hexColor: string) => {
-                        if (!hexColor) return 'text-white';
-                        const hex = hexColor.replace('#', '');
-                        if (hex.length !== 6) return 'text-white';
-                        const r = parseInt(hex.substring(0, 2), 16);
-                        const g = parseInt(hex.substring(2, 4), 16);
-                        const b = parseInt(hex.substring(4, 6), 16);
-                        const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-                        return yiq >= 128 ? 'text-black' : 'text-white';
-                      };
-
-                      const textClass = getContrastClass(ev.tag_color || '#6b7280');
-                      const subtextClass = getContrastClass(ev.tag_color || '#6b7280') === 'text-black'
-                        ? 'text-black/80 font-medium'
-                        : 'text-white/80 font-medium';
-
-                      return (
-                        <div
-                          key={ev.id}
-                          className={`absolute rounded pointer-events-auto transition-all select-none cursor-pointer flex flex-col justify-center overflow-hidden shadow-sm event-card-clickable border border-black/10 hover:brightness-105 ${
-                            heightPx < 46
-                              ? 'px-1 items-start justify-center'
-                              : 'pt-1 pb-1 px-1 items-start justify-start'
-                          }`}
-                          style={{
-                            top: `${topPx}px`,
-                            height: `${heightPx}px`,
-                            left: `${leftPercent}%`,
-                            width: `calc(${widthPercent}% - 2px)`,
-                            backgroundColor: ev.tag_color
-                              ? ev.isPending
-                                ? `${ev.tag_color}66`
-                                : ev.tag_color
-                              : undefined,
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenEditOverlay(ev, e);
-                          }}
-                        >
-                          {/* Event block content */}
-                          {heightPx < 46 ? (
-                            <div className="truncate leading-none w-full">
-                              <span className={`font-extrabold text-xs ${textClass}`}>{ev.title}</span>
-                              <span className={`font-extrabold text-[9px] ml-1 opacity-80 ${subtextClass}`}>({ev.start_time})</span>
-                            </div>
-                          ) : (
-                            <div className="truncate leading-none w-full">
-                              <span className={`font-extrabold text-xs truncate block ${textClass}`}>
-                                {ev.title}
-                              </span>
-                              <span className={`font-extrabold text-[9px] block mt-0.5 ${subtextClass}`}>
-                                {ev.start_time} - {ev.end_time}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {dayEvents.map((ev) => (
+                      <EventBlock key={ev.id} ev={ev} zoomLevel={zoomLevel} density="week" onOpen={handleOpenEditOverlay} />
+                    ))}
                   </div>
 
                 </div>
