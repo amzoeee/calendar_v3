@@ -13,6 +13,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalSto
  * - 12h or 24h, following the locale unless `hour12` is given.
  * - "4" and "04" both mean 4. A digit that can't start a two-digit number
  *   moves on to the next part straight away.
+ * - In 12h, hours 0–23 are accepted too: "16" becomes 4 PM, "00" 12 AM.
  * - ← → (and `:` or space) move between parts; ↑ ↓ step the current one.
  * - Backspace clears the current part, then moves back.
  * - In 12h, `a` / `p` set AM / PM; tapping AM/PM again toggles it.
@@ -89,12 +90,20 @@ export default function TimeInput({ value, onChange, hour12: hour12Prop, onBlur,
     if (v !== null && v !== value) onChange(v);
   };
 
+  /** Sets a typed hour, which is always 0–23; in 12h that also decides AM/PM when it can. */
+  const withHour = (p: Parts, n: number): Parts => {
+    if (!hour12) return { ...p, h: n };
+    if (n === 0) return { ...p, h: 12, ap: 'AM' };
+    if (n > 12) return { ...p, h: n - 12, ap: 'PM' };
+    return { ...p, h: n };
+  };
+
   /** Writes a half-typed part if it's valid on its own; drops it otherwise. */
   const flush = (p: Parts = parts): Parts => {
     if (!buffer) return p;
     const n = Number(buffer);
     setBuffer('');
-    if (active === 0 && n >= hourMin && n <= hourMax) return { ...p, h: n };
+    if (active === 0 && n <= 23) return withHour(p, n);
     if (active === 1 && n <= 59) return { ...p, m: n };
     return p;
   };
@@ -106,13 +115,13 @@ export default function TimeInput({ value, onChange, hour12: hour12Prop, onBlur,
 
   const typeDigit = (d: number) => {
     if (active === 2) return;
-    const [min, max] = active === 0 ? [hourMin, hourMax] : [0, 59];
-    const key: 'h' | 'm' = active === 0 ? 'h' : 'm';
+    const max = active === 0 ? 23 : 59;
+    const set = (n: number) => (active === 0 ? withHour(parts, n) : { ...parts, m: n });
     const next = Number(buffer + d);
 
-    if (buffer && next >= min && next <= max) {
+    if (buffer && next <= max) {
       setBuffer('');
-      emit({ ...parts, [key]: next });
+      emit(set(next));
       if (active < lastSeg) setActive((active + 1) as Seg);
       return;
     }
@@ -120,7 +129,7 @@ export default function TimeInput({ value, onChange, hour12: hour12Prop, onBlur,
     // two together don't make a valid number.
     if (d * 10 > max) {
       setBuffer('');
-      if (d >= min) emit({ ...parts, [key]: d });
+      emit(set(d));
       if (active < lastSeg) setActive((active + 1) as Seg);
     } else {
       setBuffer(String(d));
