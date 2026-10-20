@@ -18,6 +18,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalSto
  *   mobile numeric keypads, which have no letters, never need one.
  * - ← → (and `:` or space) move between parts; ↑ ↓ step the current one.
  * - Backspace clears the current part, then moves back.
+ * - Leaving with only an hour fills in :00 and the AM/PM guess.
  * - In 12h, `a` / `p` set AM / PM; tapping AM/PM again toggles it.
  */
 
@@ -112,6 +113,10 @@ export default function TimeInput({ value, onChange, hour12: hour12Prop, onBlur,
     if (active === 1 && n <= 59) return { ...p, m: n };
     return p;
   };
+
+  /** Fills what a half-entered time leaves out, once there's an hour to go on. */
+  const complete = (p: Parts): Parts =>
+    p.h === null ? p : { ...p, m: p.m ?? 0, ap: hour12 ? (p.ap ?? guessPeriod(p.h)) : null };
 
   const move = (to: number) => {
     emit(flush());
@@ -246,7 +251,7 @@ export default function TimeInput({ value, onChange, hour12: hour12Prop, onBlur,
         }}
         onBlur={(e) => {
           setFocused(false);
-          const p = flush();
+          const p = complete(flush());
           if (toValue(p, hour12) === null) setParts(fromValue(value, hour12));
           else emit(p);
           onBlur?.(e);
