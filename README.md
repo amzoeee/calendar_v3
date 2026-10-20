@@ -78,6 +78,14 @@ The first time it runs, the app creates the database file (`calendar.db`) in the
 
 Go to the register page at **http://localhost:3000/register** and create a username and password. You can then log in and start adding events.
 
+### 6. Run the tests
+
+```bash
+npm test
+```
+
+Covers the pure logic in `src/lib` and the bot's log parsing. `npm run test:watch` reruns on save.
+
 ---
 
 ## Migrating from calendar_v2
