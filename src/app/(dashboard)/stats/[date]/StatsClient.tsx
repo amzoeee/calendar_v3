@@ -652,7 +652,7 @@ export default function StatsClient({
                           return (
                             <div
                               key={tag}
-                              {...tipProps(`${tag}: ${hrs.toFixed(1)} hrs avg`)}
+                              {...tipProps(`${tag}: ${hrs.toFixed(1)} hrs${day.activeCount > 1 ? ' avg' : ''}`)}
                               className="w-full hover:brightness-110 transition-all"
                               style={{
                                 height: `${blockHeightPercent}%`,
