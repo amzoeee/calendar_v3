@@ -14,6 +14,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalSto
  * - "4" and "04" both mean 4. A digit that can't start a two-digit number
  *   moves on to the next part straight away.
  * - In 12h, hours 0–23 are accepted too: "16" becomes 4 PM, "00" 12 AM.
+ *   Otherwise an hour with no AM/PM yet gets a guess (7–11 AM, 12–6 PM), so
+ *   mobile numeric keypads, which have no letters, never need one.
  * - ← → (and `:` or space) move between parts; ↑ ↓ step the current one.
  * - Backspace clears the current part, then moves back.
  * - In 12h, `a` / `p` set AM / PM; tapping AM/PM again toggles it.
@@ -58,6 +60,9 @@ function toValue(p: Parts, hour12: boolean): string | null {
   return `${pad(H)}:${pad(p.m)}`;
 }
 
+/** Period for an hour typed without one: 7–11 reads as morning, 12–6 as afternoon. */
+const guessPeriod = (h: number): Period => (h >= 7 && h <= 11 ? 'AM' : 'PM');
+
 const SEG_START = [0, 3, 6];
 
 export default function TimeInput({ value, onChange, hour12: hour12Prop, onBlur, onFocus, className, name, ...rest }: Props) {
@@ -95,7 +100,7 @@ export default function TimeInput({ value, onChange, hour12: hour12Prop, onBlur,
     if (!hour12) return { ...p, h: n };
     if (n === 0) return { ...p, h: 12, ap: 'AM' };
     if (n > 12) return { ...p, h: n - 12, ap: 'PM' };
-    return { ...p, h: n };
+    return { ...p, h: n, ap: p.ap ?? guessPeriod(n) };
   };
 
   /** Writes a half-typed part if it's valid on its own; drops it otherwise. */
@@ -145,7 +150,7 @@ export default function TimeInput({ value, onChange, hour12: hour12Prop, onBlur,
     if (active === 0) {
       const span = hourMax - hourMin + 1;
       const h = p.h === null ? (dir > 0 ? hourMin : hourMax) : ((p.h - hourMin + dir + span) % span) + hourMin;
-      emit({ ...p, h });
+      emit({ ...p, h, ap: hour12 ? (p.ap ?? guessPeriod(h)) : null });
     } else if (active === 1) {
       emit({ ...p, m: p.m === null ? (dir > 0 ? 0 : 59) : (p.m + dir + 60) % 60 });
     } else {
