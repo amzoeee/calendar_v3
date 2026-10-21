@@ -64,7 +64,7 @@ export async function registerAction(prevState: any, formData: FormData) {
     await db.insert(tags).values(defaultTags);
 
     // Give the account a task list to land on. Accounts that predate tasks get
-    // theirs lazily instead — see ensureDefaultBoard in task-actions.ts.
+    // theirs lazily instead — see ensureDefaultBoard in features/tasks/server.
     await db.insert(taskBoards).values({ name: 'My Tasks', orderIndex: 1, userId: newUser.id });
 
     await createSession(newUser.id, username);
