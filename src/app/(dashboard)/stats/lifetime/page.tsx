@@ -9,6 +9,8 @@ import { normalizeTitle } from '@/lib/titleParts';
 import type { LifetimeEvents } from '@/lib/lifetime';
 import { todayForViewer } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
+import { getSubtagDisplay } from '@/lib/server-tags';
+import { displayTag } from '@/lib/tags';
 
 const MS_PER_MIN = 60_000;
 
@@ -54,6 +56,7 @@ export default async function LifetimePage() {
   const spellings: Map<string, number>[] = [];
   const tagNames: string[] = dbTags.map((t) => t.name);
   const tagIndex = new Map(tagNames.map((n, i) => [n, i]));
+  const subtagDisplay = await getSubtagDisplay();
 
   const data: LifetimeEvents = {
     titles: [],
@@ -81,12 +84,13 @@ export default async function LifetimePage() {
 
     // An event whose tag was since deleted still needs a slot.
     let gi = -1;
-    if (r.tag) {
-      gi = tagIndex.get(r.tag) ?? -1;
+    const tag = displayTag(dbTags, r.tag, subtagDisplay)?.name ?? r.tag;
+    if (tag) {
+      gi = tagIndex.get(tag) ?? -1;
       if (gi === -1) {
         gi = tagNames.length;
-        tagNames.push(r.tag);
-        tagIndex.set(r.tag, gi);
+        tagNames.push(tag);
+        tagIndex.set(tag, gi);
       }
     }
 

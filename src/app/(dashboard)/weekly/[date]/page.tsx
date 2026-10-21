@@ -7,6 +7,7 @@ import WeeklyCalendarClient from './WeeklyCalendarClient';
 import { todayForViewer } from '@/lib/server-timezone';
 import { previewPendingMerge } from '@/lib/merge-pending';
 import { shiftDateStr } from '@/lib/timezone';
+import { getSubtagDisplay } from '@/lib/server-tags';
 import { getWeekStart } from '@/lib/server-week';
 import { startOfWeek, type WeekStart } from '@/lib/week';
 
@@ -92,6 +93,7 @@ export default async function WeeklyPage({ params }: PageProps) {
       weekStart={weekStart}
       initialEvents={previewPendingMerge(dbEvents)}
       tags={dbTags}
+      subtagDisplay={await getSubtagDisplay()}
     />
   );
 }

@@ -557,6 +557,48 @@ export async function restoreTaskDeadlineAction(
   refresh();
 }
 
+/**
+ * The reminder columns for a deadline, from offsets typed in the viewer's
+ * timezone. `dueDate` is the deadline as typed; `dueDatetime` is it stored.
+ */
+function resolveReminder(
+  dueDate: string,
+  dueDatetime: string,
+  input: {
+    remindOffsetMinutes: number | null;
+    remindOffsetDays: number | null;
+    remindTimeOfDay: string | null;
+  },
+  tz: string
+) {
+  for (const offset of [input.remindOffsetMinutes, input.remindOffsetDays]) {
+    if (offset != null && !(Number.isInteger(offset) && offset >= 0)) {
+      throw new Error('Reminder offset must be a whole number, zero or more');
+    }
+  }
+
+  // The time of day needs a date to resolve against, and the deadline's own
+  // date is the one that matters here.
+  let remindTimeOfDay: string | null = null;
+  if (input.remindTimeOfDay) {
+    const asPacific = browserDatetimeToServerDbString(`${dueDate}T${input.remindTimeOfDay}`, tz);
+    remindTimeOfDay = asPacific.split(' ')[1].slice(0, 5);
+  }
+
+  return {
+    remindAt: computeRemindAt(
+      dueDatetime,
+      input.remindOffsetMinutes,
+      input.remindOffsetDays,
+      remindTimeOfDay,
+      tz
+    ),
+    remindOffsetMinutes: input.remindOffsetMinutes,
+    remindOffsetDays: input.remindOffsetDays,
+    remindTimeOfDay,
+  };
+}
+
 export async function createTaskAction(
   boardId: number,
   title: string,
@@ -609,14 +651,22 @@ export async function createTaskAction(
 
   // A day-only deadline is stored at the end of its day, the same convention
   // setTaskScheduleAction uses, so the two can't disagree about what "due
-  // Friday" sorts as. No reminder is offered here — an offset is a decision
-  // about a deadline you already have, and the editor is where it belongs.
+  // Friday" sorts as.
+  const tz = await getViewerTimeZone();
   const dueDatetime = details.dueDate
     ? browserDatetimeToServerDbString(
         `${details.dueDate}T${details.dueTime || END_OF_DAY}`,
-        await getViewerTimeZone()
+        tz
       )
     : null;
+  const reminder =
+    details.dueDate && dueDatetime
+      ? resolveReminder(details.dueDate, dueDatetime, {
+          remindOffsetMinutes: details.dueTime ? (details.remindOffsetMinutes ?? null) : null,
+          remindOffsetDays: details.dueTime ? null : (details.remindOffsetDays ?? null),
+          remindTimeOfDay: details.dueTime ? null : (details.remindTimeOfDay ?? null),
+        }, tz)
+      : null;
 
   const [created] = await db
     .insert(tasks)
@@ -630,6 +680,7 @@ export async function createTaskAction(
       dueDatetime,
       dueHasTime: dueDatetime && details.dueTime ? 1 : 0,
       dueAsap: !dueDatetime && details.asap ? 1 : 0,
+      ...reminder,
     })
     .returning({ id: tasks.id });
 
@@ -1133,11 +1184,6 @@ export async function setTaskScheduleAction(
     .limit(1);
   if (!task) throw new Error('Task not found');
   if (input.asap && task.rrule) throw new Error('A repeating task needs a date, not ASAP');
-  for (const offset of [input.remindOffsetMinutes, input.remindOffsetDays]) {
-    if (offset != null && !(Number.isInteger(offset) && offset >= 0)) {
-      throw new Error('Reminder offset must be a whole number, zero or more');
-    }
-  }
 
   if (input.asap || !input.dueDate) {
     // No deadline means no reminder — an offset from nothing has no meaning.
@@ -1167,36 +1213,13 @@ export async function setTaskScheduleAction(
     tz
   );
 
-  // The reminder's time of day was typed in the viewer's timezone too. It
-  // needs a date to resolve against, and the deadline's own date is the one
-  // that matters here.
-  let remindTimeOfDay: string | null = null;
-  if (input.remindTimeOfDay) {
-    const asPacific = browserDatetimeToServerDbString(
-      `${input.dueDate}T${input.remindTimeOfDay}`,
-      tz
-    );
-    remindTimeOfDay = asPacific.split(' ')[1].slice(0, 5);
-  }
-
-  const remindAt = computeRemindAt(
-    dueDatetime,
-    input.remindOffsetMinutes,
-    input.remindOffsetDays,
-    remindTimeOfDay,
-    tz
-  );
-
   await db
     .update(tasks)
     .set({
       dueDatetime,
       dueHasTime: hasTime ? 1 : 0,
       dueAsap: 0,
-      remindAt,
-      remindOffsetMinutes: input.remindOffsetMinutes,
-      remindOffsetDays: input.remindOffsetDays,
-      remindTimeOfDay,
+      ...resolveReminder(input.dueDate, dueDatetime, input, tz),
     })
     .where(and(eq(tasks.id, taskId), eq(tasks.userId, session.userId)));
 

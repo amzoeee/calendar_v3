@@ -7,7 +7,7 @@ import {
   computeStats,
   EXACT,
   formatDuration,
-  matchTitles,
+  matchEvents,
   todayColumn,
   type Focus,
   type LifetimeEvents,
@@ -28,6 +28,7 @@ interface Tag {
   color: string;
   isArchived: number;
   scope: string;
+  parentId: number | null;
 }
 
 interface LifetimeClientProps {
@@ -66,6 +67,32 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
     () => data.tagNames.map((n) => tags.find((t) => t.name === n)?.color ?? UNTAGGED_COLOR),
     [data, tags],
   );
+  const tagCounts = useMemo(() => {
+    const perTag = new Map<number, number>();
+    data.tagIdx.forEach((g) => perTag.set(g, (perTag.get(g) ?? 0) + 1));
+    return perTag;
+  }, [data]);
+  // Subtags with events, by index into data.tagNames.
+  const tagSubtags = useMemo(
+    () =>
+      data.tagNames.map((n) => {
+        const tag = tags.find((t) => t.name === n);
+        if (!tag) return [];
+        return tags
+          .filter((t) => t.parentId === tag.id)
+          .map((t) => data.tagNames.indexOf(t.name))
+          .filter((s) => tagCounts.has(s));
+      }),
+    [data, tags, tagCounts],
+  );
+  const searchTags = useMemo(
+    () =>
+      tagSubtags
+        .map((subs, g) => ({ tag: g, count: [g, ...subs].reduce((n, m) => n + (tagCounts.get(m) ?? 0), 0) }))
+        .filter((t) => t.count > 0),
+    [tagSubtags, tagCounts],
+  );
+
   const colorOf = useCallback(
     (g: number) => (g >= 0 ? tagColors[g] : UNTAGGED_COLOR),
     [tagColors],
@@ -148,14 +175,10 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
   );
   const focus = pinned ?? dwellFocus;
 
-  const titleLevels = useMemo(() => (focus ? matchTitles(index, focus) : null), [index, focus]);
-  const eventLevels = useMemo(
-    () => (titleLevels ? Uint8Array.from(data.titleIdx, (t) => titleLevels[t]) : null),
-    [data, titleLevels],
-  );
+  const eventLevels = useMemo(() => (focus ? matchEvents(data, index, focus) : null), [data, index, focus]);
   const stats = useMemo(
-    () => (hydrated && titleLevels ? computeStats(data, index, segments, titleLevels, tagTotalMin, weekStart) : null),
-    [hydrated, data, index, segments, titleLevels, tagTotalMin, weekStart],
+    () => (hydrated && eventLevels ? computeStats(data, segments, eventLevels, tagTotalMin, weekStart) : null),
+    [hydrated, data, segments, eventLevels, tagTotalMin, weekStart],
   );
 
   // Chips only help when the title splits into something other than itself.
@@ -167,15 +190,14 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
         : []
       : [];
 
-  // The events a rename or retag would touch, split by match level.
+  // The events a rename or retag would touch, split by match level. A tag
+  // spans unrelated titles, so there's nothing to rename.
   const bulkTarget = useMemo<BulkTarget | null>(() => {
-    if (!focus || !titleLevels) return null;
+    if (!focus || !eventLevels || focus.kind === 'tag') return null;
     const exactIds: number[] = [];
     const relatedIds: number[] = [];
-    titleLevels.forEach((lvl, t) => {
-      if (!lvl) return;
-      const into = lvl === EXACT ? exactIds : relatedIds;
-      for (const e of index.eventsByTitle[t]) into.push(data.ids[e]);
+    eventLevels.forEach((lvl, e) => {
+      if (lvl) (lvl === EXACT ? exactIds : relatedIds).push(data.ids[e]);
     });
     if (focus.kind === 'query') {
       const q = normalizeTitle(focus.q);
@@ -187,7 +209,7 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
     const ps = index.parts[focus.title];
     const from = focus.part ?? (ps.length === 1 ? ps[0] : null);
     return { label: from ?? data.titles[focus.title], exactIds, relatedIds, renameFrom: from, renameMode: 'word' };
-  }, [focus, titleLevels, index, data]);
+  }, [focus, eventLevels, index, data]);
 
   const { raiseUndo } = useUndo();
 
@@ -223,6 +245,10 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
 
   const onPart = (part: string | null) => {
     if (focus?.kind === 'title') setPinned({ ...focus, part });
+  };
+
+  const onSubtags = (withSubtags: boolean) => {
+    if (focus?.kind === 'tag') setPinned({ ...focus, withSubtags });
   };
 
   // ---- Range ---------------------------------------------------------------
@@ -263,6 +289,9 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
               keys={index.keys}
               counts={counts}
               parts={searchParts}
+              tags={searchTags}
+              tagNames={data.tagNames}
+              colorOf={colorOf}
               query={query}
               onQuery={(q) => {
                 setQuery(q);
@@ -275,6 +304,10 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
               onPickPart={(part) => {
                 setQuery(part);
                 setPinned({ kind: 'part', part });
+              }}
+              onPickTag={(tag) => {
+                setQuery(data.tagNames[tag]);
+                setPinned({ kind: 'tag', tag, subtags: tagSubtags[tag], withSubtags: true });
               }}
             />
             <StatsViewSwitch active="lifetime" rangeHref={`/stats/${todayStr}`} />
@@ -331,6 +364,7 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
               pinned={pinned !== null}
               colorOf={colorOf}
               onPart={onPart}
+              onSubtags={onSubtags}
               onClear={clearFocus}
               bulkTarget={bulkTarget}
               tags={tags}

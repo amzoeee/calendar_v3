@@ -38,7 +38,9 @@ import {
   TAG_SCOPES,
   TAG_SCOPE_BADGES,
   TAG_SCOPE_LABELS,
+  SUBTAG_DISPLAY_COOKIE,
   tagTreeOrder,
+  type SubtagDisplay,
   type TagScope,
 } from '@/lib/tags';
 import { getBrowserTimeZone } from '@/lib/timezone';
@@ -137,10 +139,16 @@ interface SettingsClientProps {
   initialTags: Tag[];
   buildInfo: BuildInfo;
   weekStart: WeekStart;
+  subtagDisplay: SubtagDisplay;
   discordLinks: DiscordLinkView[];
 }
 
-export default function SettingsClient({ initialTags, buildInfo, weekStart, discordLinks }: SettingsClientProps) {
+const SUBTAG_DISPLAY_LABELS: Record<SubtagDisplay, string> = {
+  child: 'Subtag',
+  parent: 'Parent tag',
+};
+
+export default function SettingsClient({ initialTags, buildInfo, weekStart, subtagDisplay, discordLinks }: SettingsClientProps) {
   const router = useRouter();
   const { confirm } = useConfirm();
   const { raiseUndo } = useUndo();
@@ -187,6 +195,11 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     router.refresh();
   };
 
+  const handleSubtagDisplayChange = (value: SubtagDisplay) => {
+    document.cookie = `${SUBTAG_DISPLAY_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;
+    router.refresh();
+  };
+
   // --- Tags list state ---
   const [tagsList, setTagsList] = useState<Tag[]>(initialTags);
 
@@ -194,6 +207,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#6b7280');
   const [newTagScope, setNewTagScope] = useState<TagScope>('both');
+  const [newTagParent, setNewTagParent] = useState<number | null>(null);
   const [addTagError, setAddTagError] = useState('');
 
   // --- Edit Tag Modal State ---
@@ -314,10 +328,11 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     e.preventDefault();
     setAddTagError('');
     try {
-      await addTagAction(newTagName, newTagColor, newTagScope);
+      await addTagAction(newTagName, newTagColor, newTagScope, newTagParent);
       setNewTagName('');
       setNewTagColor('#6b7280');
       setNewTagScope('both');
+      setNewTagParent(null);
       // Refresh local page data
       router.refresh();
     } catch (e: any) {
@@ -635,6 +650,19 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
           {arrangeError && <p className="text-xs text-red-400">{arrangeError}</p>}
         </div>
 
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+          <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="subtag-display">
+            Color subtagged events by
+          </label>
+          <Select<SubtagDisplay>
+            id="subtag-display"
+            value={subtagDisplay}
+            onChange={handleSubtagDisplayChange}
+            className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+            options={(['child', 'parent'] as const).map((v) => ({ value: v, label: SUBTAG_DISPLAY_LABELS[v] }))}
+          />
+        </div>
+
         {/* Collapsible Archived Tags */}
         <details className="border border-border/50 rounded-lg overflow-hidden bg-secondary/15 transition-all">
           <summary className="px-4 py-3 bg-secondary/30 font-semibold text-sm cursor-pointer select-none flex items-center justify-between hover:bg-secondary/45">
@@ -707,6 +735,21 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                 onChange={setNewTagScope}
                 className="mt-1 w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
                 options={TAG_SCOPES.map((scope) => ({ value: scope, label: TAG_SCOPE_LABELS[scope] }))}
+              />
+            </div>
+            <div className="w-full lg:w-44 shrink-0">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="new-tag-parent">
+                Subtag of
+              </label>
+              <Select<number>
+                id="new-tag-parent"
+                value={newTagParent ?? 0}
+                onChange={(v) => setNewTagParent(v || null)}
+                className="mt-1 w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                options={[
+                  { value: 0, label: 'None (top-level)' },
+                  ...activeTags.filter((t) => t.parentId == null).map((t) => ({ value: t.id, label: t.name })),
+                ]}
               />
             </div>
             {/* Color + button always share a row (even on mobile) and stay
