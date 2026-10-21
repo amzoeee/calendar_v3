@@ -13,7 +13,11 @@ FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+# Server Action IDs are hashed with this key; without a fixed one every build
+# renames every action and breaks tabs left open across a deploy. Optional:
+# when the secret is absent Next generates a random key, as before.
+RUN --mount=type=secret,id=next_actions_key,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
+    npm run build
 
 # ---- prod-deps: production-only install, native module built for this image ----
 FROM node:20-bookworm-slim AS prod-deps
