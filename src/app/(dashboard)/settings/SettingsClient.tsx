@@ -648,20 +648,17 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
           {arrangeError && <p className="text-xs text-red-400">{arrangeError}</p>}
         </div>
 
-        <div className="space-y-1">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
-            <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="subtag-display">
-              Color subtagged events by
-            </label>
-            <Select<SubtagDisplay>
-              id="subtag-display"
-              value={subtagDisplay}
-              onChange={handleSubtagDisplayChange}
-              className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-              options={(['child', 'parent'] as const).map((v) => ({ value: v, label: SUBTAG_DISPLAY_LABELS[v] }))}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">Applies to the daily and weekly calendars.</p>
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+          <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="subtag-display">
+            Color subtagged events by
+          </label>
+          <Select<SubtagDisplay>
+            id="subtag-display"
+            value={subtagDisplay}
+            onChange={handleSubtagDisplayChange}
+            className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+            options={(['child', 'parent'] as const).map((v) => ({ value: v, label: SUBTAG_DISPLAY_LABELS[v] }))}
+          />
         </div>
 
         {/* Collapsible Archived Tags */}
