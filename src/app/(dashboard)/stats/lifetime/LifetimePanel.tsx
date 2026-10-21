@@ -297,7 +297,7 @@ export default function LifetimePanel({
           aria-pressed={focus.withSubtags}
           className={`max-w-full flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border transition cursor-pointer ${
             focus.withSubtags
-              ? 'bg-primary/20 border-primary text-primary'
+              ? 'bg-muted border-border text-foreground'
               : 'bg-secondary border-border text-muted-foreground hover:bg-muted hover:text-foreground'
           }`}
         >
