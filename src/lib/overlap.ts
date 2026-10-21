@@ -21,9 +21,6 @@ export interface PositionedEvent {
   start_datetime_local?: string;
   end_datetime_local?: string;
   tag_color?: string;
-  multi_day?: boolean;
-  continues_before?: boolean;
-  continues_after?: boolean;
   overlap_column?: number;
   overlap_total?: number;
 }

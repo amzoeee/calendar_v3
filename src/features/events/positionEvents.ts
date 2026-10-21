@@ -72,9 +72,6 @@ export function positionEventsForDay(
       start_datetime_local: `${formatDateInputValue(startDt)}T${formatTimeInputValue(startDt)}`,
       end_datetime_local: `${formatDateInputValue(endDt)}T${formatTimeInputValue(endDt)}`,
       tag_color: eventTagColor(tags, ev.tag ?? null, subtagDisplay) || UNTAGGED_COLOR,
-      multi_day: startDt.toDateString() !== endDt.toDateString(),
-      continues_before: startDt.getTime() < dayStart,
-      continues_after: endDt.getTime() > dayEnd,
     });
   }
 
