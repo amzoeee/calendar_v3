@@ -63,6 +63,16 @@ describe('sortTaskTree', () => {
     expect(sortTaskTree(tree, 'deadline').map((n) => n.id)).toEqual([3, 4, 2, 1]);
   });
 
+  it('puts ASAP first and unset last when sorting by reminder', () => {
+    const tree = buildTaskTree([
+      row(1),
+      row(2, { remindAt: '2026-10-20 09:00:00' }),
+      row(3, { dueAsap: 1 }),
+      row(4, { remindAt: '2026-10-18 09:00:00' }),
+    ]);
+    expect(sortTaskTree(tree, 'remind').map((n) => n.id)).toEqual([3, 4, 2, 1]);
+  });
+
   it('sorts alphabetically ignoring case', () => {
     const tree = buildTaskTree([row(1, { title: 'banana' }), row(2, { title: 'Apple' })]);
     expect(sortTaskTree(tree, 'alpha').map((n) => n.id)).toEqual([2, 1]);
