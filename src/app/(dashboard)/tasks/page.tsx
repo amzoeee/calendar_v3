@@ -1,7 +1,7 @@
 import { getSession } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { ensureDefaultBoard } from '@/features/tasks/server/actions';
+import { ensureDefaultBoard } from '@/features/tasks/server/queries';
 import { VISIBLE_BOARDS_COOKIE, isVirtualList } from '@/lib/tasks';
 
 // /tasks has no board of its own. It restores the lists you last had open —

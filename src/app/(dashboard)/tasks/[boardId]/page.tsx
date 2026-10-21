@@ -5,7 +5,7 @@ import { eq, and, asc, inArray } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import TasksClient from './TasksClient';
-import { ensureDefaultBoard } from '@/features/tasks/server/actions';
+import { ensureDefaultBoard } from '@/features/tasks/server/queries';
 import {
   MAX_VISIBLE_BOARDS,
   REMINDERS_ONLY_COOKIE,
