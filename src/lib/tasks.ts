@@ -60,6 +60,10 @@ export interface NewTaskDetails {
   /** Due as soon as possible; ignored when a date is given. */
   asap?: boolean;
   tagIds?: number[];
+  /** Reminder, in the same shape setTaskScheduleAction takes. Needs a dueDate. */
+  remindOffsetMinutes?: number | null;
+  remindOffsetDays?: number | null;
+  remindTimeOfDay?: string | null;
 }
 
 /**
