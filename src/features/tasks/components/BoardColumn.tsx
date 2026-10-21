@@ -54,7 +54,7 @@ import {
   deleteCompletedTasksAction,
   createTasksBulkAction,
 } from '@/app/task-actions';
-import { displayTitle, repeatLabel } from '@/lib/taskSchedule';
+import { displayTitle, repeatLabel, DEFAULT_REMIND_TIME } from '@/lib/taskSchedule';
 import DateInput from '@/app/components/DateInput';
 import TimeInput from '@/app/components/TimeInput';
 import Select from '@/app/components/Select';
@@ -67,6 +67,7 @@ import EditableTitle from './EditableTitle';
 import DueChip from './DueChip';
 import TagChips from './TagChips';
 import TagPicker from './TagPicker';
+import ReminderPicker from './ReminderPicker';
 import PasteListDialog from './PasteListDialog';
 import BoardNameDialog from './BoardNameDialog';
 
@@ -109,6 +110,9 @@ export default function BoardColumn({
   const [draftTime, setDraftTime] = useState('');
   const [draftAsap, setDraftAsap] = useState(false);
   const [draftTagIds, setDraftTagIds] = useState<number[]>([]);
+  const [draftRemindMinutes, setDraftRemindMinutes] = useState<number | null>(null);
+  const [draftRemindDays, setDraftRemindDays] = useState<number | null>(null);
+  const [draftRemindTime, setDraftRemindTime] = useState(DEFAULT_REMIND_TIME);
   const [subtaskValue, setSubtaskValue] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -537,6 +541,9 @@ export default function BoardColumn({
     dueTime: draftTime || null,
     asap: draftAsap,
     tagIds: draftTagIds,
+    remindOffsetMinutes: draftRemindMinutes,
+    remindOffsetDays: draftRemindDays,
+    remindTimeOfDay: draftRemindDays != null ? draftRemindTime : null,
   };
 
   // Spent on the task it was set for. The panel stays open, empty and ready,
@@ -546,6 +553,9 @@ export default function BoardColumn({
     setDraftTime('');
     setDraftAsap(false);
     setDraftTagIds([]);
+    setDraftRemindMinutes(null);
+    setDraftRemindDays(null);
+    setDraftRemindTime(DEFAULT_REMIND_TIME);
   };
 
   const closeDetails = () => {
@@ -941,8 +951,8 @@ export default function BoardColumn({
             <button
               onClick={() => (detailsOpen ? closeDetails() : setDetailsOpen(true))}
               aria-expanded={detailsOpen}
-              aria-label={detailsOpen ? 'Hide deadline and tags' : 'Add a deadline or tags'}
-              title="Deadline and tags"
+              aria-label={detailsOpen ? 'Hide deadline, reminder and tags' : 'Add a deadline, reminder or tags'}
+              title="Deadline, reminder and tags"
               className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
             >
               {detailsOpen ? (
@@ -953,10 +963,9 @@ export default function BoardColumn({
             </button>
           </div>
 
-          {/* Deadline and tags before the task exists, so the common case —
-              "read chapter 4, due Friday, #school" — is one step instead of
-              create, open, fill in. The reminder isn't here on purpose: an
-              offset is a decision about a deadline you already have. */}
+          {/* Deadline, reminder and tags before the task exists, so the common
+              case — "read chapter 4, due Friday, #school" — is one step
+              instead of create, open, fill in. */}
           {detailsOpen && (
             <div className="px-2 pb-2 space-y-2">
               <div className="flex gap-1.5 items-center">
@@ -999,6 +1008,18 @@ export default function BoardColumn({
                   ASAP
                 </button>
               </div>
+              {draftDate && (
+                <ReminderPicker
+                  dueDate={draftDate}
+                  dueTime={draftTime}
+                  minutes={draftRemindMinutes}
+                  days={draftRemindDays}
+                  remindTime={draftRemindTime}
+                  onMinutesChange={setDraftRemindMinutes}
+                  onDaysChange={setDraftRemindDays}
+                  onRemindTimeChange={setDraftRemindTime}
+                />
+              )}
               <TagPicker all={availableTags} selected={draftTagIds} onChange={setDraftTagIds} />
             </div>
           )}
