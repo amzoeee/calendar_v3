@@ -126,7 +126,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
           <form action={logoutAction}>
             <button
               type="submit"
-              className="w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-destructive hover:bg-red-950/20 hover:text-red-300 transition-all gap-3 cursor-pointer"
+              className="w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg text-destructive hover:bg-secondary transition-all gap-3 cursor-pointer"
             >
               <LogOut className="h-5 w-5" />
               Sign Out
