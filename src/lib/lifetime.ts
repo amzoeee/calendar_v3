@@ -125,8 +125,7 @@ export type Focus =
   | { kind: 'title'; title: number; part: string | null; event: number | null }
   | { kind: 'query'; q: string }
   | { kind: 'part'; part: string }
-  // `members` is the tag plus its subtags.
-  | { kind: 'tag'; tag: number; members: number[] };
+  | { kind: 'tag'; tag: number; subtags: number[]; withSubtags: boolean };
 
 export const EXACT = 2;
 export const RELATED = 1;
@@ -173,7 +172,7 @@ function matchTitles(index: MatchIndex, focus: Exclude<Focus, { kind: 'tag' }>):
 // through matchTitles.
 export function matchEvents(data: LifetimeEvents, index: MatchIndex, focus: Focus): Uint8Array {
   if (focus.kind === 'tag') {
-    const members = new Set(focus.members);
+    const members = new Set(focus.withSubtags ? [focus.tag, ...focus.subtags] : [focus.tag]);
     return Uint8Array.from(data.tagIdx, (g) => (members.has(g) ? EXACT : 0));
   }
   const titleLevels = matchTitles(index, focus);

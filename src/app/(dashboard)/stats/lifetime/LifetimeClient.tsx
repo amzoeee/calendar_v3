@@ -67,24 +67,31 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
     () => data.tagNames.map((n) => tags.find((t) => t.name === n)?.color ?? UNTAGGED_COLOR),
     [data, tags],
   );
-  // Each tag with its subtags, by index into data.tagNames.
-  const tagMembers = useMemo(
-    () =>
-      data.tagNames.map((n, g) => {
-        const tag = tags.find((t) => t.name === n);
-        if (!tag) return [g];
-        const subs = tags.filter((t) => t.parentId === tag.id).map((t) => data.tagNames.indexOf(t.name));
-        return [g, ...subs.filter((s) => s >= 0)];
-      }),
-    [data, tags],
-  );
-  const searchTags = useMemo(() => {
+  const tagCounts = useMemo(() => {
     const perTag = new Map<number, number>();
     data.tagIdx.forEach((g) => perTag.set(g, (perTag.get(g) ?? 0) + 1));
-    return tagMembers
-      .map((ms, g) => ({ tag: g, count: ms.reduce((n, m) => n + (perTag.get(m) ?? 0), 0) }))
-      .filter((t) => t.count > 0);
-  }, [data, tagMembers]);
+    return perTag;
+  }, [data]);
+  // Subtags with events, by index into data.tagNames.
+  const tagSubtags = useMemo(
+    () =>
+      data.tagNames.map((n) => {
+        const tag = tags.find((t) => t.name === n);
+        if (!tag) return [];
+        return tags
+          .filter((t) => t.parentId === tag.id)
+          .map((t) => data.tagNames.indexOf(t.name))
+          .filter((s) => tagCounts.has(s));
+      }),
+    [data, tags, tagCounts],
+  );
+  const searchTags = useMemo(
+    () =>
+      tagSubtags
+        .map((subs, g) => ({ tag: g, count: [g, ...subs].reduce((n, m) => n + (tagCounts.get(m) ?? 0), 0) }))
+        .filter((t) => t.count > 0),
+    [tagSubtags, tagCounts],
+  );
 
   const colorOf = useCallback(
     (g: number) => (g >= 0 ? tagColors[g] : UNTAGGED_COLOR),
@@ -240,6 +247,10 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
     if (focus?.kind === 'title') setPinned({ ...focus, part });
   };
 
+  const onSubtags = (withSubtags: boolean) => {
+    if (focus?.kind === 'tag') setPinned({ ...focus, withSubtags });
+  };
+
   // ---- Range ---------------------------------------------------------------
   const hasEvents = data.starts.length > 0;
   const firstDay = hasEvents ? segments.eventDay[0] : 0;
@@ -296,7 +307,7 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
               }}
               onPickTag={(tag) => {
                 setQuery(data.tagNames[tag]);
-                setPinned({ kind: 'tag', tag, members: tagMembers[tag] });
+                setPinned({ kind: 'tag', tag, subtags: tagSubtags[tag], withSubtags: true });
               }}
             />
             <StatsViewSwitch active="lifetime" rangeHref={`/stats/${todayStr}`} />
@@ -353,6 +364,7 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
               pinned={pinned !== null}
               colorOf={colorOf}
               onPart={onPart}
+              onSubtags={onSubtags}
               onClear={clearFocus}
               bulkTarget={bulkTarget}
               tags={tags}

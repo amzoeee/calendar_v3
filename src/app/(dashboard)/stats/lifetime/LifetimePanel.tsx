@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { MoreHorizontal, X } from 'lucide-react';
+import { Check, MoreHorizontal, X } from 'lucide-react';
 import { formatDuration, type Focus, type LifetimeEvents, type NameStats } from '@/lib/lifetime';
 import { formatDateInputValue } from '@/lib/timezone';
 import BulkEdit, { type BulkResult, type BulkTarget } from './BulkEdit';
@@ -20,6 +20,7 @@ interface LifetimePanelProps {
   pinned: boolean;
   colorOf: (tag: number) => string;
   onPart: (part: string | null) => void;
+  onSubtags: (withSubtags: boolean) => void;
   onClear: () => void;
   bulkTarget: BulkTarget | null;
   tags: React.ComponentProps<typeof BulkEdit>['tags'];
@@ -163,6 +164,7 @@ export default function LifetimePanel({
   pinned,
   colorOf,
   onPart,
+  onSubtags,
   onClear,
   bulkTarget,
   tags,
@@ -192,7 +194,6 @@ export default function LifetimePanel({
           : focus.part ?? data.titles[focus.title];
   const anchor = focus.kind === 'title' ? focus.event : null;
   const activePart = focus.kind === 'title' ? focus.part : null;
-  const subtags = focus.kind === 'tag' ? focus.members.filter((g) => g !== focus.tag) : [];
 
   const busiest = stats
     ? stats.weekdayCounts.indexOf(Math.max(...stats.weekdayCounts))
@@ -255,12 +256,6 @@ export default function LifetimePanel({
           )}
         </div>
 
-        {subtags.length > 0 && (
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Includes {subtags.map((g) => data.tagNames[g]).join(', ')}
-          </p>
-        )}
-
         {anchor !== null && (
           <div className="text-xs text-muted-foreground space-y-1 mt-0.5">
             <p>
@@ -294,6 +289,21 @@ export default function LifetimePanel({
             </button>
           ))}
         </div>
+      )}
+
+      {focus.kind === 'tag' && focus.subtags.length > 0 && (
+        <button
+          onClick={() => onSubtags(!focus.withSubtags)}
+          aria-pressed={focus.withSubtags}
+          className={`max-w-full flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border transition cursor-pointer ${
+            focus.withSubtags
+              ? 'bg-primary/20 border-primary text-primary'
+              : 'bg-secondary border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          {focus.withSubtags && <Check className="h-3 w-3 shrink-0" />}
+          <span className="truncate">Include {focus.subtags.map((g) => data.tagNames[g]).join(', ')}</span>
+        </button>
       )}
 
       {pinned && bulkTarget && editing && (
