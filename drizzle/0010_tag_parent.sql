@@ -1,0 +1,1 @@
+ALTER TABLE `tags` ADD `parent_id` integer;

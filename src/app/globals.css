@@ -21,7 +21,7 @@
   --muted-foreground: #888888;
   --accent: #333333;
   --accent-foreground: #f0f0f0;
-  --destructive: #ef4444;
+  --destructive: oklch(70.4% 0.191 22.216);
   --destructive-foreground: #ffffff;
   --border: #2a2a2a;
   --input: #222222;
@@ -48,6 +48,14 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+}
+
+/* Red text, grey on hover: Delete, Sign Out and other destructive actions. */
+@utility btn-destructive {
+  color: var(--destructive);
+  &:hover {
+    background-color: var(--secondary);
+  }
 }
 
 body {
