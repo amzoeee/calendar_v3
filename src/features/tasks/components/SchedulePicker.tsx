@@ -6,23 +6,13 @@ import {
   pacificDbStringToDate,
   formatDateInputValue,
   formatTimeInputValue,
-  shiftDateStr,
   getBrowserTimeZone,
 } from '@/lib/timezone';
-import {
-  TIMED_PRESETS,
-  DATED_PRESETS,
-  DEFAULT_REMIND_TIME,
-  localRemindTime,
-  TIMED_UNITS,
-  DATED_UNITS,
-} from '@/lib/taskSchedule';
+import { DEFAULT_REMIND_TIME, localRemindTime } from '@/lib/taskSchedule';
 import DateInput from '@/app/components/DateInput';
 import TimeInput from '@/app/components/TimeInput';
-import Select from '@/app/components/Select';
-import { CUSTOM } from './CustomOffset';
 import { FIELD_CLASS } from '../fieldClass';
-import CustomOffset from './CustomOffset';
+import ReminderPicker from './ReminderPicker';
 
 /**
  * Deadline and reminder for one task.
@@ -32,10 +22,6 @@ import CustomOffset from './CustomOffset';
  * tasks will be able to carry one. The offset comes in two shapes because
  * deadlines do: minutes before a deadline that names a time, whole days plus a
  * time of day for one that names only a date.
- *
- * The preview underneath is computed here in the viewer's own terms rather
- * than read back from the server, so it updates as the fields change. It
- * mirrors the same two rules the server uses.
  */
 export default function SchedulePicker({
   task,
@@ -64,7 +50,6 @@ export default function SchedulePicker({
       ? localRemindTime(task.remindTimeOfDay, task.dueDatetime, getBrowserTimeZone())
       : DEFAULT_REMIND_TIME
   );
-  const [customOpen, setCustomOpen] = useState(false);
 
   const commit = (next: Partial<{
     dueDate: string;
@@ -89,45 +74,6 @@ export default function SchedulePicker({
       remindTimeOfDay: d && !t && dy != null ? rt : null,
     });
   };
-
-  // What will actually happen, in the viewer's own timezone.
-  let preview: string | null = null;
-  if (dueDate && dueTime && minutes != null) {
-    const at = new Date(`${dueDate}T${dueTime}`);
-    at.setMinutes(at.getMinutes() - minutes);
-    preview = at.toLocaleString([], {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  } else if (dueDate && !dueTime && days != null) {
-    const at = new Date(`${shiftDateStr(dueDate, -days)}T${remindTime}`);
-    preview = at.toLocaleString([], {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  }
-
-  // The reminder in whichever shape the deadline currently takes.
-  const presets = dueTime ? TIMED_PRESETS : DATED_PRESETS;
-  const offset = dueTime ? minutes : days;
-  const setOffset = (v: number | null) => {
-    if (dueTime) {
-      setMinutes(v);
-      commit({ minutes: v });
-    } else {
-      setDays(v);
-      commit({ days: v });
-    }
-  };
-  const showCustom =
-    offset != null &&
-    (customOpen || !presets.some((p) => (dueTime ? p.minutes : p.days) === offset));
 
   const toggleAsap = () => {
     const next = !asap;
@@ -201,49 +147,25 @@ export default function SchedulePicker({
           <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Reminder
           </span>
-          <div className="flex gap-1.5">
-            <Select<number | '' | typeof CUSTOM>
-              value={showCustom ? CUSTOM : (offset ?? '')}
-              onChange={(value) => {
-                if (value === CUSTOM) {
-                  setCustomOpen(true);
-                  if (offset == null) setOffset(dueTime ? 60 : 1);
-                  return;
-                }
-                setCustomOpen(false);
-                setOffset(value === '' ? null : value);
-              }}
-              className={`${field} flex-1 min-w-0 cursor-pointer`}
-              options={[
-                { value: '', label: 'No reminder' },
-                ...presets.map((p) => ({
-                  value: (dueTime ? p.minutes : p.days) ?? ('' as const),
-                  label: p.label,
-                })),
-                { value: CUSTOM, label: 'Custom…' },
-              ]}
-            />
-            {!dueTime && days != null && (
-              <TimeInput
-                value={remindTime}
-                onChange={(v) => {
-                  setRemindTime(v);
-                  commit({ remindTime: v });
-                }}
-                className={`${field} w-[6.25rem] cursor-pointer`}
-              />
-            )}
-          </div>
-          {showCustom && offset != null && (
-            <CustomOffset
-              // Remount when the deadline changes shape, so the units re-derive.
-              key={dueTime ? 'timed' : 'dated'}
-              offset={offset}
-              units={dueTime ? TIMED_UNITS : DATED_UNITS}
-              onChange={setOffset}
-            />
-          )}
-          {preview && <p className="text-[10px] text-muted-foreground">Reminds {preview}</p>}
+          <ReminderPicker
+            dueDate={dueDate}
+            dueTime={dueTime}
+            minutes={minutes}
+            days={days}
+            remindTime={remindTime}
+            onMinutesChange={(v) => {
+              setMinutes(v);
+              commit({ minutes: v });
+            }}
+            onDaysChange={(v) => {
+              setDays(v);
+              commit({ days: v });
+            }}
+            onRemindTimeChange={(v) => {
+              setRemindTime(v);
+              commit({ remindTime: v });
+            }}
+          />
         </div>
       )}
     </div>
