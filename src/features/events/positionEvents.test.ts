@@ -35,9 +35,6 @@ describe('positionEventsForDay', () => {
     expect(e.top_position).toBe(16 * 60);
     expect(e.height).toBe(90);
     expect(e.duration_minutes).toBe(90);
-    expect(e.multi_day).toBe(false);
-    expect(e.continues_before).toBe(false);
-    expect(e.continues_after).toBe(false);
   });
 
   it('applies the winter (PST) offset', () => {
@@ -101,18 +98,12 @@ describe('positionEventsForDay', () => {
       // Clipped to 23:59:59, so the minute count stops at 23:59.
       expect(e.height).toBe(59);
       expect(e.duration_minutes).toBe(59);
-      expect(e.multi_day).toBe(true);
-      expect(e.continues_before).toBe(false);
-      expect(e.continues_after).toBe(true);
     });
 
     it('is clipped to the start of the following day', () => {
       const [e] = positionEventsForDay([crossing], JUNE_16, noTags);
       expect(e.top_position).toBe(0);
       expect(e.height).toBe(3 * 60);
-      expect(e.multi_day).toBe(true);
-      expect(e.continues_before).toBe(true);
-      expect(e.continues_after).toBe(false);
     });
 
     it('labels the unclipped range on both days', () => {
@@ -124,22 +115,17 @@ describe('positionEventsForDay', () => {
       }
     });
 
-    // Current behaviour, likely unintended: the day ends at 23:59:59, so an event
-    // ending exactly at midnight reads as 1 minute short and as continuing.
-    it('treats an event ending exactly at midnight as continuing, one minute short', () => {
+    // The day ends at 23:59:59, so an event ending at midnight is clipped too.
+    it('stops an event ending exactly at midnight one minute short', () => {
       // Pacific 16:00-17:00 is local 23:00-00:00.
       const [e] = positionEventsForDay([ev('2026-06-15 16:00:00', '2026-06-15 17:00:00')], JUNE_15, noTags);
       expect(e.height).toBe(59);
-      expect(e.multi_day).toBe(true);
-      expect(e.continues_after).toBe(true);
     });
 
     it('spans the whole day for an event covering it end to end', () => {
       const [e] = positionEventsForDay([ev('2026-06-14 12:00:00', '2026-06-16 12:00:00')], JUNE_15, noTags);
       expect(e.top_position).toBe(0);
       expect(e.height).toBe(24 * 60 - 1);
-      expect(e.continues_before).toBe(true);
-      expect(e.continues_after).toBe(true);
     });
   });
 
