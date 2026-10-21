@@ -124,7 +124,7 @@ function EditorFields({ editor, tags, size }: { editor: EventEditorState; tags: 
         <button
           type="button"
           onClick={editor.remove}
-          className={`flex-1 flex items-center justify-center gap-1.5 ${s.button} bg-red-600 hover:bg-red-700 text-white rounded font-semibold cursor-pointer`}
+          className={`flex-1 flex items-center justify-center gap-1.5 ${s.button} btn-destructive transition-all rounded font-semibold cursor-pointer`}
         >
           <Trash2 className={s.icon} />
           Delete
