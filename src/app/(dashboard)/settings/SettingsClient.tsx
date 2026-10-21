@@ -207,6 +207,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#6b7280');
   const [newTagScope, setNewTagScope] = useState<TagScope>('both');
+  const [newTagParent, setNewTagParent] = useState<number | null>(null);
   const [addTagError, setAddTagError] = useState('');
 
   // --- Edit Tag Modal State ---
@@ -327,10 +328,11 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
     e.preventDefault();
     setAddTagError('');
     try {
-      await addTagAction(newTagName, newTagColor, newTagScope);
+      await addTagAction(newTagName, newTagColor, newTagScope, newTagParent);
       setNewTagName('');
       setNewTagColor('#6b7280');
       setNewTagScope('both');
+      setNewTagParent(null);
       // Refresh local page data
       router.refresh();
     } catch (e: any) {
@@ -733,6 +735,21 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                 onChange={setNewTagScope}
                 className="mt-1 w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
                 options={TAG_SCOPES.map((scope) => ({ value: scope, label: TAG_SCOPE_LABELS[scope] }))}
+              />
+            </div>
+            <div className="w-full lg:w-44 shrink-0">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="new-tag-parent">
+                Subtag of
+              </label>
+              <Select<number>
+                id="new-tag-parent"
+                value={newTagParent ?? 0}
+                onChange={(v) => setNewTagParent(v || null)}
+                className="mt-1 w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                options={[
+                  { value: 0, label: 'None (top-level)' },
+                  ...activeTags.filter((t) => t.parentId == null).map((t) => ({ value: t.id, label: t.name })),
+                ]}
               />
             </div>
             {/* Color + button always share a row (even on mobile) and stay
