@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { MoreHorizontal, X } from 'lucide-react';
+import { Check, MoreHorizontal, X } from 'lucide-react';
 import { formatDuration, type Focus, type LifetimeEvents, type NameStats } from '@/lib/lifetime';
 import { formatDateInputValue } from '@/lib/timezone';
 import BulkEdit, { type BulkResult, type BulkTarget } from './BulkEdit';
@@ -20,6 +20,7 @@ interface LifetimePanelProps {
   pinned: boolean;
   colorOf: (tag: number) => string;
   onPart: (part: string | null) => void;
+  onSubtags: (withSubtags: boolean) => void;
   onClear: () => void;
   bulkTarget: BulkTarget | null;
   tags: React.ComponentProps<typeof BulkEdit>['tags'];
@@ -163,6 +164,7 @@ export default function LifetimePanel({
   pinned,
   colorOf,
   onPart,
+  onSubtags,
   onClear,
   bulkTarget,
   tags,
@@ -187,7 +189,9 @@ export default function LifetimePanel({
       ? `“${focus.q}”`
       : focus.kind === 'part'
         ? focus.part
-        : focus.part ?? data.titles[focus.title];
+        : focus.kind === 'tag'
+          ? data.tagNames[focus.tag]
+          : focus.part ?? data.titles[focus.title];
   const anchor = focus.kind === 'title' ? focus.event : null;
   const activePart = focus.kind === 'title' ? focus.part : null;
 
@@ -199,7 +203,17 @@ export default function LifetimePanel({
     <div className="space-y-4">
       <div>
         <div className="flex items-start justify-between gap-2">
-          <h2 className="text-lg font-bold tracking-tight break-words min-w-0">{heading}</h2>
+          {focus.kind === 'tag' ? (
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tag</p>
+              <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight break-words min-w-0">
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: colorOf(focus.tag) }} />
+                {heading}
+              </h2>
+            </div>
+          ) : (
+            <h2 className="text-lg font-bold tracking-tight break-words min-w-0">{heading}</h2>
+          )}
           {pinned && (
             // Matches the heading's line height so the icons centre on its first line.
             <div className="relative flex items-center gap-0.5 h-7 shrink-0">
@@ -277,6 +291,21 @@ export default function LifetimePanel({
         </div>
       )}
 
+      {focus.kind === 'tag' && focus.subtags.length > 0 && (
+        <button
+          onClick={() => onSubtags(!focus.withSubtags)}
+          aria-pressed={focus.withSubtags}
+          className={`max-w-full flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border transition cursor-pointer ${
+            focus.withSubtags
+              ? 'bg-muted border-border text-foreground'
+              : 'bg-secondary border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          {focus.withSubtags && <Check className="h-3 w-3 shrink-0" />}
+          <span className="truncate">Include {focus.subtags.map((g) => data.tagNames[g]).join(', ')}</span>
+        </button>
+      )}
+
       {pinned && bulkTarget && editing && (
         <BulkEdit
           key={focusKey}
@@ -335,7 +364,7 @@ export default function LifetimePanel({
             />
           </div>
 
-          {stats.topTag && (
+          {stats.topTag && focus.kind !== 'tag' && (
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
