@@ -23,27 +23,28 @@ const ev = (start: string, end: string, extra: Partial<EventRowLike> = {}): Even
   ...extra,
 });
 
-const noTags: { name: string; color: string }[] = [];
+type Tags = Parameters<typeof positionEventsForDay>[2];
+const noTags: Tags = [];
 
 describe('positionEventsForDay', () => {
   it('returns [] for no events', () => {
-    expect(positionEventsForDay([], JUNE_15, noTags)).toEqual([]);
+    expect(positionEventsForDay([], JUNE_15, noTags, 'child')).toEqual([]);
   });
 
   it('positions an event in minutes from local midnight', () => {
-    const [e] = positionEventsForDay([ev('2026-06-15 09:00:00', '2026-06-15 10:30:00')], JUNE_15, noTags);
+    const [e] = positionEventsForDay([ev('2026-06-15 09:00:00', '2026-06-15 10:30:00')], JUNE_15, noTags, 'child');
     expect(e.top_position).toBe(16 * 60);
     expect(e.height).toBe(90);
     expect(e.duration_minutes).toBe(90);
   });
 
   it('applies the winter (PST) offset', () => {
-    const [e] = positionEventsForDay([ev('2026-01-15 09:00:00', '2026-01-15 10:00:00')], new Date(2026, 0, 15), noTags);
+    const [e] = positionEventsForDay([ev('2026-01-15 09:00:00', '2026-01-15 10:00:00')], new Date(2026, 0, 15), noTags, 'child');
     expect(e.top_position).toBe(17 * 60);
   });
 
   it('formats times with the pinned en-US format', () => {
-    const [e] = positionEventsForDay([ev('2026-06-15 09:00:00', '2026-06-15 10:30:00')], JUNE_15, noTags);
+    const [e] = positionEventsForDay([ev('2026-06-15 09:00:00', '2026-06-15 10:30:00')], JUNE_15, noTags, 'child');
     expect(e.start_time).toBe('04:00 PM');
     expect(e.end_time).toBe('05:30 PM');
     expect(e.time_range).toBe('04:00 PM - 05:30 PM');
@@ -55,7 +56,8 @@ describe('positionEventsForDay', () => {
     const [e] = positionEventsForDay(
       [ev('2026-06-15 09:00:00', '2026-06-15 10:00:00', { description: 'notes', tag: 'work', rrule: 'FREQ=DAILY', recurrenceId: 'r1' })],
       JUNE_15,
-      noTags
+      noTags,
+      'child'
     );
     expect(e).toMatchObject({
       title: 'Event',
@@ -74,17 +76,17 @@ describe('positionEventsForDay', () => {
         ev('2026-06-14 09:00:00', '2026-06-14 10:00:00'),
         ev('2026-06-16 09:00:00', '2026-06-16 10:00:00'),
       ];
-      expect(positionEventsForDay(events, JUNE_15, noTags)).toEqual([]);
+      expect(positionEventsForDay(events, JUNE_15, noTags, 'child')).toEqual([]);
     });
 
     it('drops an event ending exactly at the start of the day', () => {
       // Pacific 16:00-17:00 on the 14th is 23:00-00:00 local.
-      expect(positionEventsForDay([ev('2026-06-14 16:00:00', '2026-06-14 17:00:00')], JUNE_15, noTags)).toEqual([]);
+      expect(positionEventsForDay([ev('2026-06-14 16:00:00', '2026-06-14 17:00:00')], JUNE_15, noTags, 'child')).toEqual([]);
     });
 
     it('drops an event starting exactly at the end of the day', () => {
       // Pacific 17:00 is 00:00 local on the next day.
-      expect(positionEventsForDay([ev('2026-06-15 17:00:00', '2026-06-15 18:00:00')], JUNE_15, noTags)).toEqual([]);
+      expect(positionEventsForDay([ev('2026-06-15 17:00:00', '2026-06-15 18:00:00')], JUNE_15, noTags, 'child')).toEqual([]);
     });
   });
 
@@ -93,7 +95,7 @@ describe('positionEventsForDay', () => {
     const crossing = ev('2026-06-15 16:00:00', '2026-06-15 20:00:00');
 
     it('is clipped to the end of the starting day', () => {
-      const [e] = positionEventsForDay([crossing], JUNE_15, noTags);
+      const [e] = positionEventsForDay([crossing], JUNE_15, noTags, 'child');
       expect(e.top_position).toBe(23 * 60);
       // Clipped to 23:59:59, so the minute count stops at 23:59.
       expect(e.height).toBe(59);
@@ -101,14 +103,14 @@ describe('positionEventsForDay', () => {
     });
 
     it('is clipped to the start of the following day', () => {
-      const [e] = positionEventsForDay([crossing], JUNE_16, noTags);
+      const [e] = positionEventsForDay([crossing], JUNE_16, noTags, 'child');
       expect(e.top_position).toBe(0);
       expect(e.height).toBe(3 * 60);
     });
 
     it('labels the unclipped range on both days', () => {
       for (const day of [JUNE_15, JUNE_16]) {
-        const [e] = positionEventsForDay([crossing], day, noTags);
+        const [e] = positionEventsForDay([crossing], day, noTags, 'child');
         expect(e.start_time).toBe('11:00 PM');
         expect(e.end_time).toBe('03:00 AM');
         expect(e.time_range).toBe('Jun 15 11:00 PM - Jun 16 03:00 AM');
@@ -118,24 +120,24 @@ describe('positionEventsForDay', () => {
     // The day ends at 23:59:59, so an event ending at midnight is clipped too.
     it('stops an event ending exactly at midnight one minute short', () => {
       // Pacific 16:00-17:00 is local 23:00-00:00.
-      const [e] = positionEventsForDay([ev('2026-06-15 16:00:00', '2026-06-15 17:00:00')], JUNE_15, noTags);
+      const [e] = positionEventsForDay([ev('2026-06-15 16:00:00', '2026-06-15 17:00:00')], JUNE_15, noTags, 'child');
       expect(e.height).toBe(59);
     });
 
     it('spans the whole day for an event covering it end to end', () => {
-      const [e] = positionEventsForDay([ev('2026-06-14 12:00:00', '2026-06-16 12:00:00')], JUNE_15, noTags);
+      const [e] = positionEventsForDay([ev('2026-06-14 12:00:00', '2026-06-16 12:00:00')], JUNE_15, noTags, 'child');
       expect(e.top_position).toBe(0);
       expect(e.height).toBe(24 * 60 - 1);
     });
   });
 
   describe('tag colour', () => {
-    const tags = [
-      { name: 'work', color: '#ff0000' },
-      { name: 'blank', color: '' },
+    const tags: Tags = [
+      { id: 1, name: 'work', color: '#ff0000', parentId: null },
+      { id: 2, name: 'blank', color: '', parentId: null },
     ];
     const colorOf = (tag?: string | null) =>
-      positionEventsForDay([ev('2026-06-15 09:00:00', '2026-06-15 10:00:00', { tag })], JUNE_15, tags)[0].tag_color;
+      positionEventsForDay([ev('2026-06-15 09:00:00', '2026-06-15 10:00:00', { tag })], JUNE_15, tags, 'child')[0].tag_color;
 
     it('uses the colour of the matching tag', () => {
       expect(colorOf('work')).toBe('#ff0000');
@@ -160,7 +162,8 @@ describe('positionEventsForDay', () => {
         ev('2026-06-15 11:00:00', '2026-06-15 12:00:00', { title: 'C' }),
       ],
       JUNE_15,
-      noTags
+      noTags,
+      'child'
     );
     expect(result.map((e) => [e.title, e.overlap_column, e.overlap_total])).toEqual([
       ['A', 0, 2],
