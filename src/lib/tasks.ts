@@ -160,10 +160,9 @@ function compare(a: TaskNode, b: TaskNode, mode: SortMode): number {
       // Newest first, matching where the composer puts new tasks.
       return (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || b.id - a.id;
     case 'deadline':
-      // ASAP outranks any date, so it sits on top.
-      if (a.dueAsap !== b.dueAsap) return b.dueAsap - a.dueAsap;
-    // falls through
     case 'remind': {
+      // ASAP outranks any date, and counts as a reminder that's already gone off.
+      if (a.dueAsap !== b.dueAsap) return b.dueAsap - a.dueAsap;
       // Undated tasks sink to the bottom rather than sorting as "earliest".
       const key = mode === 'deadline' ? 'dueDatetime' : 'remindAt';
       const av = a[key];
@@ -218,6 +217,7 @@ function groupKey(node: TaskNode, mode: SortMode): string | null {
       if (node.dueAsap) return 'asap';
       return node.dueDatetime?.slice(0, 10) ?? 'undated';
     case 'remind':
+      if (node.dueAsap) return 'asap';
       return node.remindAt?.slice(0, 10) ?? 'unset';
     default:
       return null;
