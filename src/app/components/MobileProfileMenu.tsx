@@ -81,7 +81,7 @@ export default function MobileProfileMenu({
             <form action={logoutAction}>
               <button
                 type="submit"
-                className="w-full flex items-center px-2 py-2 text-sm font-medium rounded-md text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-all gap-2 cursor-pointer"
+                className="w-full flex items-center px-2 py-2 text-sm font-medium rounded-md btn-destructive transition-all gap-2 cursor-pointer"
               >
                 <LogOut className="h-4 w-4" />
                 Sign Out

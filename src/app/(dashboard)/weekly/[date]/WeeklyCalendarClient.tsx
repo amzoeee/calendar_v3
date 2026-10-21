@@ -10,8 +10,6 @@ import {
   ChevronRight,
   ZoomIn,
   ZoomOut,
-  Trash2,
-  Copy,
   X,
   Plus,
   Circle,
@@ -19,22 +17,12 @@ import {
   CalendarRange,
 } from 'lucide-react';
 import { PositionedEvent, calculateOverlapColumns } from '@/lib/overlap';
-import { computeInitialOverlayCoords, topMinToViewportTop, clampOverlayTopMin, overlayClipPath } from '@/lib/overlayPosition';
 import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { track } from '@/lib/track';
 import { usePinchZoom } from '@/lib/usePinchZoom';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import EventSearch from '@/app/components/EventSearch';
-import {
-  addEventAction,
-  updateEventAction,
-  deleteEventAction,
-  copyEventAction,
-  deleteRecurringSeriesAction,
-  reinsertEventsAction,
-  type EventRow,
-  updateRecurringSeriesAction,
-} from '@/app/actions';
+import { addEventAction } from '@/app/actions';
 import {
   getBrowserTimeZone,
   pacificDbStringToDate,
@@ -45,9 +33,10 @@ import {
 } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
 import TimeInput from '@/app/components/TimeInput';
-import { useConfirm, isInsideModal } from '@/app/components/ConfirmDialog';
-import { useUndo } from '@/app/components/UndoToast';
-import { deletedEventsMessage } from '@/lib/undoMessages';
+import { isInsideModal } from '@/app/components/ConfirmDialog';
+import { useEventEditor } from '@/features/events/useEventEditor';
+import { useEditorPlacement } from '@/features/events/useEditorPlacement';
+import EventEditor from '@/features/events/components/EventEditor';
 
 interface Tag {
   id: number;
@@ -89,8 +78,6 @@ interface WeeklyCalendarClientProps {
 }
 
 export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags }: WeeklyCalendarClientProps) {
-  const { confirm } = useConfirm();
-  const { raiseUndo } = useUndo();
 
   // --- Zoom & Scroll ---
   const [zoomLevel, setZoomLevel] = useState<number>(60);
@@ -110,48 +97,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   const mobileGridRef = useRef<HTMLDivElement>(null);
   const [mobileGridHeight, setMobileGridHeight] = useState(0);
 
-  // --- Overlay & Modal States ---
-  const [activeOverlayId, setActiveOverlayId] = useState<number | null>(null);
-  const [showEditRecurModal, setShowEditRecurModal] = useState<boolean>(false);
-  const [showDeleteRecurModal, setShowDeleteRecurModal] = useState<boolean>(false);
-  const [recurEvent, setRecurEvent] = useState<PositionedEvent | null>(null);
-  const [editingEvent, setEditingEvent] = useState<PositionedEvent | null>(null);
-  // Anchor for the edit overlay: `topMin` = the event's start minute (so it
-  // scales with zoom), `x` = horizontal viewport px. This is the TRUE click
-  // anchor and is never mutated after being set — positioned imperatively
-  // (see positionOverlay) so it tracks the event with no per-frame re-render.
-  const [overlayCoords, setOverlayCoords] = useState<{ topMin: number; x: number } | null>(null);
-  // One-time vertical nudge (in timeline minutes) applied on top of
-  // overlayCoords.topMin so the popup opens fully on-screen even when the
-  // click was near the end of the day. Computed fresh from the true anchor
-  // whenever the overlay opens, and dropped back to 0 on zoom/resize so a
-  // nudge sized for one viewport never lingers and drags the popup out of
-  // sync with its event — see the effects below.
-  const [verticalNudgeMin, setVerticalNudgeMin] = useState(0);
-  // Adjust-state-during-render: reset the nudge as soon as zoom changes.
-  const [prevZoomLevel, setPrevZoomLevel] = useState(zoomLevel);
-  if (prevZoomLevel !== zoomLevel) {
-    setPrevZoomLevel(zoomLevel);
-    if (verticalNudgeMin !== 0) setVerticalNudgeMin(0);
-  }
-  const overlayRef = useRef<HTMLDivElement>(null);
-  // Separate DOM subtree from overlayRef (the desktop popover, hidden on
-  // mobile) — the click-outside listener below needs to know about both so a
-  // tap inside the mobile sheet isn't mistaken for a click outside it.
-  const mobileEditSheetRef = useRef<HTMLDivElement>(null);
-
-  // --- Edit Form State ---
-  const [editTitle, setEditTitle] = useState('');
-  const [editTag, setEditTag] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [editStartDate, setEditStartDate] = useState('');
-  const [editStartTime, setEditStartTime] = useState('');
-  const [editEndDate, setEditEndDate] = useState('');
-  const [editEndTime, setEditEndTime] = useState('');
-
-  // Ref so the keydown handler always reads the latest edit state.
-  const editStateRef = useRef({ editTitle, editTag, editDesc, editStartDate, editStartTime, editEndDate, editEndTime });
-  editStateRef.current = { editTitle, editTag, editDesc, editStartDate, editStartTime, editEndDate, editEndTime };
+  const editorPopoverRef = useRef<HTMLDivElement>(null);
 
   // --- Add Event Modal State ---
   const [showAddModal, setShowAddModal] = useState(false);
@@ -208,29 +154,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     const savedMobileZoom = Number(localStorage.getItem(MOBILE_ZOOM_KEY));
     if (Number.isFinite(savedMobileZoom) && savedMobileZoom > 0) setMobileZoom(savedMobileZoom);
   }, []);
-
-  // Click outside overlay listener to close the popover
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isInsideModal(event.target)) return;
-      if (
-        activeOverlayId !== null &&
-        overlayRef.current &&
-        !overlayRef.current.contains(event.target as Node) &&
-        !mobileEditSheetRef.current?.contains(event.target as Node)
-      ) {
-        const clickedEventCard = (event.target as Element).closest('.event-card-clickable');
-        if (!clickedEventCard) {
-          setActiveOverlayId(null);
-          setEditingEvent(null);
-          setOverlayCoords(null);
-        }
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [activeOverlayId]);
 
   const changeZoom = (delta: number) => {
     setZoomLevel((prev) => Math.max(30, Math.min(300, prev + delta)));
@@ -319,40 +242,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
         e.target instanceof HTMLTextAreaElement ||
         select !== null;
 
-      // Escape closes the overlay regardless of focus
-      if (e.key === 'Escape' && activeOverlayId !== null) {
-        e.preventDefault();
-        setActiveOverlayId(null);
-        setEditingEvent(null);
-        setOverlayCoords(null);
-        return;
-      }
-
-      // Enter saves the event regardless of whether focus is in a form field
-      if (e.key === 'Enter' && activeOverlayId !== null && editingEvent) {
-        e.preventDefault();
-        if (editingEvent.recurrenceId) {
-          setRecurEvent(editingEvent);
-          setShowEditRecurModal(true);
-        } else {
-          const s = editStateRef.current;
-          saveScroll();
-          updateEventAction(editingEvent.id, {
-            title: s.editTitle,
-            description: s.editDesc,
-            tag: s.editTag,
-            startDatetime: `${s.editStartDate}T${s.editStartTime}`,
-            endDatetime: `${s.editEndDate}T${s.editEndTime}`,
-            timeZone: getBrowserTimeZone(),
-          }).then(() => {
-            setActiveOverlayId(null);
-            setEditingEvent(null);
-            setOverlayCoords(null);
-          });
-        }
-        return;
-      }
-
       if (e.metaKey || e.ctrlKey) {
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
@@ -378,93 +267,19 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
           track('nav.keyboard');
           saveScroll();
           navigateTo(nextWeekStr);
-        } else if ((e.key === 'Delete' || e.key === 'Backspace') && activeOverlayId !== null && editingEvent) {
-          e.preventDefault();
-          if (editingEvent.recurrenceId) {
-            setRecurEvent(editingEvent);
-            setShowDeleteRecurModal(true);
-          } else {
-            handleDeleteInstance(editingEvent.id);
-          }
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [navigateTo, prevWeekStr, nextWeekStr, activeOverlayId, editingEvent]);
+  }, [navigateTo, prevWeekStr, nextWeekStr]);
 
   const saveScroll = () => {
     if (timelineContainerRef.current) {
       localStorage.setItem('calendarScrollPos', String(timelineContainerRef.current.scrollTop));
     }
   };
-
-  // Position the edit overlay imperatively so it tracks its event as the
-  // timeline scrolls/zooms — pinned to the event's on-screen position, and
-  // clipped to the timeline box so it partially cuts off at the edges and
-  // disappears entirely once the event scrolls out of view. Writing styles
-  // directly (rather than via React state) keeps scrolling lag-free.
-  const positionOverlay = () => {
-    const el = overlayRef.current;
-    const container = timelineContainerRef.current;
-    if (!el || !container || !overlayCoords) return;
-
-    const rect = container.getBoundingClientRect();
-    const top = topMinToViewportTop(overlayCoords.topMin + verticalNudgeMin, rect.top, container.scrollTop, zoomLevel);
-    el.style.top = `${top}px`;
-    el.style.left = `${overlayCoords.x}px`;
-
-    // Clip to the container's vertical bounds; hide once fully outside.
-    const h = el.offsetHeight;
-    const clipTop = Math.max(0, rect.top - top);
-    const clipBottom = Math.max(0, top + h - rect.bottom);
-    if (clipTop >= h || clipBottom >= h) {
-      el.style.visibility = 'hidden';
-    } else {
-      el.style.visibility = 'visible';
-      el.style.clipPath = overlayClipPath(clipTop, clipBottom);
-    }
-  };
-
-  // Compute the one-time vertical nudge fresh from the TRUE click anchor
-  // whenever the overlay opens (or a new click re-anchors it within the same
-  // event) — never from a previously-nudged value, so it can't compound or
-  // drift out of sync with the event after a later zoom/resize.
-  useLayoutEffect(() => {
-    if (activeOverlayId === null || !overlayCoords) return;
-    const el = overlayRef.current;
-    const container = timelineContainerRef.current;
-    if (!el || !container) return;
-
-    const rect = container.getBoundingClientRect();
-    const naturalTop = topMinToViewportTop(overlayCoords.topMin, rect.top, container.scrollTop, zoomLevel);
-    const nudge = clampOverlayTopMin(overlayCoords.topMin, naturalTop, el.offsetHeight, zoomLevel, window.innerHeight) - overlayCoords.topMin;
-    setVerticalNudgeMin(nudge);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOverlayId, overlayCoords]);
-
-  // Reposition on scroll (tracking the current nudge as-is) and on resize
-  // (dropping the nudge — a window resize can't be "clamped for" the way an
-  // initial-open nudge is, so just let the popup crop/hide via the clip-path
-  // above, same as when its event scrolls out of view).
-  useLayoutEffect(() => {
-    if (activeOverlayId === null || !overlayCoords) return;
-    positionOverlay();
-    const container = timelineContainerRef.current;
-    const onScroll = () => positionOverlay();
-    const onResize = () => {
-      setVerticalNudgeMin(0);
-      positionOverlay();
-    };
-    container?.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onResize);
-    return () => {
-      container?.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onResize);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOverlayId, overlayCoords, zoomLevel, verticalNudgeMin]);
 
   // Process events for a single day
   const getPositionedEventsForDay = (day: Date): PositionedEvent[] => {
@@ -533,48 +348,25 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     [weekDates, initialEvents, tags]
   );
 
+  const editor = useEventEditor({ beforeMutate: saveScroll });
+  const placement = useEditorPlacement({
+    open: editor.event !== null,
+    popoverRef: editorPopoverRef,
+    containerRef: timelineContainerRef,
+    zoomLevel,
+  });
+  const activeOverlayId = editor.event?.id ?? null;
+
   const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
     saveScroll();
-
-    // Anchor the overlay to the exact click point: horizontal straight from the
-    // click, vertical converted to a timeline minute so all subsequent
-    // scroll/zoom anchoring stays relative to where the click landed.
-    const container = timelineContainerRef.current;
-    const rect = container?.getBoundingClientRect();
-    const scrollTop = container?.scrollTop ?? 0;
-
-    setOverlayCoords(
-      computeInitialOverlayCoords(e.clientX, e.clientY, rect?.top ?? 0, scrollTop, zoomLevel, window.innerWidth)
-    );
-    setEditingEvent(ev);
-    setActiveOverlayId(ev.id);
-    setEditTitle(ev.title);
-    setEditTag(ev.tag || '');
-    setEditDesc(ev.description || '');
-    const editStartDt = pacificDbStringToDate(ev.startDatetime);
-    const editEndDt = pacificDbStringToDate(ev.endDatetime);
-    setEditStartDate(formatDateInputValue(editStartDt));
-    setEditStartTime(formatTimeInputValue(editStartDt));
-    setEditEndDate(formatDateInputValue(editEndDt));
-    setEditEndTime(formatTimeInputValue(editEndDt));
+    placement.anchorAt(e);
+    editor.open(ev);
   };
 
-  // Mobile agenda rows have no click-point to anchor a popover to (there's no
-  // desktop-style overlay on mobile — see the bottom sheet below), so this just
-  // populates the edit state without touching overlayCoords/positioning.
+  // Mobile has no click point to anchor a popover to; it gets the bottom sheet.
   const handleOpenEditMobile = (ev: PositionedEvent) => {
     saveScroll();
-    setEditingEvent(ev);
-    setActiveOverlayId(ev.id);
-    setEditTitle(ev.title);
-    setEditTag(ev.tag || '');
-    setEditDesc(ev.description || '');
-    const editStartDt = pacificDbStringToDate(ev.startDatetime);
-    const editEndDt = pacificDbStringToDate(ev.endDatetime);
-    setEditStartDate(formatDateInputValue(editStartDt));
-    setEditStartTime(formatTimeInputValue(editStartDt));
-    setEditEndDate(formatDateInputValue(editEndDt));
-    setEditEndTime(formatTimeInputValue(editEndDt));
+    editor.open(ev);
   };
 
   const handleGridClick = (day: Date, hour: number) => {
@@ -587,10 +379,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     setAddStartTime(`${startHourStr}:00`);
     setAddEndTime(`${endHourStr}:00`);
     setShowAddModal(true);
-  };
-
-  const getTagColor = (tagName: string) => {
-    return tags.find((t) => t.name === tagName)?.color || 'transparent';
   };
 
   // Handlers
@@ -610,66 +398,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     setAddDesc('');
     setAddTag('');
     setShowAddModal(false);
-  };
-
-  const handleUpdateInstance = async (eventId: number) => {
-    saveScroll();
-    await updateEventAction(eventId, {
-      title: editTitle,
-      description: editDesc,
-      tag: editTag,
-      startDatetime: `${editStartDate}T${editStartTime}`,
-      endDatetime: `${editEndDate}T${editEndTime}`,
-      timeZone: getBrowserTimeZone(),
-    });
-    setActiveOverlayId(null);
-    setEditingEvent(null);
-    setOverlayCoords(null);
-  };
-
-  const handleUpdateSeries = async (recurrenceId: string) => {
-    saveScroll();
-    await updateRecurringSeriesAction(recurrenceId, {
-      title: editTitle,
-      description: editDesc,
-      tag: editTag,
-    });
-    setActiveOverlayId(null);
-    setEditingEvent(null);
-    setOverlayCoords(null);
-  };
-
-  const handleDeleteInstance = async (eventId: number) => {
-    if (await confirm({ title: 'Delete this event?', confirmLabel: 'Delete', destructive: true })) {
-      saveScroll();
-      const deleted = await deleteEventAction(eventId);
-      setActiveOverlayId(null);
-      setEditingEvent(null);
-      setOverlayCoords(null);
-      raiseUndo({ message: deletedEventsMessage(deleted), undo: () => restoreEvents(deleted) });
-    }
-  };
-
-  const handleDeleteSeries = async (recurrenceId: string) => {
-    saveScroll();
-    const deleted = await deleteRecurringSeriesAction(recurrenceId);
-    setActiveOverlayId(null);
-    setEditingEvent(null);
-    setOverlayCoords(null);
-    raiseUndo({ message: deletedEventsMessage(deleted), undo: () => restoreEvents(deleted) });
-  };
-
-  const restoreEvents = async (rows: EventRow[]) => {
-    saveScroll();
-    await reinsertEventsAction(rows);
-  };
-
-  const handleCopy = async (eventId: number) => {
-    saveScroll();
-    await copyEventAction(eventId);
-    setActiveOverlayId(null);
-    setEditingEvent(null);
-    setOverlayCoords(null);
   };
 
   const today = new Date();
@@ -744,7 +472,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
       saveScroll();
       navigateTo(prevWeekStr);
     },
-    enabled: activeOverlayId === null && !showAddModal && !showEditRecurModal && !showDeleteRecurModal,
+    enabled: activeOverlayId === null && !showAddModal,
   });
 
   return (
@@ -1236,331 +964,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
         </div>
       </div>
 
-      {/* EDIT OVERLAY POPOVER (desktop only — see the mobile bottom sheet below) */}
-      {activeOverlayId && editingEvent && (
-        <div
-          ref={overlayRef}
-          className="hidden md:block fixed bg-card border border-border rounded-lg shadow-2xl p-4 w-72 space-y-3 z-50 text-left"
-        >
-          <div className="flex items-center justify-between border-b border-border pb-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Edit Event
-            </h4>
-            <button
-              onClick={() => {
-                setActiveOverlayId(null);
-                setEditingEvent(null);
-                setOverlayCoords(null);
-              }}
-              className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Title */}
-          <div>
-            <input
-              type="text"
-              required
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              placeholder="Title"
-              className="block w-full rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-
-          {/* Tag */}
-          <div className="flex items-center gap-2">
-            <span
-              className="w-4 h-4 rounded-full border border-border flex-shrink-0"
-              style={{ backgroundColor: getTagColor(editTag) }}
-            ></span>
-            <TagSelect
-              tags={tags}
-              value={editTag}
-              onChange={setEditTag}
-              className="w-full rounded bg-secondary border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-            />
-          </div>
-
-          {/* Date/Time Inputs */}
-          <div className="space-y-2 text-xs">
-            <div>
-              <label className="block text-muted-foreground">Start</label>
-              <div className="mt-1 grid grid-cols-2 gap-1">
-                <DateInput
-                  value={editStartDate}
-                  onChange={setEditStartDate}
-                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
-                />
-                <TimeInput
-                  value={editStartTime}
-                  onChange={setEditStartTime}
-                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-muted-foreground">End</label>
-              <div className="mt-1 grid grid-cols-2 gap-1">
-                <DateInput
-                  value={editEndDate}
-                  onChange={setEditEndDate}
-                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
-                />
-                <TimeInput
-                  value={editEndTime}
-                  onChange={setEditEndTime}
-                  className="block w-full rounded bg-secondary border border-border px-1 py-1 text-foreground focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Description */}
-          <div>
-            <textarea
-              value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value)}
-              placeholder="Description"
-              rows={2}
-              className="block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground focus:outline-none resize-none"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-2">
-            {editingEvent.recurrenceId ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setRecurEvent(editingEvent);
-                  setShowEditRecurModal(true);
-                }}
-                className="flex-1 py-1.5 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-semibold cursor-pointer text-center"
-              >
-                Save
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => handleUpdateInstance(editingEvent.id)}
-                className="flex-1 py-1.5 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-semibold cursor-pointer text-center"
-              >
-                Save
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveOverlayId(null);
-                setEditingEvent(null);
-                setOverlayCoords(null);
-              }}
-              className="px-3 py-1.5 bg-secondary hover:bg-muted text-foreground rounded text-xs font-semibold cursor-pointer"
-            >
-              Cancel
-            </button>
-          </div>
-
-            {/* Delete & Copy */}
-            <div className="border-t border-border pt-2 flex justify-between gap-2">
-              {editingEvent.recurrenceId ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRecurEvent(editingEvent);
-                    setShowDeleteRecurModal(true);
-                  }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-red-650 hover:bg-red-700 text-white rounded text-xs font-semibold cursor-pointer"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleDeleteInstance(editingEvent.id)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-red-650 hover:bg-red-700 text-white rounded text-xs font-semibold cursor-pointer"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => handleCopy(editingEvent.id)}
-                className="px-3 py-1.5 bg-secondary hover:bg-muted text-foreground rounded text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Copy className="h-3.5 w-3.5" />
-                Copy
-              </button>
-            </div>
-          </div>
-        )}
-
-      {/* MOBILE EDIT EVENT SHEET (desktop uses the click-anchored popover above) */}
-      {activeOverlayId && editingEvent && (
-        <div className="md:hidden fixed inset-0 z-50 flex items-end">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => {
-              setActiveOverlayId(null);
-              setEditingEvent(null);
-              setOverlayCoords(null);
-            }}
-          />
-          <div ref={mobileEditSheetRef} className="relative w-full max-h-[85vh] overflow-y-auto bg-card border-t border-border rounded-t-2xl p-5 pb-8 space-y-4">
-            <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold tracking-tight">Edit event</h2>
-              <button
-                onClick={() => {
-                  setActiveOverlayId(null);
-                  setEditingEvent(null);
-                  setOverlayCoords(null);
-                }}
-                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <input
-              type="text"
-              required
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              placeholder="Title"
-              className="block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-
-            <div className="flex items-center gap-2">
-              <span
-                className="w-4 h-4 rounded-full border border-border flex-shrink-0"
-                style={{ backgroundColor: getTagColor(editTag) }}
-              ></span>
-              <TagSelect
-                tags={tags}
-                value={editTag}
-                onChange={setEditTag}
-                className="w-full rounded bg-secondary border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-              />
-            </div>
-
-            <div className="space-y-3 text-sm">
-              <div>
-                <label className="block text-muted-foreground text-xs mb-1">Start</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <DateInput
-                    value={editStartDate}
-                    onChange={setEditStartDate}
-                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
-                  />
-                  <TimeInput
-                    value={editStartTime}
-                    onChange={setEditStartTime}
-                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-muted-foreground text-xs mb-1">End</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <DateInput
-                    value={editEndDate}
-                    onChange={setEditEndDate}
-                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
-                  />
-                  <TimeInput
-                    value={editEndTime}
-                    onChange={setEditEndTime}
-                    className="block w-full rounded bg-secondary border border-border px-2 py-2 text-foreground focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <textarea
-              value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value)}
-              placeholder="Description"
-              rows={2}
-              className="block w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none resize-none"
-            />
-
-            <div className="flex gap-2">
-              {editingEvent.recurrenceId ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRecurEvent(editingEvent);
-                    setShowEditRecurModal(true);
-                  }}
-                  className="flex-1 py-2.5 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-semibold cursor-pointer text-center"
-                >
-                  Save
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleUpdateInstance(editingEvent.id)}
-                  className="flex-1 py-2.5 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-semibold cursor-pointer text-center"
-                >
-                  Save
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveOverlayId(null);
-                  setEditingEvent(null);
-                  setOverlayCoords(null);
-                }}
-                className="px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-
-            <div className="border-t border-border pt-3 flex justify-between gap-2">
-              {editingEvent.recurrenceId ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRecurEvent(editingEvent);
-                    setShowDeleteRecurModal(true);
-                  }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-650 hover:bg-red-700 text-white rounded text-sm font-semibold cursor-pointer"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleDeleteInstance(editingEvent.id)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-650 hover:bg-red-700 text-white rounded text-sm font-semibold cursor-pointer"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => handleCopy(editingEvent.id)}
-                className="px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
-                title="Copy Event"
-              >
-                <Copy className="h-4 w-4" />
-                Copy
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EventEditor editor={editor} tags={tags} popoverRef={editorPopoverRef} />
 
       {/* QUICK ADD MODAL */}
       {showAddModal && (
@@ -1654,85 +1058,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
         </div>
       )}
 
-      {/* EDIT RECURRING SERIES MODAL */}
-      {showEditRecurModal && recurEvent && (
-        <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50">
-          <div className="bg-card border border-border p-6 rounded-t-2xl md:rounded-lg w-full md:max-w-sm space-y-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-foreground">Edit Recurring Event</h3>
-            <p className="text-sm text-muted-foreground">
-              This is a recurring event. How would you like to edit it?
-            </p>
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  handleUpdateInstance(recurEvent.id);
-                  setShowEditRecurModal(false);
-                }}
-                className="w-full py-2 bg-primary hover:bg-muted text-primary-foreground text-sm font-semibold rounded cursor-pointer transition"
-              >
-                Edit this event only
-              </button>
-              <button
-                onClick={() => {
-                  if (recurEvent.recurrenceId) {
-                    handleUpdateSeries(recurEvent.recurrenceId);
-                  }
-                  setShowEditRecurModal(false);
-                }}
-                className="w-full py-2 bg-primary hover:bg-muted text-primary-foreground text-sm font-semibold rounded cursor-pointer transition"
-              >
-                Edit entire series
-              </button>
-              <button
-                onClick={() => setShowEditRecurModal(false)}
-                className="w-full py-2 bg-secondary hover:bg-muted text-foreground text-sm font-semibold rounded cursor-pointer transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DELETE RECURRING SERIES MODAL */}
-      {showDeleteRecurModal && recurEvent && (
-        <div className="fixed inset-0 bg-black/70 flex items-end md:items-center justify-center z-50">
-          <div className="bg-card border border-border p-6 rounded-t-2xl md:rounded-lg w-full md:max-w-sm space-y-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-foreground">Delete Recurring Event</h3>
-            <p className="text-sm text-muted-foreground">
-              This is a recurring event. How would you like to delete it?
-            </p>
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  handleDeleteInstance(recurEvent.id);
-                  setShowDeleteRecurModal(false);
-                }}
-                className="w-full py-2 bg-red-650 hover:bg-red-750 text-white text-sm font-semibold rounded cursor-pointer transition"
-              >
-                Delete this event only
-              </button>
-              <button
-                onClick={() => {
-                  if (recurEvent.recurrenceId) {
-                    handleDeleteSeries(recurEvent.recurrenceId);
-                  }
-                  setShowDeleteRecurModal(false);
-                }}
-                className="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded cursor-pointer transition"
-              >
-                Delete entire series
-              </button>
-              <button
-                onClick={() => setShowDeleteRecurModal(false)}
-                className="w-full py-2 bg-secondary hover:bg-muted text-foreground text-sm font-semibold rounded cursor-pointer transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
