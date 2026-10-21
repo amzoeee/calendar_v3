@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { LogOut, Settings as SettingsIcon, Shield } from 'lucide-react';
+import Button from './Button';
 
 /**
  * Rendered in a portal with fixed positioning so it escapes the dashboard
@@ -79,13 +80,15 @@ export default function MobileProfileMenu({
               </Link>
             )}
             <form action={logoutAction}>
-              <button
+              <Button
                 type="submit"
-                className="w-full flex items-center px-2 py-2 text-sm font-medium rounded-md btn-destructive transition-all gap-2 cursor-pointer"
+                variant="destructive"
+                size="none"
+                className="w-full px-2 py-2 text-sm font-medium rounded-md gap-2"
               >
                 <LogOut className="h-4 w-4" />
                 Sign Out
-              </button>
+              </Button>
             </form>
           </div>,
           document.body
