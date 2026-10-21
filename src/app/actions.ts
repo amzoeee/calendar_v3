@@ -159,13 +159,30 @@ async function assertTagNesting(userId: number, changes: Map<number, number | nu
   if (error) throw new Error(error);
 }
 
-export async function addTagAction(name: string, color: string, scope: TagScope = 'both') {
+export async function addTagAction(
+  name: string,
+  color: string,
+  scope: TagScope = 'both',
+  parentId: number | null = null
+) {
   const session = await requireAuth();
   track(session.userId, 'tag.create');
   const trimmedName = name.trim();
 
   if (!trimmedName) throw new Error('Tag name is required');
   if (!isTagScope(scope)) throw new Error('Unknown tag scope');
+
+  if (parentId != null) {
+    const [parent] = await db
+      .select()
+      .from(tags)
+      .where(and(eq(tags.id, parentId), eq(tags.userId, session.userId)))
+      .limit(1);
+    if (!parent || parent.isArchived) throw new Error('Parent tag not found');
+    if (parent.parentId != null) {
+      throw new Error(`“${parent.name}” is already a subtag, so it can’t have subtags`);
+    }
+  }
 
   // Check if tag already exists for user
   const existing = await db
@@ -191,8 +208,11 @@ export async function addTagAction(name: string, color: string, scope: TagScope 
     color,
     orderIndex,
     scope,
+    parentId,
     userId: session.userId,
   });
+  // Last overall, so this moves it to the end of its parent's subtags.
+  if (parentId != null) await renumberTags(session.userId);
 
   revalidatePath('/settings');
 }
