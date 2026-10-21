@@ -53,7 +53,7 @@ import {
   setBoardSortAction,
   deleteCompletedTasksAction,
   createTasksBulkAction,
-} from '@/app/task-actions';
+} from '@/features/tasks/server/actions';
 import { displayTitle, repeatLabel } from '@/lib/taskSchedule';
 import DateInput from '@/app/components/DateInput';
 import TimeInput from '@/app/components/TimeInput';
