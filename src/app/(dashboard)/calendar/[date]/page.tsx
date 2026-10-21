@@ -7,6 +7,7 @@ import DailyCalendarClient from './DailyCalendarClient';
 import { todayForViewer } from '@/lib/server-timezone';
 import { previewPendingMerge } from '@/lib/merge-pending';
 import { shiftDateStr } from '@/lib/timezone';
+import { getSubtagDisplay } from '@/lib/server-tags';
 
 interface PageProps {
   params: Promise<{ date: string }> | { date: string };
@@ -75,6 +76,7 @@ export default async function DailyPage({ params }: PageProps) {
       date={date}
       initialEvents={previewPendingMerge(dbEvents)}
       tags={dbTags}
+      subtagDisplay={await getSubtagDisplay()}
     />
   );
 }

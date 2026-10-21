@@ -38,7 +38,9 @@ import {
   TAG_SCOPES,
   TAG_SCOPE_BADGES,
   TAG_SCOPE_LABELS,
+  SUBTAG_DISPLAY_COOKIE,
   tagTreeOrder,
+  type SubtagDisplay,
   type TagScope,
 } from '@/lib/tags';
 import { getBrowserTimeZone } from '@/lib/timezone';
@@ -137,10 +139,16 @@ interface SettingsClientProps {
   initialTags: Tag[];
   buildInfo: BuildInfo;
   weekStart: WeekStart;
+  subtagDisplay: SubtagDisplay;
   discordLinks: DiscordLinkView[];
 }
 
-export default function SettingsClient({ initialTags, buildInfo, weekStart, discordLinks }: SettingsClientProps) {
+const SUBTAG_DISPLAY_LABELS: Record<SubtagDisplay, string> = {
+  child: 'Subtag',
+  parent: 'Parent tag',
+};
+
+export default function SettingsClient({ initialTags, buildInfo, weekStart, subtagDisplay, discordLinks }: SettingsClientProps) {
   const router = useRouter();
   const { confirm } = useConfirm();
   const { raiseUndo } = useUndo();
@@ -184,6 +192,11 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
   // server, before the client runs. Refresh so they re-render with the new one.
   const handleWeekStartChange = (value: WeekStart) => {
     document.cookie = `${WEEK_START_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;
+    router.refresh();
+  };
+
+  const handleSubtagDisplayChange = (value: SubtagDisplay) => {
+    document.cookie = `${SUBTAG_DISPLAY_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;
     router.refresh();
   };
 
@@ -633,6 +646,19 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
             )}
           </div>
           {arrangeError && <p className="text-xs text-red-400">{arrangeError}</p>}
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+          <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="subtag-display">
+            Color subtagged events by
+          </label>
+          <Select<SubtagDisplay>
+            id="subtag-display"
+            value={subtagDisplay}
+            onChange={handleSubtagDisplayChange}
+            className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+            options={(['child', 'parent'] as const).map((v) => ({ value: v, label: SUBTAG_DISPLAY_LABELS[v] }))}
+          />
         </div>
 
         {/* Collapsible Archived Tags */}

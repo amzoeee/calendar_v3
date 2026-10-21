@@ -6,6 +6,7 @@ import {
   formatTimeInputValue,
   pacificDbStringToDate,
 } from '@/lib/timezone';
+import { eventTagColor, type SubtagDisplay } from '@/lib/tags';
 
 export const UNTAGGED_COLOR = '#6b7280';
 
@@ -31,7 +32,8 @@ export interface EventRowLike {
 export function positionEventsForDay(
   events: EventRowLike[],
   day: Date,
-  tags: { name: string; color: string }[]
+  tags: Parameters<typeof eventTagColor>[0],
+  subtagDisplay: SubtagDisplay
 ): PositionedEvent[] {
   const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).getTime();
   const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59).getTime();
@@ -69,7 +71,7 @@ export function positionEventsForDay(
       time_range: formatEventTimeRange(startDt, endDt),
       start_datetime_local: `${formatDateInputValue(startDt)}T${formatTimeInputValue(startDt)}`,
       end_datetime_local: `${formatDateInputValue(endDt)}T${formatTimeInputValue(endDt)}`,
-      tag_color: tags.find((t) => t.name === ev.tag)?.color || UNTAGGED_COLOR,
+      tag_color: eventTagColor(tags, ev.tag ?? null, subtagDisplay) || UNTAGGED_COLOR,
       multi_day: startDt.toDateString() !== endDt.toDateString(),
       continues_before: startDt.getTime() < dayStart,
       continues_after: endDt.getTime() > dayEnd,
