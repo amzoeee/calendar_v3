@@ -89,12 +89,15 @@ interface ColorTag {
   parentId: number | null;
 }
 
-/** The color an event tagged `name` is drawn in, or undefined for an unknown tag. */
-export function eventTagColor(tags: ColorTag[], name: string | null, display: SubtagDisplay): string | undefined {
+/** The tag an event tagged `name` is shown as, or undefined for an unknown tag. */
+export function displayTag<T extends ColorTag>(tags: T[], name: string | null, display: SubtagDisplay): T | undefined {
   const tag = tags.find((t) => t.name === name);
-  if (!tag) return undefined;
-  if (display === 'parent' && tag.parentId != null) {
-    return tags.find((t) => t.id === tag.parentId)?.color ?? tag.color;
+  if (display === 'parent' && tag?.parentId != null) {
+    return tags.find((t) => t.id === tag.parentId) ?? tag;
   }
-  return tag.color;
+  return tag;
+}
+
+export function eventTagColor(tags: ColorTag[], name: string | null, display: SubtagDisplay): string | undefined {
+  return displayTag(tags, name, display)?.color;
 }
