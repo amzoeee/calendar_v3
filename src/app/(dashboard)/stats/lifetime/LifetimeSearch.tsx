@@ -79,7 +79,7 @@ export default function LifetimeSearch({
     const shown = new Set(partSuggestions.map((p) => p.part));
     const hits: number[] = [];
     keys.forEach((k, t) => {
-      if (k.includes(q) && !shown.has(k)) hits.push(t);
+      if (counts[t] > 0 && k.includes(q) && !shown.has(k)) hits.push(t);
     });
     return hits.sort((a, b) => counts[b] - counts[a]).slice(0, MAX_SUGGESTIONS);
   }, [query, keys, counts, partSuggestions]);

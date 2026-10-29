@@ -266,6 +266,8 @@ export function computeStats(
   eventLevels: Uint8Array,
   tagTotalMin: Map<number, number>,
   weekStart: WeekStart,
+  firstDay: number,
+  lastDay: number,
 ): NameStats | null {
   const exact: number[] = [];
   const related: number[] = [];
@@ -312,19 +314,19 @@ export function computeStats(
   }
   const weeks = new Set(days.map((d) => d - ((dateOfColumn(d).getDay() - weekStart + 7) % 7)));
 
-  // Months from the first event on record, not the first of this name, so
-  // sparklines for different names line up.
-  const firstAll = new Date(data.starts[0] * MS_PER_MIN);
-  const now = new Date();
+  // Months across the whole range, not just this name's, so sparklines for
+  // different names line up.
+  const from = dateOfColumn(firstDay);
+  const to = dateOfColumn(lastDay);
   const monthly: NameStats['monthly'] = [];
   for (
-    let m = new Date(firstAll.getFullYear(), firstAll.getMonth(), 1);
-    m <= now;
+    let m = new Date(from.getFullYear(), from.getMonth(), 1);
+    m <= to;
     m = new Date(m.getFullYear(), m.getMonth() + 1, 1)
   ) {
     monthly.push({ month: m, hours: 0 });
   }
-  const m0 = firstAll.getFullYear() * 12 + firstAll.getMonth();
+  const m0 = from.getFullYear() * 12 + from.getMonth();
   for (const e of basis) {
     const d = new Date(data.starts[e] * MS_PER_MIN);
     const slot = monthly[d.getFullYear() * 12 + d.getMonth() - m0];
