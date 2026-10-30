@@ -93,6 +93,64 @@ export function buildSegments(data: LifetimeEvents): Segments {
   };
 }
 
+// ---- Range ----------------------------------------------------------------
+
+export type LifetimeRange =
+  | { kind: 'all' }
+  | { kind: 'year' }
+  // Inclusive 'YYYY-MM-DD' dates.
+  | { kind: 'custom'; from: string; to: string };
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function parseRange(params: { range?: string; from?: string; to?: string }): LifetimeRange {
+  const { range, from, to } = params;
+  if (range === 'year') return { kind: 'year' };
+  if (from && to && DATE_RE.test(from) && DATE_RE.test(to)) {
+    return from <= to ? { kind: 'custom', from, to } : { kind: 'custom', from: to, to: from };
+  }
+  return { kind: 'all' };
+}
+
+export function rangeSearch(range: LifetimeRange): string {
+  if (range.kind === 'year') return '?range=year';
+  if (range.kind === 'custom') return `?from=${range.from}&to=${range.to}`;
+  return '';
+}
+
+export const columnOfDate = (s: string) => dayNumber(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+export const dateOfColumnStr = (day: number) => dateOfColumn(day).toLocaleDateString('en-CA');
+
+// Columns the range covers, ending no later than today.
+export function rangeColumns(range: LifetimeRange, firstEventDay: number, today: number) {
+  if (range.kind === 'year') {
+    return { firstDay: dayNumber(dateOfColumn(today).getFullYear(), 0, 1), lastDay: today };
+  }
+  if (range.kind === 'custom') {
+    const firstDay = columnOfDate(range.from);
+    return { firstDay, lastDay: Math.max(firstDay, Math.min(columnOfDate(range.to), today)) };
+  }
+  return { firstDay: firstEventDay, lastDay: Math.max(today, firstEventDay) };
+}
+
+// Events starting within [firstDay, lastDay]. Titles and tags keep their
+// indices so a focus survives a range change.
+export function sliceEvents(data: LifetimeEvents, eventDay: Int32Array, firstDay: number, lastDay: number): LifetimeEvents {
+  const keep: number[] = [];
+  eventDay.forEach((d, e) => {
+    if (d >= firstDay && d <= lastDay) keep.push(e);
+  });
+  return {
+    titles: data.titles,
+    tagNames: data.tagNames,
+    ids: keep.map((e) => data.ids[e]),
+    starts: keep.map((e) => data.starts[e]),
+    durations: keep.map((e) => data.durations[e]),
+    titleIdx: keep.map((e) => data.titleIdx[e]),
+    tagIdx: keep.map((e) => data.tagIdx[e]),
+  };
+}
+
 // ---- Matching -------------------------------------------------------------
 
 export interface MatchIndex {
@@ -208,6 +266,8 @@ export function computeStats(
   eventLevels: Uint8Array,
   tagTotalMin: Map<number, number>,
   weekStart: WeekStart,
+  firstDay: number,
+  lastDay: number,
 ): NameStats | null {
   const exact: number[] = [];
   const related: number[] = [];
@@ -254,19 +314,19 @@ export function computeStats(
   }
   const weeks = new Set(days.map((d) => d - ((dateOfColumn(d).getDay() - weekStart + 7) % 7)));
 
-  // Months from the first event on record, not the first of this name, so
-  // sparklines for different names line up.
-  const firstAll = new Date(data.starts[0] * MS_PER_MIN);
-  const now = new Date();
+  // Months across the whole range, not just this name's, so sparklines for
+  // different names line up.
+  const from = dateOfColumn(firstDay);
+  const to = dateOfColumn(lastDay);
   const monthly: NameStats['monthly'] = [];
   for (
-    let m = new Date(firstAll.getFullYear(), firstAll.getMonth(), 1);
-    m <= now;
+    let m = new Date(from.getFullYear(), from.getMonth(), 1);
+    m <= to;
     m = new Date(m.getFullYear(), m.getMonth() + 1, 1)
   ) {
     monthly.push({ month: m, hours: 0 });
   }
-  const m0 = firstAll.getFullYear() * 12 + firstAll.getMonth();
+  const m0 = from.getFullYear() * 12 + from.getMonth();
   for (const e of basis) {
     const d = new Date(data.starts[e] * MS_PER_MIN);
     const slot = monthly[d.getFullYear() * 12 + d.getMonth() - m0];

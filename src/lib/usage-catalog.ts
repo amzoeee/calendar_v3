@@ -54,6 +54,7 @@ export const USAGE_CATALOG = {
   'stats.preset': { group: 'Stats', label: 'Range preset' },
   'stats.weekdays_only': { group: 'Stats', label: 'Weekdays-only filter' },
   'lifetime.search': { group: 'Stats', label: 'Lifetime search' },
+  'lifetime.range': { group: 'Stats', label: 'Lifetime range' },
   'lifetime.bulk_edit': { group: 'Stats', label: 'Lifetime bulk rename / retag' },
 
   'task.create': { group: 'Tasks', label: 'Create task' },

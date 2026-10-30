@@ -80,6 +80,10 @@ function niceCeil(x: number): number {
 }
 
 const fmtMonth = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+const isThisMonth = (d: Date) => {
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+};
 
 function MonthlyChart({ monthly }: { monthly: NameStats['monthly'] }) {
   const [hover, setHover] = useState<number | null>(null);
@@ -148,7 +152,7 @@ function MonthlyChart({ monthly }: { monthly: NameStats['monthly'] }) {
           </div>
           <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
             <span>{monthly[0] && fmtMonth(monthly[0].month)}</span>
-            <span>now</span>
+            <span>{isThisMonth(monthly[monthly.length - 1].month) ? 'now' : fmtMonth(monthly[monthly.length - 1].month)}</span>
           </div>
         </div>
       </div>

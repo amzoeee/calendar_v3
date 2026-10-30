@@ -4,23 +4,30 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import {
   buildMatchIndex,
   buildSegments,
+  columnOfDate,
   computeStats,
   EXACT,
   formatDuration,
   matchEvents,
+  rangeColumns,
+  rangeSearch,
+  sliceEvents,
   todayColumn,
   type Focus,
   type LifetimeEvents,
+  type LifetimeRange,
 } from '@/lib/lifetime';
 import StatsViewSwitch from '@/app/components/StatsViewSwitch';
 import type { WeekStart } from '@/lib/week';
 import LifetimeChart from './LifetimeChart';
 import LifetimePanel from './LifetimePanel';
 import LifetimeSearch from './LifetimeSearch';
+import RangePicker from './RangePicker';
 import type { BulkResult, BulkTarget } from './BulkEdit';
 import { restoreEventsAction } from '@/app/actions';
 import { useUndo } from '@/app/components/UndoToast';
 import { normalizeTitle } from '@/lib/titleParts';
+import { track } from '@/lib/track';
 
 interface Tag {
   id: number;
@@ -36,6 +43,7 @@ interface LifetimeClientProps {
   tags: Tag[];
   todayStr: string;
   weekStart: WeekStart;
+  initialRange: LifetimeRange;
 }
 
 const UNTAGGED_COLOR = '#6b7280';
@@ -45,10 +53,26 @@ const MS_PER_MIN = 60_000;
 
 const noopSubscribe = () => () => {};
 
-export default function LifetimeClient({ data, tags, todayStr, weekStart }: LifetimeClientProps) {
+export default function LifetimeClient({ data: allData, tags, todayStr, weekStart, initialRange }: LifetimeClientProps) {
   // Columns and times depend on the browser's timezone, so the chart only
   // renders on the client.
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
+
+  // ---- Range ---------------------------------------------------------------
+  const [range, setRange] = useState(initialRange);
+  const hasEvents = allData.starts.length > 0;
+  const allSegments = useMemo(() => buildSegments(allData), [allData]);
+  const { firstDay, lastDay } = rangeColumns(
+    range,
+    hasEvents ? allSegments.eventDay[0] : 0,
+    hydrated ? todayColumn() : columnOfDate(todayStr),
+  );
+  // Everything below sees only the range. Until hydration the columns are in
+  // the server's timezone, so it gets every event.
+  const data = useMemo(
+    () => (hydrated && range.kind !== 'all' ? sliceEvents(allData, allSegments.eventDay, firstDay, lastDay) : allData),
+    [hydrated, range.kind, allData, allSegments, firstDay, lastDay],
+  );
 
   const segments = useMemo(() => buildSegments(data), [data]);
   const index = useMemo(() => buildMatchIndex(data), [data]);
@@ -57,8 +81,8 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
   const searchParts = useMemo(() => {
     const list: { part: string; count: number }[] = [];
     index.titlesByPart.forEach((ts, part) => {
-      if (ts.every((t) => index.keys[t] === part)) return;
-      list.push({ part, count: ts.reduce((n, t) => n + index.eventsByTitle[t].length, 0) });
+      const count = ts.reduce((n, t) => n + index.eventsByTitle[t].length, 0);
+      if (count > 0 && !ts.every((t) => index.keys[t] === part)) list.push({ part, count });
     });
     return list;
   }, [index]);
@@ -177,8 +201,8 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
 
   const eventLevels = useMemo(() => (focus ? matchEvents(data, index, focus) : null), [data, index, focus]);
   const stats = useMemo(
-    () => (hydrated && eventLevels ? computeStats(data, segments, eventLevels, tagTotalMin, weekStart) : null),
-    [hydrated, data, segments, eventLevels, tagTotalMin, weekStart],
+    () => (hydrated && eventLevels ? computeStats(data, segments, eventLevels, tagTotalMin, weekStart, firstDay, lastDay) : null),
+    [hydrated, data, segments, eventLevels, tagTotalMin, weekStart, firstDay, lastDay],
   );
 
   // Chips only help when the title splits into something other than itself.
@@ -251,13 +275,20 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
     if (focus?.kind === 'tag') setPinned({ ...focus, withSubtags });
   };
 
-  // ---- Range ---------------------------------------------------------------
-  const hasEvents = data.starts.length > 0;
-  const firstDay = hasEvents ? segments.eventDay[0] : 0;
-  const lastDay = hydrated ? Math.max(todayColumn(), firstDay) : firstDay;
+  const changeRange = (next: LifetimeRange) => {
+    track('lifetime.range', { range: next.kind });
+    setRange(next);
+    window.history.replaceState(null, '', `${window.location.pathname}${rangeSearch(next)}`);
+    // Event indices shift with the range.
+    hoverEvent.current = null;
+    setHover(null);
+    setDwell(null);
+    setPinned((p) => (p?.kind === 'title' && p.event !== null ? { ...p, event: null } : p));
+  };
+
   const totalMin = useMemo(() => data.durations.reduce((a, b) => a + b, 0), [data]);
   const sinceLabel =
-    hydrated && hasEvents
+    hydrated && hasEvents && range.kind === 'all'
       ? new Date(data.starts[0] * MS_PER_MIN).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
@@ -277,9 +308,10 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
         <div className="flex items-center justify-between gap-2 md:gap-4">
           <div className="min-w-0">
             <h1 className="text-sm md:text-xl font-bold tracking-tight truncate">Lifetime</h1>
-            {sinceLabel && (
+            {hydrated && hasEvents && (
               <p className="hidden md:block text-xs text-muted-foreground">
-                {data.starts.length.toLocaleString()} events · {formatDuration(totalMin)} since {sinceLabel}
+                {data.starts.length.toLocaleString()} events · {formatDuration(totalMin)}
+                {sinceLabel ? ` since ${sinceLabel}` : range.kind === 'year' ? ' this year' : ''}
               </p>
             )}
           </div>
@@ -313,6 +345,11 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
             <StatsViewSwitch active="lifetime" rangeHref={`/stats/${todayStr}`} />
           </div>
         </div>
+        {hasEvents && (
+          <div className="mt-2">
+            <RangePicker range={range} firstDay={firstDay} lastDay={lastDay} onChange={changeRange} />
+          </div>
+        )}
       </div>
 
       {!hasEvents ? (
@@ -323,6 +360,8 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
             <div className="h-[420px] md:h-[520px] xl:h-auto xl:flex-1 xl:min-h-0" onPointerLeave={onLeave}>
               {hydrated && (
                 <LifetimeChart
+                  // Remount so its zoom resets to the new range.
+                  key={`${firstDay}:${lastDay}`}
                   data={data}
                   segments={segments}
                   firstDay={firstDay}
