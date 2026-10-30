@@ -6,13 +6,19 @@ import { redirect } from 'next/navigation';
 import LifetimeClient from './LifetimeClient';
 import { dateToServerDbString, dbStringToUtcMillis } from '@/lib/timezone';
 import { normalizeTitle } from '@/lib/titleParts';
-import type { LifetimeEvents } from '@/lib/lifetime';
+import { parseRange, type LifetimeEvents } from '@/lib/lifetime';
 import { todayForViewer } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
+import { getSubtagDisplay } from '@/lib/server-tags';
+import { displayTag } from '@/lib/tags';
 
 const MS_PER_MIN = 60_000;
 
-export default async function LifetimePage() {
+interface PageProps {
+  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
+}
+
+export default async function LifetimePage({ searchParams }: PageProps) {
   const session = await getSession();
   if (!session) {
     redirect('/login');
@@ -54,6 +60,7 @@ export default async function LifetimePage() {
   const spellings: Map<string, number>[] = [];
   const tagNames: string[] = dbTags.map((t) => t.name);
   const tagIndex = new Map(tagNames.map((n, i) => [n, i]));
+  const subtagDisplay = await getSubtagDisplay();
 
   const data: LifetimeEvents = {
     titles: [],
@@ -81,12 +88,13 @@ export default async function LifetimePage() {
 
     // An event whose tag was since deleted still needs a slot.
     let gi = -1;
-    if (r.tag) {
-      gi = tagIndex.get(r.tag) ?? -1;
+    const tag = displayTag(dbTags, r.tag, subtagDisplay)?.name ?? r.tag;
+    if (tag) {
+      gi = tagIndex.get(tag) ?? -1;
       if (gi === -1) {
         gi = tagNames.length;
-        tagNames.push(r.tag);
-        tagIndex.set(r.tag, gi);
+        tagNames.push(tag);
+        tagIndex.set(tag, gi);
       }
     }
 
@@ -101,5 +109,13 @@ export default async function LifetimePage() {
     (s) => [...s.entries()].sort((a, b) => b[1] - a[1])[0][0],
   );
 
-  return <LifetimeClient data={data} tags={dbTags} todayStr={await todayForViewer()} weekStart={await getWeekStart()} />;
+  return (
+    <LifetimeClient
+      data={data}
+      tags={dbTags}
+      todayStr={await todayForViewer()}
+      weekStart={await getWeekStart()}
+      initialRange={parseRange(await searchParams)}
+    />
+  );
 }

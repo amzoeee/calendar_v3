@@ -4,23 +4,30 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import {
   buildMatchIndex,
   buildSegments,
+  columnOfDate,
   computeStats,
   EXACT,
   formatDuration,
-  matchTitles,
+  matchEvents,
+  rangeColumns,
+  rangeSearch,
+  sliceEvents,
   todayColumn,
   type Focus,
   type LifetimeEvents,
+  type LifetimeRange,
 } from '@/lib/lifetime';
 import StatsViewSwitch from '@/app/components/StatsViewSwitch';
 import type { WeekStart } from '@/lib/week';
 import LifetimeChart from './LifetimeChart';
 import LifetimePanel from './LifetimePanel';
 import LifetimeSearch from './LifetimeSearch';
+import RangePicker from './RangePicker';
 import type { BulkResult, BulkTarget } from './BulkEdit';
 import { restoreEventsAction } from '@/app/actions';
 import { useUndo } from '@/app/components/UndoToast';
 import { normalizeTitle } from '@/lib/titleParts';
+import { track } from '@/lib/track';
 
 interface Tag {
   id: number;
@@ -28,6 +35,7 @@ interface Tag {
   color: string;
   isArchived: number;
   scope: string;
+  parentId: number | null;
 }
 
 interface LifetimeClientProps {
@@ -35,6 +43,7 @@ interface LifetimeClientProps {
   tags: Tag[];
   todayStr: string;
   weekStart: WeekStart;
+  initialRange: LifetimeRange;
 }
 
 const UNTAGGED_COLOR = '#6b7280';
@@ -44,10 +53,26 @@ const MS_PER_MIN = 60_000;
 
 const noopSubscribe = () => () => {};
 
-export default function LifetimeClient({ data, tags, todayStr, weekStart }: LifetimeClientProps) {
+export default function LifetimeClient({ data: allData, tags, todayStr, weekStart, initialRange }: LifetimeClientProps) {
   // Columns and times depend on the browser's timezone, so the chart only
   // renders on the client.
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
+
+  // ---- Range ---------------------------------------------------------------
+  const [range, setRange] = useState(initialRange);
+  const hasEvents = allData.starts.length > 0;
+  const allSegments = useMemo(() => buildSegments(allData), [allData]);
+  const { firstDay, lastDay } = rangeColumns(
+    range,
+    hasEvents ? allSegments.eventDay[0] : 0,
+    hydrated ? todayColumn() : columnOfDate(todayStr),
+  );
+  // Everything below sees only the range. Until hydration the columns are in
+  // the server's timezone, so it gets every event.
+  const data = useMemo(
+    () => (hydrated && range.kind !== 'all' ? sliceEvents(allData, allSegments.eventDay, firstDay, lastDay) : allData),
+    [hydrated, range.kind, allData, allSegments, firstDay, lastDay],
+  );
 
   const segments = useMemo(() => buildSegments(data), [data]);
   const index = useMemo(() => buildMatchIndex(data), [data]);
@@ -56,8 +81,8 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
   const searchParts = useMemo(() => {
     const list: { part: string; count: number }[] = [];
     index.titlesByPart.forEach((ts, part) => {
-      if (ts.every((t) => index.keys[t] === part)) return;
-      list.push({ part, count: ts.reduce((n, t) => n + index.eventsByTitle[t].length, 0) });
+      const count = ts.reduce((n, t) => n + index.eventsByTitle[t].length, 0);
+      if (count > 0 && !ts.every((t) => index.keys[t] === part)) list.push({ part, count });
     });
     return list;
   }, [index]);
@@ -66,6 +91,32 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
     () => data.tagNames.map((n) => tags.find((t) => t.name === n)?.color ?? UNTAGGED_COLOR),
     [data, tags],
   );
+  const tagCounts = useMemo(() => {
+    const perTag = new Map<number, number>();
+    data.tagIdx.forEach((g) => perTag.set(g, (perTag.get(g) ?? 0) + 1));
+    return perTag;
+  }, [data]);
+  // Subtags with events, by index into data.tagNames.
+  const tagSubtags = useMemo(
+    () =>
+      data.tagNames.map((n) => {
+        const tag = tags.find((t) => t.name === n);
+        if (!tag) return [];
+        return tags
+          .filter((t) => t.parentId === tag.id)
+          .map((t) => data.tagNames.indexOf(t.name))
+          .filter((s) => tagCounts.has(s));
+      }),
+    [data, tags, tagCounts],
+  );
+  const searchTags = useMemo(
+    () =>
+      tagSubtags
+        .map((subs, g) => ({ tag: g, count: [g, ...subs].reduce((n, m) => n + (tagCounts.get(m) ?? 0), 0) }))
+        .filter((t) => t.count > 0),
+    [tagSubtags, tagCounts],
+  );
+
   const colorOf = useCallback(
     (g: number) => (g >= 0 ? tagColors[g] : UNTAGGED_COLOR),
     [tagColors],
@@ -148,14 +199,10 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
   );
   const focus = pinned ?? dwellFocus;
 
-  const titleLevels = useMemo(() => (focus ? matchTitles(index, focus) : null), [index, focus]);
-  const eventLevels = useMemo(
-    () => (titleLevels ? Uint8Array.from(data.titleIdx, (t) => titleLevels[t]) : null),
-    [data, titleLevels],
-  );
+  const eventLevels = useMemo(() => (focus ? matchEvents(data, index, focus) : null), [data, index, focus]);
   const stats = useMemo(
-    () => (hydrated && titleLevels ? computeStats(data, index, segments, titleLevels, tagTotalMin, weekStart) : null),
-    [hydrated, data, index, segments, titleLevels, tagTotalMin, weekStart],
+    () => (hydrated && eventLevels ? computeStats(data, segments, eventLevels, tagTotalMin, weekStart, firstDay, lastDay) : null),
+    [hydrated, data, segments, eventLevels, tagTotalMin, weekStart, firstDay, lastDay],
   );
 
   // Chips only help when the title splits into something other than itself.
@@ -167,15 +214,14 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
         : []
       : [];
 
-  // The events a rename or retag would touch, split by match level.
+  // The events a rename or retag would touch, split by match level. A tag
+  // spans unrelated titles, so there's nothing to rename.
   const bulkTarget = useMemo<BulkTarget | null>(() => {
-    if (!focus || !titleLevels) return null;
+    if (!focus || !eventLevels || focus.kind === 'tag') return null;
     const exactIds: number[] = [];
     const relatedIds: number[] = [];
-    titleLevels.forEach((lvl, t) => {
-      if (!lvl) return;
-      const into = lvl === EXACT ? exactIds : relatedIds;
-      for (const e of index.eventsByTitle[t]) into.push(data.ids[e]);
+    eventLevels.forEach((lvl, e) => {
+      if (lvl) (lvl === EXACT ? exactIds : relatedIds).push(data.ids[e]);
     });
     if (focus.kind === 'query') {
       const q = normalizeTitle(focus.q);
@@ -187,7 +233,7 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
     const ps = index.parts[focus.title];
     const from = focus.part ?? (ps.length === 1 ? ps[0] : null);
     return { label: from ?? data.titles[focus.title], exactIds, relatedIds, renameFrom: from, renameMode: 'word' };
-  }, [focus, titleLevels, index, data]);
+  }, [focus, eventLevels, index, data]);
 
   const { raiseUndo } = useUndo();
 
@@ -225,13 +271,24 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
     if (focus?.kind === 'title') setPinned({ ...focus, part });
   };
 
-  // ---- Range ---------------------------------------------------------------
-  const hasEvents = data.starts.length > 0;
-  const firstDay = hasEvents ? segments.eventDay[0] : 0;
-  const lastDay = hydrated ? Math.max(todayColumn(), firstDay) : firstDay;
+  const onSubtags = (withSubtags: boolean) => {
+    if (focus?.kind === 'tag') setPinned({ ...focus, withSubtags });
+  };
+
+  const changeRange = (next: LifetimeRange) => {
+    track('lifetime.range', { range: next.kind });
+    setRange(next);
+    window.history.replaceState(null, '', `${window.location.pathname}${rangeSearch(next)}`);
+    // Event indices shift with the range.
+    hoverEvent.current = null;
+    setHover(null);
+    setDwell(null);
+    setPinned((p) => (p?.kind === 'title' && p.event !== null ? { ...p, event: null } : p));
+  };
+
   const totalMin = useMemo(() => data.durations.reduce((a, b) => a + b, 0), [data]);
   const sinceLabel =
-    hydrated && hasEvents
+    hydrated && hasEvents && range.kind === 'all'
       ? new Date(data.starts[0] * MS_PER_MIN).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
@@ -251,9 +308,10 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
         <div className="flex items-center justify-between gap-2 md:gap-4">
           <div className="min-w-0">
             <h1 className="text-sm md:text-xl font-bold tracking-tight truncate">Lifetime</h1>
-            {sinceLabel && (
+            {hydrated && hasEvents && (
               <p className="hidden md:block text-xs text-muted-foreground">
-                {data.starts.length.toLocaleString()} events · {formatDuration(totalMin)} since {sinceLabel}
+                {data.starts.length.toLocaleString()} events · {formatDuration(totalMin)}
+                {sinceLabel ? ` since ${sinceLabel}` : range.kind === 'year' ? ' this year' : ''}
               </p>
             )}
           </div>
@@ -263,6 +321,9 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
               keys={index.keys}
               counts={counts}
               parts={searchParts}
+              tags={searchTags}
+              tagNames={data.tagNames}
+              colorOf={colorOf}
               query={query}
               onQuery={(q) => {
                 setQuery(q);
@@ -276,10 +337,19 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
                 setQuery(part);
                 setPinned({ kind: 'part', part });
               }}
+              onPickTag={(tag) => {
+                setQuery(data.tagNames[tag]);
+                setPinned({ kind: 'tag', tag, subtags: tagSubtags[tag], withSubtags: true });
+              }}
             />
             <StatsViewSwitch active="lifetime" rangeHref={`/stats/${todayStr}`} />
           </div>
         </div>
+        {hasEvents && (
+          <div className="mt-2">
+            <RangePicker range={range} firstDay={firstDay} lastDay={lastDay} onChange={changeRange} />
+          </div>
+        )}
       </div>
 
       {!hasEvents ? (
@@ -290,6 +360,8 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
             <div className="h-[420px] md:h-[520px] xl:h-auto xl:flex-1 xl:min-h-0" onPointerLeave={onLeave}>
               {hydrated && (
                 <LifetimeChart
+                  // Remount so its zoom resets to the new range.
+                  key={`${firstDay}:${lastDay}`}
                   data={data}
                   segments={segments}
                   firstDay={firstDay}
@@ -331,6 +403,7 @@ export default function LifetimeClient({ data, tags, todayStr, weekStart }: Life
               pinned={pinned !== null}
               colorOf={colorOf}
               onPart={onPart}
+              onSubtags={onSubtags}
               onClear={clearFocus}
               bulkTarget={bulkTarget}
               tags={tags}

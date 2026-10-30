@@ -38,7 +38,9 @@ import {
   TAG_SCOPES,
   TAG_SCOPE_BADGES,
   TAG_SCOPE_LABELS,
+  SUBTAG_DISPLAY_COOKIE,
   tagTreeOrder,
+  type SubtagDisplay,
   type TagScope,
 } from '@/lib/tags';
 import { getBrowserTimeZone } from '@/lib/timezone';
@@ -52,6 +54,7 @@ import type { BuildInfo } from '@/lib/version';
 import DateInput from '@/app/components/DateInput';
 import { useConfirm } from '@/app/components/ConfirmDialog';
 import { useUndo } from '@/app/components/UndoToast';
+import Button from '@/app/components/Button';
 
 interface Tag {
   id: number;
@@ -137,10 +140,16 @@ interface SettingsClientProps {
   initialTags: Tag[];
   buildInfo: BuildInfo;
   weekStart: WeekStart;
+  subtagDisplay: SubtagDisplay;
   discordLinks: DiscordLinkView[];
 }
 
-export default function SettingsClient({ initialTags, buildInfo, weekStart, discordLinks }: SettingsClientProps) {
+const SUBTAG_DISPLAY_LABELS: Record<SubtagDisplay, string> = {
+  child: 'Subtag',
+  parent: 'Parent tag',
+};
+
+export default function SettingsClient({ initialTags, buildInfo, weekStart, subtagDisplay, discordLinks }: SettingsClientProps) {
   const router = useRouter();
   const { confirm } = useConfirm();
   const { raiseUndo } = useUndo();
@@ -187,6 +196,11 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     router.refresh();
   };
 
+  const handleSubtagDisplayChange = (value: SubtagDisplay) => {
+    document.cookie = `${SUBTAG_DISPLAY_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;
+    router.refresh();
+  };
+
   // --- Tags list state ---
   const [tagsList, setTagsList] = useState<Tag[]>(initialTags);
 
@@ -194,6 +208,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#6b7280');
   const [newTagScope, setNewTagScope] = useState<TagScope>('both');
+  const [newTagParent, setNewTagParent] = useState<number | null>(null);
   const [addTagError, setAddTagError] = useState('');
 
   // --- Edit Tag Modal State ---
@@ -314,10 +329,11 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
     e.preventDefault();
     setAddTagError('');
     try {
-      await addTagAction(newTagName, newTagColor, newTagScope);
+      await addTagAction(newTagName, newTagColor, newTagScope, newTagParent);
       setNewTagName('');
       setNewTagColor('#6b7280');
       setNewTagScope('both');
+      setNewTagParent(null);
       // Refresh local page data
       router.refresh();
     } catch (e: any) {
@@ -635,6 +651,19 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
           {arrangeError && <p className="text-xs text-red-400">{arrangeError}</p>}
         </div>
 
+        <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+          <label className="text-sm font-semibold text-foreground lg:w-48" htmlFor="subtag-display">
+            Color subtagged events by
+          </label>
+          <Select<SubtagDisplay>
+            id="subtag-display"
+            value={subtagDisplay}
+            onChange={handleSubtagDisplayChange}
+            className="lg:w-56 rounded bg-secondary border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+            options={(['child', 'parent'] as const).map((v) => ({ value: v, label: SUBTAG_DISPLAY_LABELS[v] }))}
+          />
+        </div>
+
         {/* Collapsible Archived Tags */}
         <details className="border border-border/50 rounded-lg overflow-hidden bg-secondary/15 transition-all">
           <summary className="px-4 py-3 bg-secondary/30 font-semibold text-sm cursor-pointer select-none flex items-center justify-between hover:bg-secondary/45">
@@ -709,6 +738,21 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                 options={TAG_SCOPES.map((scope) => ({ value: scope, label: TAG_SCOPE_LABELS[scope] }))}
               />
             </div>
+            <div className="w-full lg:w-44 shrink-0">
+              <label className="block text-xs font-semibold text-muted-foreground uppercase" htmlFor="new-tag-parent">
+                Subtag of
+              </label>
+              <Select<number>
+                id="new-tag-parent"
+                value={newTagParent ?? 0}
+                onChange={(v) => setNewTagParent(v || null)}
+                className="mt-1 w-full rounded bg-secondary border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                options={[
+                  { value: 0, label: 'None (top-level)' },
+                  ...activeTags.filter((t) => t.parentId == null).map((t) => ({ value: t.id, label: t.name })),
+                ]}
+              />
+            </div>
             {/* Color + button always share a row (even on mobile) and stay
                 bottom-aligned to each other via this inner items-end, which
                 doesn't depend on the outer row's own breakpoint-gated
@@ -724,13 +768,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                   className="mt-1 block w-full h-8 rounded bg-secondary border border-border px-1 py-0.5 cursor-pointer"
                 />
               </div>
-              <button
+              <Button
                 type="submit"
-                className="shrink-0 px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                variant="primary"
+                size="none"
+                className="shrink-0 px-4 py-2 rounded text-xs font-bold gap-1.5"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add Tag
-              </button>
+              </Button>
             </div>
           </form>
           {addTagError && <p className="text-xs text-red-400 mt-1">{addTagError}</p>}
@@ -793,12 +839,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
               />
             </div>
           </div>
-          <button
+          <Button
             type="submit"
-            className="px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+            variant="primary"
+            size="none"
+            className="px-4 py-2 rounded text-xs font-bold"
           >
             Import ICS File
-          </button>
+          </Button>
         </form>
       </section>
 
@@ -824,13 +872,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
                 className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
               />
             </div>
-            <button
+            <Button
               onClick={handleStageLog}
               disabled={isLogStaging}
-              className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+              variant="primary"
+              size="none"
+              className="px-4 py-2 rounded text-xs font-bold"
             >
               {isLogStaging ? 'Staging...' : 'Stage Discord Log'}
-            </button>
+            </Button>
           </div>
 
           <div>
@@ -915,17 +965,19 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
           </div>
         </div>
         
-        <button
+        <Button
           onClick={handleExport}
           disabled={exportSelected.size === 0}
-          className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
+          variant="primary"
+          size="none"
+          className="px-4 py-2 rounded text-xs font-bold"
         >
           {exportSelected.size === 0
             ? 'Pick a tag to export'
             : exportSelected.size === 1
               ? 'Export .ics'
               : `Export ZIP (${exportSelected.size} tags)`}
-        </button>
+        </Button>
       </section>
 
       {/* Calendar preferences */}
@@ -990,13 +1042,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
               className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
             />
           </div>
-          <button
+          <Button
             type="submit"
             disabled={isChangingPassword}
-            className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+            variant="primary"
+            size="none"
+            className="px-4 py-2 rounded text-xs font-bold"
           >
             {isChangingPassword ? 'Saving...' : 'Change Password'}
-          </button>
+          </Button>
         </form>
 
         {passwordResult && (
@@ -1053,13 +1107,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
               className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs font-mono tracking-widest text-foreground"
             />
           </div>
-          <button
+          <Button
             onClick={handleLinkDiscord}
             disabled={isLinking}
-            className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+            variant="primary"
+            size="none"
+            className="px-4 py-2 rounded text-xs font-bold"
           >
             {isLinking ? 'Linking...' : 'Link Discord Account'}
-          </button>
+          </Button>
         </div>
 
         {linkError && <p className="text-xs text-red-400">{linkError}</p>}
@@ -1169,12 +1225,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, disc
               {editTagError && <p className="text-xs text-red-400 mt-1">{editTagError}</p>}
 
               <div className="flex gap-2 pt-2">
-                <button
+                <Button
                   type="submit"
-                  className="flex-1 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-bold cursor-pointer transition"
+                  variant="primary"
+                  size="none"
+                  className="flex-1 justify-center py-2 rounded text-sm font-bold"
                 >
                   Save Changes
-                </button>
+                </Button>
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}

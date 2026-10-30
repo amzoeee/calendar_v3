@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { getBuildInfo } from '@/lib/version';
 import SettingsClient from './SettingsClient';
 import { getWeekStart } from '@/lib/server-week';
+import { getSubtagDisplay } from '@/lib/server-tags';
 import { getLinksForUser } from '@/lib/discord-link';
 
 export default async function SettingsPage() {
@@ -26,6 +27,7 @@ export default async function SettingsPage() {
       initialTags={dbTags}
       buildInfo={getBuildInfo()}
       weekStart={await getWeekStart()}
+      subtagDisplay={await getSubtagDisplay()}
       discordLinks={await getLinksForUser(session.userId)}
     />
   );

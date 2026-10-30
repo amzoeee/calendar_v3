@@ -5,6 +5,7 @@ import Select from '@/app/components/Select';
 import { useConfirm } from '@/app/components/ConfirmDialog';
 import { bulkEditEventsAction, type EventSnapshot } from '@/app/actions';
 import { scopeAllows } from '@/lib/tags';
+import Button from '@/app/components/Button';
 
 interface Tag {
   id: number;
@@ -181,13 +182,15 @@ export default function BulkEdit({ target, tags, onApplied, onClose }: BulkEditP
         >
           Cancel
         </button>
-        <button
+        <Button
           onClick={apply}
           disabled={busy || !(renaming || retagging)}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          variant="primary"
+          size="none"
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg"
         >
           {busy ? 'Applying…' : 'Apply'}
-        </button>
+        </Button>
       </div>
     </div>
   );

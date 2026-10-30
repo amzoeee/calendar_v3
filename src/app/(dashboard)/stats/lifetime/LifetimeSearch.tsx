@@ -8,34 +8,43 @@ import { normalizeTitle } from '@/lib/titleParts';
 
 const MAX_SUGGESTIONS = 30;
 const MAX_PART_SUGGESTIONS = 5;
+const MAX_TAG_SUGGESTIONS = 5;
 
 interface LifetimeSearchProps {
   titles: string[];
   keys: string[];
   counts: number[];
   parts: { part: string; count: number }[];
+  tags: { tag: number; count: number }[];
+  tagNames: string[];
+  colorOf: (tag: number) => string;
   query: string;
   // Fires on every keystroke, so the chart highlights as you type.
   onQuery: (q: string) => void;
   // The parent sets the box to the picked title.
   onPick: (title: number) => void;
   onPickPart: (part: string) => void;
+  onPickTag: (tag: number) => void;
 }
 
 /**
  * Same look as EventSearch, but it filters the already-loaded titles instead
  * of querying the server: the first row keeps the typed text as a search,
- * then segments (parts of titles), then whole titles.
+ * then tags, segments (parts of titles), and whole titles.
  */
 export default function LifetimeSearch({
   titles,
   keys,
   counts,
   parts,
+  tags,
+  tagNames,
+  colorOf,
   query,
   onQuery,
   onPick,
   onPickPart,
+  onPickTag,
 }: LifetimeSearchProps) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -44,6 +53,15 @@ export default function LifetimeSearch({
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const tagSuggestions = useMemo(() => {
+    const q = normalizeTitle(query);
+    if (!q) return [];
+    return tags
+      .filter((t) => normalizeTitle(tagNames[t.tag]).includes(q))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, MAX_TAG_SUGGESTIONS);
+  }, [query, tags, tagNames]);
 
   const partSuggestions = useMemo(() => {
     const q = normalizeTitle(query);
@@ -61,11 +79,12 @@ export default function LifetimeSearch({
     const shown = new Set(partSuggestions.map((p) => p.part));
     const hits: number[] = [];
     keys.forEach((k, t) => {
-      if (k.includes(q) && !shown.has(k)) hits.push(t);
+      if (counts[t] > 0 && k.includes(q) && !shown.has(k)) hits.push(t);
     });
     return hits.sort((a, b) => counts[b] - counts[a]).slice(0, MAX_SUGGESTIONS);
   }, [query, keys, counts, partSuggestions]);
-  const rowCount = 1 + partSuggestions.length + suggestions.length;
+  const tagRows = tagSuggestions.length;
+  const rowCount = 1 + tagRows + partSuggestions.length + suggestions.length;
 
   useEffect(() => {
     if (!open) return;
@@ -98,13 +117,15 @@ export default function LifetimeSearch({
     onQuery(value);
   };
 
-  // Row 0 is the free-text search, then segments, then titles.
+  // Row 0 is the free-text search, then tags, segments, and titles.
   const choose = (row: number) => {
-    const isPart = row > 0 && row <= partSuggestions.length;
-    track('lifetime.search', { suggestion: row > 0, segment: isPart });
+    const isTag = row > 0 && row <= tagRows;
+    const isPart = row > tagRows && row <= tagRows + partSuggestions.length;
+    track('lifetime.search', { suggestion: row > 0, segment: isPart, tag: isTag });
     setOpen(false);
-    if (isPart) onPickPart(partSuggestions[row - 1].part);
-    else if (row > 0) onPick(suggestions[row - 1 - partSuggestions.length]);
+    if (isTag) onPickTag(tagSuggestions[row - 1].tag);
+    else if (isPart) onPickPart(partSuggestions[row - 1 - tagRows].part);
+    else if (row > 0) onPick(suggestions[row - 1 - tagRows - partSuggestions.length]);
     inputRef.current?.blur();
   };
 
@@ -160,12 +181,27 @@ export default function LifetimeSearch({
                 Everything mentioning “{query.trim()}”
               </span>
             </button>
-            {partSuggestions.map(({ part, count }, i) => (
+            {tagSuggestions.map(({ tag, count }, i) => (
               <button
-                key={`part:${part}`}
+                key={`tag:${tag}`}
                 onClick={() => choose(i + 1)}
                 onMouseEnter={() => setHighlight(i + 1)}
                 className={rowClass(i + 1)}
+              >
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorOf(tag) }} />
+                <span className="min-w-0 flex-1 text-sm font-semibold text-foreground truncate">{tagNames[tag]}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0">
+                  tag
+                </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{count}</span>
+              </button>
+            ))}
+            {partSuggestions.map(({ part, count }, i) => (
+              <button
+                key={`part:${part}`}
+                onClick={() => choose(i + 1 + tagRows)}
+                onMouseEnter={() => setHighlight(i + 1 + tagRows)}
+                className={rowClass(i + 1 + tagRows)}
               >
                 <span className="min-w-0 flex-1 truncate">
                   <span className="px-2 py-0.5 text-xs font-semibold rounded-full border border-border bg-secondary text-foreground">
@@ -176,7 +212,7 @@ export default function LifetimeSearch({
               </button>
             ))}
             {suggestions.map((t, i) => {
-              const row = i + 1 + partSuggestions.length;
+              const row = i + 1 + tagRows + partSuggestions.length;
               return (
                 <button
                   key={t}
@@ -207,7 +243,7 @@ export default function LifetimeSearch({
             if (query.trim()) setOpen(true);
           }}
           onKeyDown={onKeyDown}
-          placeholder="Search names..."
+          placeholder="Name or tag..."
           className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none w-full"
         />
         {query && (

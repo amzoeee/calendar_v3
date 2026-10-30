@@ -7,6 +7,7 @@ import { ListChecks, Search, X } from 'lucide-react';
 import TagSelect from '@/app/components/TagSelect';
 import { listPendingEventsAction, retagPendingEventsAction, restoreEventsAction, type EventSnapshot } from '@/app/actions';
 import { pacificDbStringToDate } from '@/lib/timezone';
+import Button from '@/app/components/Button';
 
 type Data = Awaited<ReturnType<typeof listPendingEventsAction>>;
 type Filter = 'all' | 'untagged' | 'selected';
@@ -294,13 +295,15 @@ export default function PendingReview() {
             <div className="flex-1 min-w-0">
               <TagSelect tags={data?.tags ?? []} value={tag} onChange={setTag} />
             </div>
-            <button
+            <Button
               onClick={apply}
               disabled={busy}
-              className="px-3 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold whitespace-nowrap cursor-pointer"
+              variant="primary"
+              size="none"
+              className="px-3 py-2 rounded text-xs font-bold whitespace-nowrap"
             >
               Apply tag
-            </button>
+            </Button>
           </div>
         </div>
       </div>
