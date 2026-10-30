@@ -4,8 +4,8 @@ import React from 'react';
  * The app's button. Colours come from `variant` and padding, text size and
  * shape from `size`, so buttons share one definition of each style.
  *
- * `primary` is outlined; the others have no visible border until hovered or
- * focused. Every variant keeps a 1px border so hovering doesn't shift layout.
+ * No variant shows a border until hovered or focused. Each keeps a transparent
+ * 1px border so hovering doesn't shift layout.
  *
  * `className` adds to these rather than overriding them: classes that set the
  * same property as the variant or size (say `px-2` on a `sm` button) win or
@@ -15,7 +15,6 @@ import React from 'react';
  */
 
 const VARIANTS = {
-  primary: 'border-ring text-foreground enabled:hover:bg-secondary focus-visible:bg-secondary',
   secondary: 'bg-secondary text-foreground border-transparent enabled:hover:border-ring focus-visible:border-ring',
   ghost: 'text-foreground border-transparent enabled:hover:border-ring focus-visible:border-ring',
   destructive:
