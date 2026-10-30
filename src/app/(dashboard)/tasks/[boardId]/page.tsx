@@ -1,11 +1,14 @@
 import { getSession } from '@/lib/auth';
-import { db } from '@/db';
-import { taskBoards, tasks as tasksTable, taskTags, tags as tagsTable } from '@/db/schema';
-import { eq, and, asc, inArray } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import TasksClient from './TasksClient';
-import { ensureDefaultBoard } from '@/app/task-actions';
+import {
+  ensureDefaultBoard,
+  getBoards,
+  getTagsByTask,
+  getTaskRows,
+  getTaskTagOptions,
+} from '@/features/tasks/server/queries';
 import {
   MAX_VISIBLE_BOARDS,
   REMINDERS_ONLY_COOKIE,
@@ -30,11 +33,7 @@ export default async function TasksBoardPage({ params }: PageProps) {
 
   await ensureDefaultBoard(session.userId);
 
-  const boards = await db
-    .select()
-    .from(taskBoards)
-    .where(eq(taskBoards.userId, session.userId))
-    .orderBy(asc(taskBoards.orderIndex), asc(taskBoards.id));
+  const boards = await getBoards(session.userId);
 
   // Where a virtual list's composer writes. An account that has never chosen
   // one falls back to the top of the rail, which is what it always did.
@@ -95,67 +94,12 @@ export default async function TasksBoardPage({ params }: PageProps) {
 
   const remindersOnly = (await cookies()).get(REMINDERS_ONLY_COOKIE)?.value === '1';
 
-  // A flat list across every visible board, ordered by sibling position. The
-  // client assembles the tree — see buildTaskTree in lib/tasks.ts for why the
-  // nesting isn't done here.
-  const rows = await db
-    .select({
-      id: tasksTable.id,
-      boardId: tasksTable.boardId,
-      parentId: tasksTable.parentId,
-      depth: tasksTable.depth,
-      orderIndex: tasksTable.orderIndex,
-      title: tasksTable.title,
-      description: tasksTable.description,
-      dueDatetime: tasksTable.dueDatetime,
-      dueHasTime: tasksTable.dueHasTime,
-      dueAsap: tasksTable.dueAsap,
-      remindAt: tasksTable.remindAt,
-      remindOffsetMinutes: tasksTable.remindOffsetMinutes,
-      remindOffsetDays: tasksTable.remindOffsetDays,
-      remindTimeOfDay: tasksTable.remindTimeOfDay,
-      isStarred: tasksTable.isStarred,
-      completedAt: tasksTable.completedAt,
-      rrule: tasksTable.rrule,
-      counterValue: tasksTable.counterValue,
-      counterEnd: tasksTable.counterEnd,
-      createdAt: tasksTable.createdAt,
-    })
-    .from(tasksTable)
-    .where(
-      and(
-        eq(tasksTable.userId, session.userId),
-        inArray(tasksTable.boardId, boardScope)
-      )
-    )
-    .orderBy(asc(tasksTable.orderIndex), asc(tasksTable.id));
+  const rows = await getTaskRows(session.userId, boardScope);
 
   // Tags available to tasks, and which tasks carry them. Two small queries
   // rather than a join, so a task with three tags doesn't triple its row.
-  const availableTags = await db
-    .select({ id: tagsTable.id, name: tagsTable.name, color: tagsTable.color })
-    .from(tagsTable)
-    .where(
-      and(
-        eq(tagsTable.userId, session.userId),
-        eq(tagsTable.isArchived, 0),
-        inArray(tagsTable.scope, ['task', 'both'])
-      )
-    )
-    .orderBy(asc(tagsTable.orderIndex), asc(tagsTable.id));
-
-  const taskIds = rows.map((r) => r.id);
-  const tagLinks = taskIds.length
-    ? await db
-        .select({ taskId: taskTags.taskId, tagId: taskTags.tagId })
-        .from(taskTags)
-        .where(inArray(taskTags.taskId, taskIds))
-    : [];
-
-  const tagsByTask: Record<number, number[]> = {};
-  for (const link of tagLinks) {
-    (tagsByTask[link.taskId] ??= []).push(link.tagId);
-  }
+  const availableTags = await getTaskTagOptions(session.userId);
+  const tagsByTask = await getTagsByTask(rows.map((r) => r.id));
 
   return (
     <TasksClient
