@@ -32,7 +32,7 @@ import {
   stageLogAction,
   linkDiscordAction,
   unlinkDiscordAction,
-} from '@/app/actions';
+} from '@/features/import/server/actions';
 import { changePasswordAction } from '@/features/auth/server/actions';
 import TagSelect from '@/app/components/TagSelect';
 import Select from '@/app/components/Select';

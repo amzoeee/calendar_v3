@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ListChecks, Search, X } from 'lucide-react';
 import TagSelect from '@/app/components/TagSelect';
-import { listPendingEventsAction, retagPendingEventsAction } from '@/app/actions';
+import { listPendingEventsAction, retagPendingEventsAction } from '@/features/import/server/actions';
 import { restoreEventsAction, type EventSnapshot } from '@/features/events/server/actions';
 import { pacificDbStringToDate } from '@/lib/timezone';
 
