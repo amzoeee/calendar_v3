@@ -4,6 +4,9 @@ import React from 'react';
  * The app's button. Colours come from `variant` and padding, text size and
  * shape from `size`, so buttons share one definition of each style.
  *
+ * `primary` is outlined; the others have no visible border until hovered or
+ * focused. Every variant keeps a 1px border so hovering doesn't shift layout.
+ *
  * `className` adds to these rather than overriding them: classes that set the
  * same property as the variant or size (say `px-2` on a `sm` button) win or
  * lose by stylesheet order, not by where they appear. For a button laid out
@@ -12,10 +15,11 @@ import React from 'react';
  */
 
 const VARIANTS = {
-  primary: 'bg-primary text-primary-foreground hover:bg-muted',
-  secondary: 'bg-secondary text-foreground hover:bg-muted',
-  ghost: 'text-foreground hover:bg-secondary',
-  destructive: 'btn-destructive',
+  primary: 'border-ring text-foreground enabled:hover:bg-secondary focus-visible:bg-secondary',
+  secondary: 'bg-secondary text-foreground border-transparent enabled:hover:border-ring focus-visible:border-ring',
+  ghost: 'text-foreground border-transparent enabled:hover:border-ring focus-visible:border-ring',
+  destructive:
+    'text-destructive border-transparent enabled:hover:border-destructive focus-visible:border-destructive',
 };
 
 const SIZES = {
@@ -26,6 +30,11 @@ const SIZES = {
 
 export type ButtonVariant = keyof typeof VARIANTS;
 export type ButtonSize = keyof typeof SIZES;
+
+/** Button's classes, for elements that can't be a Button. */
+export function buttonClass(variant: ButtonVariant = 'secondary', size: ButtonSize = 'md') {
+  return `inline-flex items-center border cursor-pointer transition-colors focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]}`;
+}
 
 interface Props extends React.ComponentPropsWithRef<'button'> {
   variant?: ButtonVariant;
@@ -39,11 +48,5 @@ export default function Button({
   className = '',
   ...props
 }: Props) {
-  return (
-    <button
-      type={type}
-      className={`inline-flex items-center cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
-      {...props}
-    />
-  );
+  return <button type={type} className={`${buttonClass(variant, size)} ${className}`} {...props} />;
 }
