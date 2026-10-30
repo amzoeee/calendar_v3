@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Select from '@/app/components/Select';
 import { useConfirm } from '@/app/components/ConfirmDialog';
-import { bulkEditEventsAction, type EventSnapshot } from '@/app/actions';
+import { bulkEditEventsAction, type EventSnapshot } from '@/features/events/server/actions';
 import { scopeAllows } from '@/lib/tags';
 
 interface Tag {

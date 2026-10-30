@@ -17,7 +17,7 @@ import { useSwipeNavigation } from '@/lib/useSwipeNavigation';
 import { track } from '@/lib/track';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import EventSearch from '@/app/components/EventSearch';
-import { addEventAction } from '@/app/actions';
+import { addEventAction } from '@/features/events/server/actions';
 import { getBrowserTimeZone } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
 import TimeInput from '@/app/components/TimeInput';
