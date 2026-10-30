@@ -33,6 +33,7 @@ import EventBlock from '@/features/events/components/EventBlock';
 import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
 import { useTimelineZoom } from '@/features/events/useTimelineZoom';
 import type { SubtagDisplay } from '@/lib/tags';
+import Button from '@/app/components/Button';
 
 interface Tag {
   id: number;
@@ -384,13 +385,15 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
           the week grid — a 56px circle parked over a column that's only ~48px
           wide covers most of a day, and the grid is there to be read. */}
       {mobileView === 'list' && (
-        <button
+        <Button
           onClick={() => setShowAddModal(true)}
-          className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
+          variant="primary"
+          size="none"
+          className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full bg-card shadow-2xl justify-center"
           aria-label="Add event"
         >
           <Plus className="h-6 w-6" />
-        </button>
+        </Button>
       )}
 
       {/* Navigation Header */}
@@ -882,12 +885,14 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               </div>
 
               <div>
-                <button
+                <Button
                   type="submit"
-                  className="w-full py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-bold cursor-pointer transition"
+                  variant="primary"
+                  size="none"
+                  className="w-full justify-center py-2 rounded text-sm font-bold"
                 >
                   Create Event
-                </button>
+                </Button>
               </div>
             </form>
           </div>

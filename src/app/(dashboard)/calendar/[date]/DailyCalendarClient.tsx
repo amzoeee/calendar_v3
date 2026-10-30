@@ -29,6 +29,7 @@ import EventBlock from '@/features/events/components/EventBlock';
 import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
 import { useTimelineZoom } from '@/features/events/useTimelineZoom';
 import type { SubtagDisplay } from '@/lib/tags';
+import Button from '@/app/components/Button';
 
 interface Tag {
   id: number;
@@ -316,12 +317,14 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
         />
       </div>
 
-      <button
+      <Button
         type="submit"
-        className="w-full flex justify-center py-2 px-4 border border-transparent rounded bg-primary text-sm font-bold text-primary-foreground shadow-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring cursor-pointer transition"
+        variant="primary"
+        size="none"
+        className="w-full justify-center py-2 px-4 rounded text-sm font-bold"
       >
         Add Event
-      </button>
+      </Button>
     </form>
   );
 
@@ -384,13 +387,15 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
       {/* Main Timeline View */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         {/* Mobile FAB: opens the Add Event bottom sheet (desktop uses the always-visible side panel) */}
-        <button
+        <Button
           onClick={() => setShowMobileAddSheet(true)}
-          className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
+          variant="primary"
+          size="none"
+          className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full bg-card shadow-2xl justify-center"
           aria-label="Add event"
         >
           <Plus className="h-6 w-6" />
-        </button>
+        </Button>
 
         {/* Navigation Header */}
         <div className="h-14 md:h-16 border-b border-border flex items-center justify-between px-3 md:px-6 gap-2 shrink-0 glass-panel">
