@@ -54,6 +54,7 @@ import type { BuildInfo } from '@/lib/version';
 import DateInput from '@/app/components/DateInput';
 import { useConfirm } from '@/app/components/ConfirmDialog';
 import { useUndo } from '@/app/components/UndoToast';
+import Button from '@/app/components/Button';
 
 interface Tag {
   id: number;
@@ -767,13 +768,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                   className="mt-1 block w-full h-8 rounded bg-secondary border border-border px-1 py-0.5 cursor-pointer"
                 />
               </div>
-              <button
+              <Button
                 type="submit"
-                className="shrink-0 px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                variant="primary"
+                size="none"
+                className="shrink-0 px-4 py-2 rounded text-xs font-bold gap-1.5"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add Tag
-              </button>
+              </Button>
             </div>
           </form>
           {addTagError && <p className="text-xs text-red-400 mt-1">{addTagError}</p>}
@@ -836,12 +839,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               />
             </div>
           </div>
-          <button
+          <Button
             type="submit"
-            className="px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+            variant="primary"
+            size="none"
+            className="px-4 py-2 rounded text-xs font-bold"
           >
             Import ICS File
-          </button>
+          </Button>
         </form>
       </section>
 
@@ -867,13 +872,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                 className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
               />
             </div>
-            <button
+            <Button
               onClick={handleStageLog}
               disabled={isLogStaging}
-              className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+              variant="primary"
+              size="none"
+              className="px-4 py-2 rounded text-xs font-bold"
             >
               {isLogStaging ? 'Staging...' : 'Stage Discord Log'}
-            </button>
+            </Button>
           </div>
 
           <div>
@@ -958,17 +965,19 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
           </div>
         </div>
         
-        <button
+        <Button
           onClick={handleExport}
           disabled={exportSelected.size === 0}
-          className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
+          variant="primary"
+          size="none"
+          className="px-4 py-2 rounded text-xs font-bold"
         >
           {exportSelected.size === 0
             ? 'Pick a tag to export'
             : exportSelected.size === 1
               ? 'Export .ics'
               : `Export ZIP (${exportSelected.size} tags)`}
-        </button>
+        </Button>
       </section>
 
       {/* Calendar preferences */}
@@ -1033,13 +1042,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
             />
           </div>
-          <button
+          <Button
             type="submit"
             disabled={isChangingPassword}
-            className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+            variant="primary"
+            size="none"
+            className="px-4 py-2 rounded text-xs font-bold"
           >
             {isChangingPassword ? 'Saving...' : 'Change Password'}
-          </button>
+          </Button>
         </form>
 
         {passwordResult && (
@@ -1096,13 +1107,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs font-mono tracking-widest text-foreground"
             />
           </div>
-          <button
+          <Button
             onClick={handleLinkDiscord}
             disabled={isLinking}
-            className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+            variant="primary"
+            size="none"
+            className="px-4 py-2 rounded text-xs font-bold"
           >
             {isLinking ? 'Linking...' : 'Link Discord Account'}
-          </button>
+          </Button>
         </div>
 
         {linkError && <p className="text-xs text-red-400">{linkError}</p>}
@@ -1212,12 +1225,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               {editTagError && <p className="text-xs text-red-400 mt-1">{editTagError}</p>}
 
               <div className="flex gap-2 pt-2">
-                <button
+                <Button
                   type="submit"
-                  className="flex-1 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-bold cursor-pointer transition"
+                  variant="primary"
+                  size="none"
+                  className="flex-1 justify-center py-2 rounded text-sm font-bold"
                 >
                   Save Changes
-                </button>
+                </Button>
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
