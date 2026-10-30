@@ -103,7 +103,7 @@ function EditorFields({ editor, tags, size }: { editor: EventEditorState; tags: 
       />
 
       <div className="flex gap-2">
-        <Button variant="primary" size={s.button} onClick={editor.save} className="flex-1">
+        <Button size={s.button} onClick={editor.save} className="flex-1">
           Save
         </Button>
         <Button size={s.button} onClick={editor.close}>

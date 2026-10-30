@@ -58,7 +58,6 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={isPending}
-              variant="primary"
               size="none"
               className="w-full justify-center rounded-md px-3 py-2 text-sm font-semibold"
             >

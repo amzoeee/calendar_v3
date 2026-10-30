@@ -155,7 +155,6 @@ export default function PasteListDialog({
           <Button
             onClick={() => parsed.length > 0 && onCreate(parsed)}
             disabled={parsed.length === 0}
-            variant="primary"
             size="none"
             className="px-3 py-2 rounded text-sm font-semibold"
           >

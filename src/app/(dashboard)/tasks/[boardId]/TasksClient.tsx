@@ -659,9 +659,8 @@ export default function TasksClient({
       <Button
         onClick={() => composers.current.get(primary.id)?.focus()}
         aria-label="Add a task"
-        variant="primary"
         size="none"
-        className="md:hidden fixed right-5 z-30 h-14 w-14 rounded-full bg-card shadow-2xl justify-center"
+        className="md:hidden fixed right-5 z-30 h-14 w-14 rounded-full shadow-2xl justify-center"
         style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
       >
         <Plus className="h-6 w-6" />
@@ -841,7 +840,6 @@ export default function TasksClient({
                   applyCompletion(confirmParent.node, true, true);
                   setConfirmParent(null);
                 }}
-                variant="primary"
                 size="none"
                 className="px-3 py-2 rounded text-sm font-semibold"
               >

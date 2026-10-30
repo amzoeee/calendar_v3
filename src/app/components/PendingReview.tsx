@@ -298,7 +298,6 @@ export default function PendingReview() {
             <Button
               onClick={apply}
               disabled={busy}
-              variant="primary"
               size="none"
               className="px-3 py-2 rounded text-xs font-bold whitespace-nowrap"
             >

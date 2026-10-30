@@ -387,9 +387,8 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
       {mobileView === 'list' && (
         <Button
           onClick={() => setShowAddModal(true)}
-          variant="primary"
           size="none"
-          className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full bg-card shadow-2xl justify-center"
+          className="md:hidden absolute right-4 bottom-4 z-30 h-14 w-14 rounded-full shadow-2xl justify-center"
           aria-label="Add event"
         >
           <Plus className="h-6 w-6" />
@@ -887,7 +886,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               <div>
                 <Button
                   type="submit"
-                  variant="primary"
                   size="none"
                   className="w-full justify-center py-2 rounded text-sm font-bold"
                 >

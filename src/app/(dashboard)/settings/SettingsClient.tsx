@@ -770,7 +770,6 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               </div>
               <Button
                 type="submit"
-                variant="primary"
                 size="none"
                 className="shrink-0 px-4 py-2 rounded text-xs font-bold gap-1.5"
               >
@@ -841,7 +840,6 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
           </div>
           <Button
             type="submit"
-            variant="primary"
             size="none"
             className="px-4 py-2 rounded text-xs font-bold"
           >
@@ -875,7 +873,6 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
             <Button
               onClick={handleStageLog}
               disabled={isLogStaging}
-              variant="primary"
               size="none"
               className="px-4 py-2 rounded text-xs font-bold"
             >
@@ -968,7 +965,6 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
         <Button
           onClick={handleExport}
           disabled={exportSelected.size === 0}
-          variant="primary"
           size="none"
           className="px-4 py-2 rounded text-xs font-bold"
         >
@@ -1045,7 +1041,6 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
           <Button
             type="submit"
             disabled={isChangingPassword}
-            variant="primary"
             size="none"
             className="px-4 py-2 rounded text-xs font-bold"
           >
@@ -1110,7 +1105,6 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
           <Button
             onClick={handleLinkDiscord}
             disabled={isLinking}
-            variant="primary"
             size="none"
             className="px-4 py-2 rounded text-xs font-bold"
           >
@@ -1227,7 +1221,6 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               <div className="flex gap-2 pt-2">
                 <Button
                   type="submit"
-                  variant="primary"
                   size="none"
                   className="flex-1 justify-center py-2 rounded text-sm font-bold"
                 >

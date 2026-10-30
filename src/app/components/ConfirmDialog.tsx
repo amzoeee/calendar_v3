@@ -59,7 +59,7 @@ interface Pending {
 const TONE_CLASSES: Record<Tone, string> = {
   default:
     'text-muted-foreground hover:text-foreground hover:bg-secondary',
-  primary: `font-semibold ${buttonClass('primary', 'none')}`,
+  primary: `font-semibold ${buttonClass('secondary', 'none')}`,
   danger: 'font-semibold bg-red-600 text-white hover:bg-red-700',
 };
 

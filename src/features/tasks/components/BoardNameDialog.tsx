@@ -49,7 +49,6 @@ export default function BoardNameDialog({
           <Button
             onClick={() => trimmed && onSubmit(trimmed)}
             disabled={!trimmed}
-            variant="primary"
             size="none"
             className="px-3 py-2 rounded text-sm font-semibold"
           >

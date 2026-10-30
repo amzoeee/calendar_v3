@@ -185,7 +185,6 @@ export default function BulkEdit({ target, tags, onApplied, onClose }: BulkEditP
         <Button
           onClick={apply}
           disabled={busy || !(renaming || retagging)}
-          variant="primary"
           size="none"
           className="px-3 py-1.5 text-xs font-semibold rounded-lg"
         >
