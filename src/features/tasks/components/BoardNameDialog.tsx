@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Button from '@/app/components/Button';
 
 export default function BoardNameDialog({
   heading,
@@ -45,13 +46,15 @@ export default function BoardNameDialog({
           >
             Cancel
           </button>
-          <button
+          <Button
             onClick={() => trimmed && onSubmit(trimmed)}
             disabled={!trimmed}
-            className="px-3 py-2 rounded text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            variant="primary"
+            size="none"
+            className="px-3 py-2 rounded text-sm font-semibold"
           >
             {submitLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -74,6 +74,7 @@ import SchedulePicker from '@/features/tasks/components/SchedulePicker';
 import RepeatPicker from '@/features/tasks/components/RepeatPicker';
 import TagPicker from '@/features/tasks/components/TagPicker';
 import BoardNameDialog from '@/features/tasks/components/BoardNameDialog';
+import Button from '@/app/components/Button';
 
 interface TasksClientProps {
   boards: BoardSummary[];
@@ -655,14 +656,16 @@ export default function TasksClient({
       )}
 
       {/* Mobile compose button, clear of the tab bar and the home indicator */}
-      <button
+      <Button
         onClick={() => composers.current.get(primary.id)?.focus()}
         aria-label="Add a task"
-        className="md:hidden fixed right-5 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
+        variant="primary"
+        size="none"
+        className="md:hidden fixed right-5 z-30 h-14 w-14 rounded-full bg-card shadow-2xl justify-center"
         style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
       >
         <Plus className="h-6 w-6" />
-      </button>
+      </Button>
 
       {selected && (
         <EditTaskDialog at={editorAt} onClose={() => setSelectedId(null)}>
@@ -833,15 +836,17 @@ export default function TasksClient({
               >
                 Keep it open
               </button>
-              <button
+              <Button
                 onClick={() => {
                   applyCompletion(confirmParent.node, true, true);
                   setConfirmParent(null);
                 }}
-                className="px-3 py-2 rounded text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer"
+                variant="primary"
+                size="none"
+                className="px-3 py-2 rounded text-sm font-semibold"
               >
                 Complete all
-              </button>
+              </Button>
             </div>
           </div>
         </div>
