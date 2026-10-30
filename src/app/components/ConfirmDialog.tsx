@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { buttonClass } from './Button';
 
 type Tone = 'default' | 'primary' | 'danger';
 
@@ -58,7 +59,7 @@ interface Pending {
 const TONE_CLASSES: Record<Tone, string> = {
   default:
     'text-muted-foreground hover:text-foreground hover:bg-secondary',
-  primary: 'font-semibold bg-primary text-primary-foreground hover:opacity-90',
+  primary: `font-semibold ${buttonClass('primary', 'none')}`,
   danger: 'font-semibold bg-red-600 text-white hover:bg-red-700',
 };
 
