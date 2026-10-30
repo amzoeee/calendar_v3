@@ -2,6 +2,7 @@
 
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { clampOverlayX } from '@/lib/overlayPosition';
+import Overlay from '@/app/components/Overlay';
 
 /**
  * The edit dialog, in two shapes.
@@ -68,37 +69,35 @@ export default function EditTaskDialog({
 
   if (!isWide) {
     return (
-      <div className="fixed inset-0 z-50 flex items-end">
-        <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden="true" />
-        <div
-          role="dialog"
-          aria-label="Edit task"
-          className="relative w-full max-h-[85vh] overflow-y-auto bg-card border-t border-border rounded-t-2xl p-5 pb-8 space-y-4"
-        >
-          <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
-          {children}
-        </div>
-      </div>
+      <Overlay
+        variant="sheet"
+        onClose={onClose}
+        zIndex={50}
+        aria-label="Edit task"
+        className="max-h-[85vh] overflow-y-auto p-5 pb-8 space-y-4"
+      >
+        {children}
+      </Overlay>
     );
   }
 
   return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden="true" />
-      <div
-        ref={ref}
-        role="dialog"
-        aria-label="Edit task"
-        style={{
-          left: pos?.left ?? 0,
-          top: pos?.top ?? 0,
-          // Hidden for the single frame between mount and measurement.
-          visibility: pos ? 'visible' : 'hidden',
-        }}
-        className="fixed z-50 w-[min(18rem,calc(100vw-1.5rem))] max-h-[65vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-3.5 space-y-3"
-      >
-        {children}
-      </div>
-    </>
+    <Overlay
+      variant="none"
+      onClose={onClose}
+      zIndex={50}
+      backdropClassName=""
+      panelRef={ref}
+      aria-label="Edit task"
+      style={{
+        left: pos?.left ?? 0,
+        top: pos?.top ?? 0,
+        // Hidden for the single frame between mount and measurement.
+        visibility: pos ? 'visible' : 'hidden',
+      }}
+      className="fixed w-[min(18rem,calc(100vw-1.5rem))] max-h-[65vh] overflow-y-auto bg-card border border-border rounded-xl shadow-2xl p-3.5 space-y-3"
+    >
+      {children}
+    </Overlay>
   );
 }
