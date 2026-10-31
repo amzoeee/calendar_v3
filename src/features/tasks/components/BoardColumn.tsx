@@ -7,12 +7,7 @@ import {
   useState,
 } from 'react';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
-import {
-  Bell,
-  CornerDownRight,
-  ListChecks,
-  Tag as TagIcon,
-} from 'lucide-react';
+import { CornerDownRight, ListChecks } from 'lucide-react';
 import {
   buildTaskTree,
   sortTaskTree,
@@ -21,35 +16,20 @@ import {
   sortTasksFlat,
   nestedRenderRows,
   completedRenderRows,
-  ACTIVE_SORT_MODES,
-  SORT_LABELS,
   MAX_TASK_DEPTH,
-  VIRTUAL_LISTS,
-  VIRTUAL_LIST_NAMES,
-  VIRTUAL_SORT_MODES,
-  isVirtualList,
-  type SortMode,
   type VirtualList,
   type TaskRow,
   type TaskNode,
   type TaskRenderRow,
 } from '@/lib/tasks';
-import {
-  renameBoardAction,
-  setBoardSortAction,
-  createTasksBulkAction,
-} from '@/features/tasks/server/actions';
 import { displayTitle } from '@/lib/taskSchedule';
-import Select from '@/app/components/Select';
 import { hasActiveReminder } from '../reminders';
 import { type BoardSummary, type VisibleBoard, type TaskTag, type ColumnHandlers } from '../types';
-import PasteListDialog from './PasteListDialog';
-import BoardNameDialog from './BoardNameDialog';
 import TaskComposer from './TaskComposer';
 import CompletedSection from './CompletedSection';
 import TaskItem from './TaskItem';
 import FilterOptions from './FilterOptions';
-import ColumnMenu from './ColumnMenu';
+import ColumnHeader from './ColumnHeader';
 
 /**
  * One board's column: its own header, composer, list and Completed section.
@@ -83,9 +63,6 @@ export default function BoardColumn({
   isPrimary: boolean;
 }) {
   const [subtaskValue, setSubtaskValue] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [pasting, setPasting] = useState(false);
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
 
@@ -355,18 +332,9 @@ export default function BoardColumn({
     tagsInUse.length > 0 ||
     (!starredList && (starredOnly || rows.some((r) => r.isStarred)));
 
-  // Sort and filter are rendered either as their own header controls or as
-  // sections of the overflow menu, depending on how much room the column has.
-  // Defined once here so the two placements can't drift apart.
-  // A virtual list can't offer My order: orderIndex is scoped to a board and a
-  // parent, so two tasks on different boards have no order between them. Its
-  // choice goes to a cookie rather than a task_boards row.
-  const sortModes = board.virtual ? VIRTUAL_SORT_MODES : ACTIVE_SORT_MODES;
-  const changeSort = (mode: SortMode) => {
-    if (board.virtual) handlers.setVirtualSort(board.virtual, mode);
-    else handlers.run(() => setBoardSortAction(board.id, mode));
-  };
-
+  // Filtering is rendered either as its own header control or as a section of
+  // the overflow menu, depending on how much room the column has. Defined once
+  // here so the two placements can't drift apart.
   const filterOptions = (
     <FilterOptions
       starredList={starredList}
@@ -387,117 +355,23 @@ export default function BoardColumn({
       data-board-id={board.id}
       className={`flex-1 min-w-0 flex flex-col ${isPrimary ? '' : 'hidden md:flex'}`}
     >
-      <div className="shrink-0 border-b border-border px-3 md:px-4 py-3 flex items-center gap-2">
-        {/* Mobile shows one list at a time, chosen here. */}
-        <div className="md:hidden flex-1 min-w-0">
-          <Select<string | number>
-            value={board.virtual ?? board.id}
-            onChange={(value) => {
-              if (value === 'new') onNewBoard();
-              else if (typeof value === 'string' && isVirtualList(value)) onPickList(value);
-              else onPickBoard(Number(value));
-            }}
-            aria-label="Choose a list"
-            className="w-full bg-transparent text-lg font-bold text-foreground focus:outline-none cursor-pointer"
-            options={[
-              ...VIRTUAL_LISTS.map((kind) => ({ value: kind, label: VIRTUAL_LIST_NAMES[kind] })),
-              ...boards.map((b) => ({ value: b.id, label: b.name })),
-              { value: 'new', label: '+ New list…' },
-            ]}
-          />
-        </div>
-
-        <h2 className="hidden md:block flex-1 min-w-0 truncate text-base font-bold text-foreground">
-          {board.name}
-          {openCount > 0 && (
-            <span className="ml-2 text-xs font-medium text-muted-foreground">{openCount}</span>
-          )}
-        </h2>
-
-        {!collapsed && (
-          <div className={`relative shrink-0 ${hasFilterables ? '' : 'md:hidden'}`}>
-            <button
-              onClick={() => setFilterOpen((o) => !o)}
-              aria-expanded={filterOpen}
-              aria-label={`Filter ${board.name}`}
-              className={`flex items-center gap-1 px-2 py-1 rounded border text-xs transition-colors cursor-pointer ${
-                activeFilters > 0
-                  ? 'bg-secondary border-foreground/30 text-foreground'
-                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <TagIcon className="h-3 w-3" />
-              {activeFilters > 0 ? activeFilters : 'Filter'}
-              {/* Mobile has no rail to show the toggle is on. */}
-              {remindersOnly && <Bell className="h-3 w-3 md:hidden" />}
-            </button>
-            {filterOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1 max-h-72 overflow-y-auto">
-                  {filterOptions}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {!collapsed && (
-          <Select
-            value={board.sortMode}
-            onChange={changeSort}
-            aria-label={`Sort ${board.name}`}
-            className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
-            options={sortModes.map((mode) => ({ value: mode, label: SORT_LABELS[mode] }))}
-          />
-        )}
-
-        {/* Everything in this menu acts on a board — renaming it, pasting into
-            it, deleting it — so a virtual list has no use for it. Its sort and
-            filter live in the header, since it's never shown alongside
-            another column. */}
-        {!board.virtual && (
-          <ColumnMenu
-            board={board}
-            boards={boards}
-            taskCount={rows.length}
-            completedCount={completedCount}
-            collapsed={collapsed}
-            activeFilters={activeFilters}
-            hasFilterables={hasFilterables}
-            filterOptions={filterOptions}
-            sortModes={sortModes}
-            changeSort={changeSort}
-            run={handlers.run}
-            onPickBoard={onPickBoard}
-            onPaste={() => setPasting(true)}
-            onRename={() => setRenaming(true)}
-          />
-        )}
-      </div>
-
-      {pasting && (
-        <PasteListDialog
-          onCancel={() => setPasting(false)}
-          onCreate={(items) => {
-            setPasting(false);
-            handlers.run(() => createTasksBulkAction(board.id, items));
-          }}
-        />
-      )}
-
-      {renaming && (
-        <BoardNameDialog
-          heading="Rename list"
-          initialValue={board.name}
-          submitLabel="Rename"
-          onCancel={() => setRenaming(false)}
-          onSubmit={(name) => {
-            setRenaming(false);
-            if (name !== board.name) handlers.run(() => renameBoardAction(board.id, name));
-          }}
-        />
-      )}
+      <ColumnHeader
+        board={board}
+        boards={boards}
+        taskCount={rows.length}
+        openCount={openCount}
+        completedCount={completedCount}
+        collapsed={collapsed}
+        filterOptions={filterOptions}
+        activeFilters={activeFilters}
+        hasFilterables={hasFilterables}
+        remindersOnly={remindersOnly}
+        run={handlers.run}
+        setVirtualSort={handlers.setVirtualSort}
+        onPickBoard={onPickBoard}
+        onPickList={onPickList}
+        onNewBoard={onNewBoard}
+      />
 
       {/* The column's scroll container. Tagged so a drag reaching the top or
           bottom edge can scroll it — see useTaskDrag. */}
