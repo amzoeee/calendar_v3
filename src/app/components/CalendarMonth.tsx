@@ -174,7 +174,7 @@ export default function CalendarMonth({
           onClick={togglePicker}
           aria-label="Choose month and year"
           aria-expanded={pickerOpen}
-          className={`${s.header} font-bold text-foreground select-none rounded px-1.5 py-0.5`}
+          className={`${s.header} font-bold text-foreground select-none whitespace-nowrap rounded px-1 py-0.5`}
         >
           {monthLabel}
         </Button>
