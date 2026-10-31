@@ -12,13 +12,18 @@ import React from 'react';
  * lose by stylesheet order, not by where they appear. For a button laid out
  * like the links around it, such as a menu row, use `size="none"` and give the
  * padding, text size and shape in `className`.
+ *
+ * `ghost` takes its text colour from its parent or `className`. `unstyled` adds
+ * nothing and ignores `size`, for controls with a look of their own: calendar
+ * cells, event cards, checkboxes, toggles that show a selected state.
  */
 
 const VARIANTS = {
   secondary: 'bg-secondary text-foreground border-transparent enabled:hover:border-ring focus-visible:border-ring',
-  ghost: 'text-foreground border-transparent enabled:hover:border-ring focus-visible:border-ring',
+  ghost: 'border-transparent enabled:hover:border-ring focus-visible:border-ring',
   destructive:
     'text-destructive border-transparent enabled:hover:border-destructive focus-visible:border-destructive',
+  unstyled: '',
 };
 
 const SIZES = {
@@ -32,6 +37,7 @@ export type ButtonSize = keyof typeof SIZES;
 
 /** Button's classes, for elements that can't be a Button. */
 export function buttonClass(variant: ButtonVariant = 'secondary', size: ButtonSize = 'md') {
+  if (variant === 'unstyled') return '';
   return `inline-flex items-center border cursor-pointer transition-colors focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]}`;
 }
 
