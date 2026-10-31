@@ -176,12 +176,13 @@ export default function BulkEdit({ target, tags, onApplied, onClose }: BulkEditP
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       <div className="flex justify-end gap-2">
-        <button
+        <Button
+          size="none"
           onClick={onClose}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg"
         >
           Cancel
-        </button>
+        </Button>
         <Button
           onClick={apply}
           disabled={busy || !(renaming || retagging)}

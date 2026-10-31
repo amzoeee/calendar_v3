@@ -10,6 +10,7 @@ import {
   type LifetimeEvents,
   type Segments,
 } from '@/lib/lifetime';
+import Button from '@/app/components/Button';
 
 const MARGIN = { top: 8, right: 8, bottom: 24, left: 44 };
 // Hit slop around tiny bars, in CSS pixels.
@@ -422,12 +423,13 @@ export default function LifetimeChart({
         }}
       />
       {view && (
-        <button
+        <Button
+          size="none"
           onClick={() => setView(null)}
-          className="absolute top-3 right-3 px-2.5 py-1 text-xs font-semibold rounded-md border border-border bg-secondary/90 text-muted-foreground hover:text-foreground hover:bg-muted transition cursor-pointer"
+          className="absolute top-3 right-3 px-2.5 py-1 text-xs font-semibold rounded-md"
         >
           Fit all
-        </button>
+        </Button>
       )}
     </div>
   );
