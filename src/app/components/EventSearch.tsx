@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import { pacificDbStringToDate, formatDateInputValue, formatClockTime } from '@/lib/timezone';
 import { track } from '@/lib/track';
+import Button from './Button';
 
 interface Tag {
   id: number;
@@ -217,7 +218,8 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
             ) : (
               <>
                 {results.map((ev, i) => (
-                  <button
+                  <Button
+                    variant="unstyled"
                     key={ev.id}
                     onClick={() => goTo(ev)}
                     onMouseEnter={() => setHighlight(i)}
@@ -238,7 +240,7 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
                         {ev.tag ? ` · ${ev.tag}` : ''}
                       </span>
                     </span>
-                  </button>
+                  </Button>
                 ))}
                 {loadingMore && (
                   <div className="px-3 py-2 text-xs text-muted-foreground text-center">Loading more…</div>
@@ -267,13 +269,15 @@ export default function EventSearch({ tags }: { tags: Tag[] }) {
           className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none w-full"
         />
         {query && (
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={clear}
             aria-label="Clear search"
-            className="text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+            className="text-muted-foreground hover:text-foreground shrink-0"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         )}
       </div>
 

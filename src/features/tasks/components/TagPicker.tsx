@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
 import { type TaskTag } from '../types';
+import Button from '@/app/components/Button';
 
 /**
  * Tag picker for the edit dialog. A searchable list rather than a chip row:
@@ -42,10 +43,12 @@ export default function TagPicker({
         {matches.map((t) => {
           const on = selected.includes(t.id);
           return (
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               key={t.id}
               onClick={() => onChange(on ? selected.filter((x) => x !== t.id) : [...selected, t.id])}
-              className="w-full flex items-center gap-2 px-2 py-1.5 md:py-1 text-sm md:text-xs hover:bg-secondary transition-colors cursor-pointer"
+              className="w-full gap-2 px-2 py-1.5 md:py-1 text-sm md:text-xs"
             >
               <span
                 className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
@@ -59,7 +62,7 @@ export default function TagPicker({
                 style={{ backgroundColor: t.color }}
               />
               <span className="truncate">{t.name}</span>
-            </button>
+            </Button>
           );
         })}
       </div>

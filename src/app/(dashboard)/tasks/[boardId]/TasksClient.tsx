@@ -74,6 +74,7 @@ import SchedulePicker from '@/features/tasks/components/SchedulePicker';
 import RepeatPicker from '@/features/tasks/components/RepeatPicker';
 import TagPicker from '@/features/tasks/components/TagPicker';
 import BoardNameDialog from '@/features/tasks/components/BoardNameDialog';
+import Button from '@/app/components/Button';
 
 interface TasksClientProps {
   boards: BoardSummary[];
@@ -514,7 +515,8 @@ export default function TasksClient({
           {VIRTUAL_LISTS.map((kind) => {
             const shown = virtual === kind;
             return (
-              <button
+              <Button
+                variant="unstyled"
                 key={kind}
                 onClick={() => showList(kind)}
                 aria-current={shown ? 'page' : undefined}
@@ -530,7 +532,7 @@ export default function TasksClient({
                   <ListChecks className="h-3.5 w-3.5 shrink-0" />
                 )}
                 <span className="truncate">{VIRTUAL_LIST_NAMES[kind]}</span>
-              </button>
+              </Button>
             );
           })}
 
@@ -550,7 +552,8 @@ export default function TasksClient({
                   shown ? 'bg-secondary' : 'hover:bg-secondary/50'
                 } ${draggedBoard === index ? 'opacity-50' : ''}`}
               >
-                <button
+                <Button
+                  variant="unstyled"
                   onClick={() => showOnly(b.id)}
                   aria-current={shown ? 'page' : undefined}
                   title={b.isDefault ? `Show only ${b.name} (default list)` : `Show only ${b.name}`}
@@ -567,8 +570,9 @@ export default function TasksClient({
                       default
                     </span>
                   )}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="unstyled"
                   onClick={() => toggleColumn(b.id)}
                   disabled={atLimit || (shown && visibleIds.length === 1)}
                   aria-pressed={shown}
@@ -586,20 +590,23 @@ export default function TasksClient({
                   }`}
                 >
                   {shown && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
-                </button>
+                </Button>
               </div>
             );
           })}
         </div>
         <div className="p-3 border-t border-border">
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={() => setNewBoardOpen(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors cursor-pointer"
+            className="w-full gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             <Plus className="h-4 w-4" />
             New list
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
             onClick={() => setRemindersOnly(!remindersOnly)}
             role="switch"
             aria-checked={remindersOnly}
@@ -616,7 +623,7 @@ export default function TasksClient({
               {remindersOnly && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
             </span>
             <span className="text-left leading-tight">Active reminders only</span>
-          </button>
+          </Button>
         </div>
       </aside>
 
@@ -655,26 +662,29 @@ export default function TasksClient({
       )}
 
       {/* Mobile compose button, clear of the tab bar and the home indicator */}
-      <button
+      <Button
         onClick={() => composers.current.get(primary.id)?.focus()}
         aria-label="Add a task"
-        className="md:hidden fixed right-5 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center cursor-pointer"
+        size="none"
+        className="md:hidden fixed right-5 z-30 h-14 w-14 rounded-full shadow-2xl justify-center"
         style={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom))' }}
       >
         <Plus className="h-6 w-6" />
-      </button>
+      </Button>
 
       {selected && (
         <EditTaskDialog at={editorAt} onClose={() => setSelectedId(null)}>
           <div className="flex items-start justify-between gap-3">
             <h2 className="text-base md:text-xs font-bold text-foreground">Edit task</h2>
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={() => setSelectedId(null)}
               aria-label="Close"
-              className="text-muted-foreground hover:text-foreground cursor-pointer"
+              className="text-muted-foreground hover:text-foreground"
             >
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
 
           <label className="block space-y-1">
@@ -745,54 +755,64 @@ export default function TasksClient({
           </label>
 
           {selected.depth < MAX_TASK_DEPTH && (
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={() => {
                 setSubtaskParent(selected.id);
                 setSelectedId(null);
               }}
-              className="flex items-center gap-2 text-sm md:text-xs text-foreground hover:opacity-80 transition-opacity cursor-pointer"
+              className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground"
             >
               <CornerDownRight className="h-3.5 w-3.5" />
               Add subtask
-            </button>
+            </Button>
           )}
 
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={() => toggleStar(selected)}
-            className="flex items-center gap-2 text-sm md:text-xs text-foreground hover:text-amber-400 transition-colors cursor-pointer"
+            className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground hover:text-amber-400"
           >
             <Star
               className={`h-3.5 w-3.5 ${selected.isStarred ? 'text-amber-400' : ''}`}
               fill={selected.isStarred ? 'currentColor' : 'none'}
             />
             {selected.isStarred ? 'Starred' : 'Add star'}
-          </button>
+          </Button>
 
           {/* ASAP tasks always count as reminded, so there's nothing to toggle. */}
           {!selected.completedAt && selected.dueAsap !== 1 && (
             reminderFired(selected) ? (
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => setReminderActive(selected, false)}
                 title="Turn the reminder off"
-                className="flex items-center gap-2 text-sm md:text-xs text-foreground hover:text-amber-400 transition-colors cursor-pointer"
+                className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground hover:text-amber-400"
               >
                 <BellOff className="h-3.5 w-3.5" />
                 Dismiss reminder
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => setReminderActive(selected, true)}
                 title="Count this task as reminded from now"
-                className="flex items-center gap-2 text-sm md:text-xs text-foreground hover:text-amber-400 transition-colors cursor-pointer"
+                className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground hover:text-amber-400"
               >
                 <Bell className="h-3.5 w-3.5" />
                 Set reminder active
-              </button>
+              </Button>
             )
           )}
 
           <div className="pt-2 border-t border-border">
-            <button
+            <Button
+              variant="destructive"
+              size="none"
               onClick={async () => {
                 const subs = localRows.filter((r) => r.parentId === selected.id).length;
                 const ok = await confirm({
@@ -805,11 +825,11 @@ export default function TasksClient({
                 });
                 if (ok) removeTask(selected.id);
               }}
-              className="flex items-center gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs font-medium text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer"
+              className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs font-medium"
             >
               <Trash2 className="h-4 w-4" />
               Delete task
-            </button>
+            </Button>
           </div>
         </EditTaskDialog>
       )}
@@ -827,21 +847,24 @@ export default function TasksClient({
               {confirmParent.open === 1 ? 'it' : 'them'} too. Close it anyway?
             </p>
             <div className="flex justify-end gap-2">
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => setConfirmParent(null)}
-                className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+                className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground"
               >
                 Keep it open
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => {
                   applyCompletion(confirmParent.node, true, true);
                   setConfirmParent(null);
                 }}
-                className="px-3 py-2 rounded text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer"
+                size="none"
+                className="px-3 py-2 rounded text-sm font-semibold"
               >
                 Complete all
-              </button>
+              </Button>
             </div>
           </div>
         </div>

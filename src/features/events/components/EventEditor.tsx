@@ -2,6 +2,7 @@
 
 import type { RefObject } from 'react';
 import { Copy, Trash2, X } from 'lucide-react';
+import Button from '@/app/components/Button';
 import DateInput from '@/app/components/DateInput';
 import TagSelect from '@/app/components/TagSelect';
 import TimeInput from '@/app/components/TimeInput';
@@ -26,8 +27,7 @@ const SIZES = {
     dateGrid: 'mt-1 gap-1',
     dateLabel: '',
     desc: 'px-3 py-1.5 text-xs',
-    button: 'py-1.5 text-xs',
-    buttonPad: 'px-3',
+    button: 'sm',
     icon: 'h-3.5 w-3.5',
     divider: 'pt-2',
   },
@@ -41,12 +41,11 @@ const SIZES = {
     dateGrid: 'gap-2',
     dateLabel: 'text-xs mb-1',
     desc: 'px-3 py-2 text-sm',
-    button: 'py-2.5 text-sm',
-    buttonPad: 'px-4',
+    button: 'md',
     icon: 'h-4 w-4',
     divider: 'pt-3',
   },
-};
+} as const;
 
 function EditorFields({ editor, tags, size }: { editor: EventEditorState; tags: Tag[]; size: keyof typeof SIZES }) {
   const s = SIZES[size];
@@ -104,40 +103,23 @@ function EditorFields({ editor, tags, size }: { editor: EventEditorState; tags: 
       />
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={editor.save}
-          className={`flex-1 ${s.button} bg-primary hover:bg-muted text-primary-foreground rounded font-semibold cursor-pointer text-center`}
-        >
+        <Button size={s.button} onClick={editor.save} className="flex-1">
           Save
-        </button>
-        <button
-          type="button"
-          onClick={editor.close}
-          className={`${s.buttonPad} ${s.button} bg-secondary hover:bg-muted text-foreground rounded font-semibold cursor-pointer`}
-        >
+        </Button>
+        <Button size={s.button} onClick={editor.close}>
           Cancel
-        </button>
+        </Button>
       </div>
 
       <div className={`border-t border-border ${s.divider} flex justify-between gap-2`}>
-        <button
-          type="button"
-          onClick={editor.remove}
-          className={`flex-1 flex items-center justify-center gap-1.5 ${s.button} btn-destructive transition-all rounded font-semibold cursor-pointer`}
-        >
+        <Button variant="destructive" size={s.button} onClick={editor.remove} className="flex-1">
           <Trash2 className={s.icon} />
           Delete
-        </button>
-        <button
-          type="button"
-          onClick={editor.copy}
-          className={`${s.buttonPad} ${s.button} bg-secondary hover:bg-muted text-foreground rounded font-semibold flex items-center justify-center gap-1.5 cursor-pointer`}
-          title="Copy Event"
-        >
+        </Button>
+        <Button size={s.button} onClick={editor.copy} title="Copy Event">
           <Copy className={s.icon} />
           Copy
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -167,13 +149,15 @@ export default function EventEditor({
       >
         <div className="flex items-center justify-between border-b border-border pb-2">
           <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Edit Event</h4>
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={editor.close}
-            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+            className="p-1 rounded text-muted-foreground hover:text-foreground"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
         <EditorFields editor={editor} tags={tags} size="popover" />
       </div>
@@ -187,13 +171,15 @@ export default function EventEditor({
           <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold tracking-tight">Edit event</h2>
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={editor.close}
-              className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+              className="p-1 rounded text-muted-foreground hover:text-foreground"
               aria-label="Close"
             >
               <X className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
           <EditorFields editor={editor} tags={tags} size="sheet" />
         </div>

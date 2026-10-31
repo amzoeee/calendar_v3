@@ -54,6 +54,7 @@ import type { BuildInfo } from '@/lib/version';
 import DateInput from '@/app/components/DateInput';
 import { useConfirm } from '@/app/components/ConfirmDialog';
 import { useUndo } from '@/app/components/UndoToast';
+import Button from '@/app/components/Button';
 
 interface Tag {
   id: number;
@@ -568,33 +569,37 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
         </div>
         
         <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
-          <button
+          <Button
+            size="none"
             onClick={() => handleOpenEditModal(tag)}
             aria-label="Edit tag"
             title="Edit"
-            className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-foreground cursor-pointer transition flex items-center gap-1"
+            className="p-1.5 lg:px-2 lg:py-1 text-xs rounded font-semibold gap-1"
           >
             <Edit2 className="h-3 w-3" />
             <span className="hidden lg:inline">Edit</span>
-          </button>
-          <button
+          </Button>
+          <Button
+            size="none"
             onClick={() => handleArchive(tag.id, tag.name)}
             aria-label="Archive tag"
             title="Archive"
-            className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-amber-400 cursor-pointer transition flex items-center gap-1"
+            className="p-1.5 lg:px-2 lg:py-1 text-xs rounded font-semibold gap-1"
           >
             <Archive className="h-3 w-3" />
             <span className="hidden lg:inline">Archive</span>
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="destructive"
+            size="none"
             onClick={() => handleDeleteTag(tag.id, tag.name)}
             aria-label="Delete tag"
             title="Delete"
-            className="p-1.5 lg:px-2 lg:py-1 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 text-xs rounded font-semibold text-red-400 cursor-pointer transition flex items-center gap-1"
+            className="p-1.5 lg:px-2 lg:py-1 text-xs rounded font-semibold gap-1"
           >
             <Trash2 className="h-3 w-3" />
             <span className="hidden lg:inline">Delete</span>
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -682,24 +687,27 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                   </div>
                   
                   <div className="flex items-center gap-1.5 lg:gap-2 shrink-0">
-                    <button
+                    <Button
+                      size="none"
                       onClick={() => handleUnarchive(tag.id)}
                       aria-label="Unarchive tag"
                       title="Unarchive"
-                      className="p-1.5 lg:px-2 lg:py-1 bg-secondary hover:bg-muted border border-border text-xs rounded font-semibold text-foreground cursor-pointer transition flex items-center gap-1"
+                      className="p-1.5 lg:px-2 lg:py-1 text-xs rounded font-semibold gap-1"
                     >
                       <ArchiveRestore className="h-3 w-3" />
                       <span className="hidden lg:inline">Unarchive</span>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="none"
                       onClick={() => handleDeleteTag(tag.id, tag.name)}
                       aria-label="Delete tag"
                       title="Delete"
-                      className="p-1.5 lg:px-2 lg:py-1 bg-red-950/20 hover:bg-red-900/30 border border-red-900/30 text-xs rounded font-semibold text-red-400 cursor-pointer transition flex items-center gap-1"
+                      className="p-1.5 lg:px-2 lg:py-1 text-xs rounded font-semibold gap-1"
                     >
                       <Trash2 className="h-3 w-3" />
                       <span className="hidden lg:inline">Delete</span>
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))
@@ -767,13 +775,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                   className="mt-1 block w-full h-8 rounded bg-secondary border border-border px-1 py-0.5 cursor-pointer"
                 />
               </div>
-              <button
+              <Button
                 type="submit"
-                className="shrink-0 px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                size="none"
+                className="shrink-0 px-4 py-2 rounded text-xs font-bold gap-1.5"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add Tag
-              </button>
+              </Button>
             </div>
           </form>
           {addTagError && <p className="text-xs text-red-400 mt-1">{addTagError}</p>}
@@ -801,14 +810,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
             }`}
           >
             <span className="flex-1 font-semibold">{importResult.text}</span>
-            <button
+            <Button
+              variant="unstyled"
               type="button"
               onClick={() => setImportResult(null)}
               className="shrink-0 text-current opacity-70 hover:opacity-100 cursor-pointer"
               aria-label="Dismiss import message"
             >
               <X className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         )}
 
@@ -836,12 +846,13 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               />
             </div>
           </div>
-          <button
+          <Button
             type="submit"
-            className="px-4 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+            size="none"
+            className="px-4 py-2 rounded text-xs font-bold"
           >
             Import ICS File
-          </button>
+          </Button>
         </form>
       </section>
 
@@ -867,13 +878,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                 className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
               />
             </div>
-            <button
+            <Button
               onClick={handleStageLog}
               disabled={isLogStaging}
-              className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+              size="none"
+              className="px-4 py-2 rounded text-xs font-bold"
             >
               {isLogStaging ? 'Staging...' : 'Stage Discord Log'}
-            </button>
+            </Button>
           </div>
 
           <div>
@@ -903,26 +915,31 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
         <div>
           <div className="flex items-center gap-3">
             <span className="block text-xs font-semibold text-muted-foreground uppercase">Tags</span>
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               type="button"
               onClick={() => setExportTagIds(null)}
-              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               All
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="none"
               type="button"
               onClick={() => setExportTagIds(new Set())}
-              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               None
-            </button>
+            </Button>
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {tagsList.map((t) => {
               const on = exportSelected.has(t.id);
               return (
-                <button
+                <Button
+                  variant="unstyled"
                   key={t.id}
                   type="button"
                   aria-pressed={on}
@@ -933,7 +950,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                 >
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
                   {t.name}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -958,17 +975,18 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
           </div>
         </div>
         
-        <button
+        <Button
           onClick={handleExport}
           disabled={exportSelected.size === 0}
-          className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed"
+          size="none"
+          className="px-4 py-2 rounded text-xs font-bold"
         >
           {exportSelected.size === 0
             ? 'Pick a tag to export'
             : exportSelected.size === 1
               ? 'Export .ics'
               : `Export ZIP (${exportSelected.size} tags)`}
-        </button>
+        </Button>
       </section>
 
       {/* Calendar preferences */}
@@ -1033,13 +1051,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs text-foreground"
             />
           </div>
-          <button
+          <Button
             type="submit"
             disabled={isChangingPassword}
-            className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+            size="none"
+            className="px-4 py-2 rounded text-xs font-bold"
           >
             {isChangingPassword ? 'Saving...' : 'Change Password'}
-          </button>
+          </Button>
         </form>
 
         {passwordResult && (
@@ -1073,13 +1092,15 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                     {link.timeZone || 'no timezone — re-link to set it'}
                   </span>
                 </span>
-                <button
+                <Button
+                  variant="destructive"
+                  size="none"
                   onClick={() => handleUnlinkDiscord(link.discordUserId)}
-                  className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition cursor-pointer"
+                  className="gap-1 text-xs"
                 >
                   <Link2Off className="h-3.5 w-3.5" />
                   Unlink
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -1096,13 +1117,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               className="mt-1 block w-full rounded bg-secondary border border-border px-3 py-1.5 text-xs font-mono tracking-widest text-foreground"
             />
           </div>
-          <button
+          <Button
             onClick={handleLinkDiscord}
             disabled={isLinking}
-            className="px-4 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold transition cursor-pointer"
+            size="none"
+            className="px-4 py-2 rounded text-xs font-bold"
           >
             {isLinking ? 'Linking...' : 'Link Discord Account'}
-          </button>
+          </Button>
         </div>
 
         {linkError && <p className="text-xs text-red-400">{linkError}</p>}
@@ -1133,12 +1155,14 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
           <div className="bg-card border border-border p-6 rounded-t-2xl lg:rounded-lg w-full lg:max-w-sm space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <h3 className="text-lg font-bold text-foreground">Edit Tag</h3>
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => setShowEditModal(false)}
-                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
               >
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
             
             <form onSubmit={handleEditSubmit} className="space-y-4">
@@ -1212,19 +1236,21 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               {editTagError && <p className="text-xs text-red-400 mt-1">{editTagError}</p>}
 
               <div className="flex gap-2 pt-2">
-                <button
+                <Button
                   type="submit"
-                  className="flex-1 py-2 bg-primary hover:bg-muted text-primary-foreground rounded text-sm font-bold cursor-pointer transition"
+                  size="none"
+                  className="flex-1 justify-center py-2 rounded text-sm font-bold"
                 >
                   Save Changes
-                </button>
-                <button
+                </Button>
+                <Button
+                  size="none"
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold cursor-pointer transition"
+                  className="px-4 py-2 rounded text-sm font-semibold"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           </div>

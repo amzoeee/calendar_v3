@@ -7,6 +7,7 @@ import { ListChecks, Search, X } from 'lucide-react';
 import TagSelect from '@/app/components/TagSelect';
 import { listPendingEventsAction, retagPendingEventsAction, restoreEventsAction, type EventSnapshot } from '@/app/actions';
 import { pacificDbStringToDate } from '@/lib/timezone';
+import Button from '@/app/components/Button';
 
 type Data = Awaited<ReturnType<typeof listPendingEventsAction>>;
 type Filter = 'all' | 'untagged' | 'selected';
@@ -166,13 +167,15 @@ export default function PendingReview() {
                   {rows.length} staged · {untaggedCount} untagged
                 </span>
               )}
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => setOpen(false)}
                 aria-label="Close"
-                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer"
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -193,7 +196,8 @@ export default function PendingReview() {
                 className="w-full rounded bg-secondary border border-border pl-8 pr-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
-            <button
+            <Button
+              variant="unstyled"
               onClick={selectMatches}
               className="px-3 py-1.5 rounded border border-border text-xs font-semibold text-foreground hover:bg-secondary whitespace-nowrap cursor-pointer"
             >
@@ -202,12 +206,13 @@ export default function PendingReview() {
                 : q
                   ? `Select ${unselectedMatches.length} match${unselectedMatches.length === 1 ? '' : 'es'}`
                   : 'Select all'}
-            </button>
+            </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
             {FILTERS.map((f) => (
-              <button
+              <Button
+                variant="unstyled"
                 key={f.value}
                 onClick={() => setFilter(f.value)}
                 aria-pressed={filter === f.value}
@@ -218,16 +223,18 @@ export default function PendingReview() {
                 }`}
               >
                 {f.label}
-              </button>
+              </Button>
             ))}
             <span className="flex-1" />
             {selected.size > 0 && (
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => setSelected(new Set())}
-                className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 Clear selection
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -249,7 +256,8 @@ export default function PendingReview() {
                   {header && (
                     <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase text-muted-foreground">{header}</div>
                   )}
-                  <button
+                  <Button
+                    variant="unstyled"
                     onClick={(e) => toggle(r.id, e.shiftKey)}
                     aria-pressed={isSelected}
                     className={`w-full flex items-center gap-3 px-4 py-2 text-left text-sm border-t border-border/50 cursor-pointer select-none transition ${
@@ -269,7 +277,7 @@ export default function PendingReview() {
                     ) : (
                       <span className="shrink-0 text-xs italic text-muted-foreground/70">untagged</span>
                     )}
-                  </button>
+                  </Button>
                 </React.Fragment>
               );
             })
@@ -281,9 +289,9 @@ export default function PendingReview() {
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="flex-1">{notice.text}</span>
               {notice.previous && notice.previous.length > 0 && (
-                <button onClick={undo} disabled={busy} className="font-semibold text-foreground hover:underline cursor-pointer disabled:opacity-50">
+                <Button variant="ghost" size="none" onClick={undo} disabled={busy} className="font-semibold text-foreground">
                   Undo
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -294,13 +302,14 @@ export default function PendingReview() {
             <div className="flex-1 min-w-0">
               <TagSelect tags={data?.tags ?? []} value={tag} onChange={setTag} />
             </div>
-            <button
+            <Button
               onClick={apply}
               disabled={busy}
-              className="px-3 py-2 bg-primary hover:bg-muted disabled:opacity-50 text-primary-foreground rounded text-xs font-bold whitespace-nowrap cursor-pointer"
+              size="none"
+              className="px-3 py-2 rounded text-xs font-bold whitespace-nowrap"
             >
               Apply tag
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -309,14 +318,15 @@ export default function PendingReview() {
 
   return (
     <>
-      <button
+      <Button
+        size="none"
         type="button"
         onClick={openPanel}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-muted text-foreground border border-border rounded text-xs font-semibold shadow transition cursor-pointer"
+        className="gap-1.5 px-3 py-1.5 rounded text-xs font-semibold"
       >
         <ListChecks className="h-3.5 w-3.5" />
         Review
-      </button>
+      </Button>
       {open && createPortal(panel, document.body)}
     </>
   );

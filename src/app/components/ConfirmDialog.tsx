@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import Button, { type ButtonVariant } from './Button';
 
 type Tone = 'default' | 'primary' | 'danger';
 
@@ -55,11 +56,10 @@ interface Pending {
   resolve: (value: unknown) => void;
 }
 
-const TONE_CLASSES: Record<Tone, string> = {
-  default:
-    'text-muted-foreground hover:text-foreground hover:bg-secondary',
-  primary: 'font-semibold bg-primary text-primary-foreground hover:opacity-90',
-  danger: 'font-semibold bg-red-600 text-white hover:bg-red-700',
+const TONE_VARIANTS: Record<Tone, ButtonVariant> = {
+  default: 'ghost',
+  primary: 'secondary',
+  danger: 'destructive',
 };
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
@@ -164,20 +164,26 @@ function Dialog({
           </div>
         )}
         <div className="flex flex-wrap justify-end gap-2 pt-2">
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={() => onSettle(null)}
-            className={`px-3 py-2 rounded text-sm font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-ring ${TONE_CLASSES.default}`}
+            className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             {cancelLabel}
-          </button>
+          </Button>
           {choices.map((c) => (
-            <button
+            <Button
               key={c.label}
+              variant={TONE_VARIANTS[c.tone ?? 'default']}
+              size="none"
               onClick={() => onSettle(c.value)}
-              className={`px-3 py-2 rounded text-sm transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${TONE_CLASSES[c.tone ?? 'default']}`}
+              className={`px-3 py-2 rounded text-sm ${
+                c.tone && c.tone !== 'default' ? 'font-semibold' : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
               {c.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
