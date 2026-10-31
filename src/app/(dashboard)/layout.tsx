@@ -172,12 +172,13 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
                     defaultValue={todayStr}
                     className="bg-secondary border border-border px-2 py-1 rounded text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 w-32"
                   />
-                  <button
+                  <Button
+                    size="none"
                     type="submit"
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold shadow transition cursor-pointer"
+                    className="px-3 py-1.5 rounded text-xs font-semibold"
                   >
                     Shift Date
-                  </button>
+                  </Button>
                 </form>
               </div>
             </div>
