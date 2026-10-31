@@ -139,6 +139,6 @@ alongside `SECRET_KEY`.
 | `CALENDAR_API_URL` | no | `http://app:4000` | Where the bot reaches the calendar. |
 | `CALENDAR_PUBLIC_URL` | no | `CALENDAR_API_URL` | URL used in links shown to people. |
 | `CALENDAR_TIMEZONE` | no | `America/Los_Angeles` | Zone the scraped times are read in. |
-| `FETCH_MAX_MESSAGES` | no | `500` | How far back `/fetch` will look for a marker. |
+| `FETCH_MAX_MESSAGES` | no | `1000` | How far back `/fetch` will look for a marker. |
 | `FETCH_POST_MARKER` | no | `true` | Kill switch for markers across the whole bot. Individual accounts opt out with `/marker`. |
 | `MARKER_POLL_SECONDS` | no | `15` | How often it checks for newly approved batches. |
