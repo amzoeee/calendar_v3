@@ -70,6 +70,7 @@ import TagPicker from './TagPicker';
 import ReminderPicker from './ReminderPicker';
 import PasteListDialog from './PasteListDialog';
 import BoardNameDialog from './BoardNameDialog';
+import Button from '@/app/components/Button';
 
 /**
  * One board's column: its own header, composer, list and Completed section.
@@ -373,17 +374,19 @@ export default function BoardColumn({
           {board.virtual ? (
             <span aria-hidden="true" className="mt-0.5 shrink-0 w-[18px]" />
           ) : (
-            <button
+            <Button
+              variant="unstyled"
               {...handlers.dragHandleProps(node.id, subtreeIds, height)}
               aria-label={`Reorder “${node.title}”`}
               title="Drag to reorder, or right to make it a subtask"
               className="mt-0.5 shrink-0 text-muted-foreground/30 hover:text-foreground transition-colors cursor-grab active:cursor-grabbing touch-none p-0.5"
             >
               <GripVertical className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           )}
 
-          <button
+          <Button
+            variant="unstyled"
             onClick={() => handlers.requestCompletion(node, !done)}
             aria-label={
               done
@@ -397,7 +400,7 @@ export default function BoardColumn({
             }`}
           >
             {done && <Check className="h-3 w-3" strokeWidth={3} />}
-          </button>
+          </Button>
 
           <div className="flex-1 min-w-0">
             {parentTitle && (
@@ -413,14 +416,15 @@ export default function BoardColumn({
                 onMove={board.virtual ? undefined : (action) => keyboardMove(node, action)}
               />
             ) : (
-              <button
+              <Button
+                variant="unstyled"
                 onClick={() => setEditingId(node.id)}
                 className={`block w-full text-left text-sm cursor-text break-words ${
                   done ? 'line-through text-muted-foreground' : 'text-foreground'
                 }`}
               >
                 {displayTitle(node.title, node.counterValue)}
-              </button>
+              </Button>
             )}
             {node.description && !isEditing && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
@@ -464,19 +468,22 @@ export default function BoardColumn({
 
           <div className="flex items-center gap-0.5 shrink-0">
             {node.depth < MAX_TASK_DEPTH && !done && (
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => {
                   setSubtaskParent(node.id);
                   setSubtaskValue('');
                 }}
                 aria-label={`Add a subtask to “${node.title}”`}
                 title="Add subtask"
-                className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
+                className="text-muted-foreground/60 hover:text-foreground p-1"
               >
                 <CornerDownRight className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             )}
-            <button
+            <Button
+              variant="unstyled"
               onClick={() => handlers.toggleStar(node)}
               aria-label={node.isStarred ? `Unstar “${node.title}”` : `Star “${node.title}”`}
               aria-pressed={node.isStarred === 1}
@@ -485,8 +492,10 @@ export default function BoardColumn({
               }`}
             >
               <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="none"
               onClick={(e) => {
                 // A keyboard-activated click reports 0,0 — fall back to the
                 // button itself so the dialog doesn't fly to the corner.
@@ -497,10 +506,10 @@ export default function BoardColumn({
                 );
               }}
               aria-label={`Edit “${node.title}”`}
-              className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
+              className="text-muted-foreground/60 hover:text-foreground p-1"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -592,35 +601,41 @@ export default function BoardColumn({
   const filterOptions = (
     <>
       {!starredList && (
-      <button
+      <Button
+        variant="ghost"
+        size="none"
         onClick={() => setStarredOnly((v) => !v)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+        className="w-full gap-2 px-2 py-1.5 text-sm rounded"
       >
         {checkbox(starredOnly)}
         <Star className="h-3.5 w-3.5 text-amber-400" fill="currentColor" />
         Starred
-      </button>
+      </Button>
       )}
 
       {/* The rail's toggle, for mobile where there is no rail. */}
-      <button
+      <Button
+        variant="ghost"
+        size="none"
         onClick={() => setRemindersOnly(!remindersOnly)}
-        className="md:hidden w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+        className="md:hidden w-full gap-2 px-2 py-1.5 text-sm rounded"
       >
         {checkbox(remindersOnly)}
         <Bell className="h-3.5 w-3.5 text-muted-foreground" />
         Active reminders only
-      </button>
+      </Button>
 
       {tagsInUse.map((t) => {
         const on = filterTagIds.includes(t.id);
         return (
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             key={t.id}
             onClick={() =>
               setFilterTagIds((prev) => (on ? prev.filter((x) => x !== t.id) : [...prev, t.id]))
             }
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+            className="w-full gap-2 px-2 py-1.5 text-sm rounded"
           >
             {checkbox(on)}
             <span
@@ -628,20 +643,22 @@ export default function BoardColumn({
               style={{ backgroundColor: t.color }}
             />
             <span className="truncate">{t.name}</span>
-          </button>
+          </Button>
         );
       })}
 
       {activeFilters > 0 && (
-        <button
+        <Button
+          variant="ghost"
+          size="none"
           onClick={() => {
             setFilterTagIds([]);
             setStarredOnly(false);
           }}
-          className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
+          className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:text-foreground"
         >
           Clear filters
-        </button>
+        </Button>
       )}
     </>
   );
@@ -649,19 +666,21 @@ export default function BoardColumn({
   const sortOptions = (
     <>
       {sortModes.map((mode) => (
-        <button
+        <Button
+          variant="ghost"
+          size="none"
           key={mode}
           onClick={() => {
             setMenuOpen(false);
             changeSort(mode);
           }}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+          className="w-full gap-2 px-2 py-1.5 text-sm rounded"
         >
           <span className="h-3.5 w-3.5 shrink-0 flex items-center justify-center">
             {board.sortMode === mode && <Check className="h-3 w-3" strokeWidth={3} />}
           </span>
           {SORT_LABELS[mode]}
-        </button>
+        </Button>
       ))}
     </>
   );
@@ -707,7 +726,8 @@ export default function BoardColumn({
 
         {!collapsed && (
           <div className={`relative shrink-0 ${hasFilterables ? '' : 'md:hidden'}`}>
-            <button
+            <Button
+              variant="unstyled"
               onClick={() => setFilterOpen((o) => !o)}
               aria-expanded={filterOpen}
               aria-label={`Filter ${board.name}`}
@@ -721,7 +741,7 @@ export default function BoardColumn({
               {activeFilters > 0 ? activeFilters : 'Filter'}
               {/* Mobile has no rail to show the toggle is on. */}
               {remindersOnly && <Bell className="h-3 w-3 md:hidden" />}
-            </button>
+            </Button>
             {filterOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
@@ -749,11 +769,13 @@ export default function BoardColumn({
             another column. */}
         {!board.virtual && (
         <div className="relative">
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={() => setMenuOpen((o) => !o)}
             aria-label={`${board.name} options`}
             aria-expanded={menuOpen}
-            className="relative p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            className="relative p-1.5 rounded text-muted-foreground hover:text-foreground"
           >
             <MoreHorizontal className="h-4 w-4" />
             {/* With the filter folded away, this dot is the only thing saying
@@ -761,7 +783,7 @@ export default function BoardColumn({
             {collapsed && activeFilters > 0 && (
               <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-foreground" />
             )}
-          </button>
+          </Button>
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
@@ -780,36 +802,44 @@ export default function BoardColumn({
                     <div className="my-1 border-t border-border" />
                   </>
                 )}
-                <button
+                <Button
+                  variant="ghost"
+                  size="none"
                   onClick={() => {
                     setMenuOpen(false);
                     setPasting(true);
                   }}
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-sm rounded"
                 >
                   Paste a list…
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="none"
                   onClick={() => {
                     setMenuOpen(false);
                     setRenaming(true);
                   }}
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-2 text-sm rounded"
                 >
                   Rename list
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="none"
                   onClick={() => {
                     setMenuOpen(false);
                     handlers.run(() => setDefaultBoardAction(board.id));
                   }}
                   disabled={isDefaultBoard}
                   title="Where All tasks and Starred add a new task"
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full text-left px-3 py-2 text-sm rounded"
                 >
                   {isDefaultBoard ? 'Default list' : 'Make default list'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="none"
                   onClick={async () => {
                     setMenuOpen(false);
                     if (completedCount === 0) return;
@@ -834,11 +864,13 @@ export default function BoardColumn({
                     });
                   }}
                   disabled={completedCount === 0}
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full text-left px-3 py-2 text-sm rounded"
                 >
                   Delete completed
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="none"
                   onClick={async () => {
                     setMenuOpen(false);
                     const others = boards.filter((b) => b.id !== board.id);
@@ -873,10 +905,10 @@ export default function BoardColumn({
                   }}
                   disabled={boards.length <= 1}
                   title={boards.length <= 1 ? 'Your only list can’t be deleted' : undefined}
-                  className="w-full text-left px-3 py-2 text-sm rounded text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-red-400"
+                  className="w-full text-left px-3 py-2 text-sm rounded"
                 >
                   Delete list
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -948,19 +980,21 @@ export default function BoardColumn({
               placeholder={board.virtual ? `Add to ${board.targetName}` : 'Add a task'}
               className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
             />
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={() => (detailsOpen ? closeDetails() : setDetailsOpen(true))}
               aria-expanded={detailsOpen}
               aria-label={detailsOpen ? 'Hide deadline, reminder and tags' : 'Add a deadline, reminder or tags'}
               title="Deadline, reminder and tags"
-              className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+              className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground"
             >
               {detailsOpen ? (
                 <ChevronUp className="h-3.5 w-3.5" />
               ) : (
                 <ChevronDown className="h-3.5 w-3.5" />
               )}
-            </button>
+            </Button>
           </div>
 
           {/* Deadline, reminder and tags before the task exists, so the common
@@ -990,7 +1024,8 @@ export default function BoardColumn({
                     />
                   </>
                 )}
-                <button
+                <Button
+                  variant="unstyled"
                   type="button"
                   onClick={() => {
                     setDraftAsap((a) => !a);
@@ -1006,7 +1041,7 @@ export default function BoardColumn({
                   }`}
                 >
                   ASAP
-                </button>
+                </Button>
               </div>
               {draftDate && (
                 <ReminderPicker
@@ -1051,10 +1086,12 @@ export default function BoardColumn({
 
         {completedCount > 0 && (
           <div className="mt-5">
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={() => setShowCompleted((s) => !s)}
               aria-expanded={showCompleted}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className="gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
             >
               {showCompleted ? (
                 <ChevronDown className="h-3.5 w-3.5" />
@@ -1062,7 +1099,7 @@ export default function BoardColumn({
                 <ChevronRight className="h-3.5 w-3.5" />
               )}
               Completed ({completedCount})
-            </button>
+            </Button>
             {showCompleted && (
               <div className="space-y-0.5 mt-1">
                 {completedRender.map((row) => renderRow(row, true))}
