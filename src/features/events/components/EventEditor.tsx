@@ -149,13 +149,15 @@ export default function EventEditor({
       >
         <div className="flex items-center justify-between border-b border-border pb-2">
           <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Edit Event</h4>
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={editor.close}
-            className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+            className="p-1 rounded text-muted-foreground hover:text-foreground"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
         <EditorFields editor={editor} tags={tags} size="popover" />
       </div>
@@ -169,13 +171,15 @@ export default function EventEditor({
           <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold tracking-tight">Edit event</h2>
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={editor.close}
-              className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+              className="p-1 rounded text-muted-foreground hover:text-foreground"
               aria-label="Close"
             >
               <X className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
           <EditorFields editor={editor} tags={tags} size="sheet" />
         </div>

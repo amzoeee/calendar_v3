@@ -357,28 +357,31 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
         <div className="border-t border-border pt-4">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Timeline Zoom</h3>
           <div className="mt-2 flex items-center justify-between gap-2">
-            <button
+            <Button
+              size="none"
               onClick={() => changeZoom(-15)}
-              className="p-1.5 rounded bg-secondary border border-border hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 rounded"
               title="Zoom Out"
             >
               <ZoomOut className="h-4 w-4" />
-            </button>
+            </Button>
             <span className="text-xs font-bold text-muted-foreground">{Math.round((zoomLevel / 60) * 100)}%</span>
-            <button
+            <Button
+              size="none"
               onClick={() => changeZoom(15)}
-              className="p-1.5 rounded bg-secondary border border-border hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 rounded"
               title="Zoom In"
             >
               <ZoomIn className="h-4 w-4" />
-            </button>
-            <button
+            </Button>
+            <Button
+              size="none"
               onClick={resetZoom}
-              className="px-2 py-1.5 text-xs rounded bg-secondary border border-border hover:bg-muted font-semibold transition cursor-pointer"
+              className="px-2 py-1.5 text-xs rounded font-semibold"
               title="Reset Zoom"
             >
               Reset
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -398,34 +401,37 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
         {/* Navigation Header */}
         <div className="h-14 md:h-16 border-b border-border flex items-center justify-between px-3 md:px-6 gap-2 shrink-0 glass-panel">
           <div className="flex items-center gap-1.5 md:gap-3">
-            <button
+            <Button
+              size="none"
               onClick={() => {
                 saveScroll();
                 navigateTo(prevDayStr);
               }}
-              className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 md:p-2 rounded-lg"
             >
               <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
-            </button>
-            <button
+            </Button>
+            <Button
+              size="none"
               onClick={() => {
                 saveScroll();
                 const today = new Date().toLocaleDateString('en-CA');
                 navigateTo(today);
               }}
-              className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg"
             >
               Today
-            </button>
-            <button
+            </Button>
+            <Button
+              size="none"
               onClick={() => {
                 saveScroll();
                 navigateTo(nextDayStr);
               }}
-              className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 md:p-2 rounded-lg"
             >
               <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
-            </button>
+            </Button>
           </div>
 
           <h1 className="text-sm md:text-xl font-bold tracking-tight truncate min-w-0">
@@ -529,13 +535,15 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
             <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold tracking-tight">Add event</h2>
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => setShowMobileAddSheet(false)}
-                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
             {renderAddEventForm('mobile-')}
           </div>

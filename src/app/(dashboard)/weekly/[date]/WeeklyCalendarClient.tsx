@@ -398,16 +398,18 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
       {/* Navigation Header */}
       <div className="h-14 md:h-16 border-b border-border flex items-center justify-between px-3 md:px-6 gap-2 shrink-0 glass-panel">
         <div className="flex items-center gap-1.5 md:gap-3">
-          <button
+          <Button
+            size="none"
             onClick={() => {
               saveScroll();
               navigateTo(prevWeekStr);
             }}
-            className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+            className="p-1.5 md:p-2 rounded-lg"
           >
             <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
-          </button>
-          <button
+          </Button>
+          <Button
+            size="none"
             onClick={() => {
               saveScroll();
               const now = new Date();
@@ -418,19 +420,20 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                 .toLocaleDateString('en-CA');
               navigateTo(todayWeekStart, `/weekly/${todayStr}?scrollToday=${Date.now()}`);
             }}
-            className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+            className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg"
           >
             Today
-          </button>
-          <button
+          </Button>
+          <Button
+            size="none"
             onClick={() => {
               saveScroll();
               navigateTo(nextWeekStr);
             }}
-            className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+            className="p-1.5 md:p-2 rounded-lg"
           >
             <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
-          </button>
+          </Button>
         </div>
 
         <h1 className="text-sm md:text-xl font-bold tracking-tight truncate min-w-0">
@@ -440,24 +443,30 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
 
         <div className="flex items-center gap-3 md:gap-4 shrink-0">
           <div className="hidden md:flex items-center gap-1.5 bg-secondary border border-border rounded-lg p-0.5">
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={() => changeZoom(-15)}
-              className="p-1 rounded hover:bg-muted text-foreground cursor-pointer"
+              className="p-1 rounded text-foreground"
               title="Zoom Out (Cmd -)">
               <ZoomOut className="h-4 w-4" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="none"
               onClick={resetZoom}
-              className="text-xs font-bold text-muted-foreground px-1 hover:text-foreground cursor-pointer"
+              className="text-xs font-bold text-muted-foreground px-1 hover:text-foreground"
               title="Reset Zoom (Cmd 0)">
               {Math.round((zoomLevel / 60) * 100)}%
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="none"
               onClick={() => changeZoom(15)}
-              className="p-1 rounded hover:bg-muted text-foreground cursor-pointer"
+              className="p-1 rounded text-foreground"
               title="Zoom In (Cmd +)">
               <ZoomIn className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
           <span className="hidden md:inline-block px-3 py-1.5 bg-accent/20 border border-accent text-accent-foreground text-xs font-semibold rounded-lg">
             Weekly
@@ -476,7 +485,8 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
       <div className="md:hidden shrink-0 flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
         <div className="flex items-center bg-secondary border border-border rounded-lg p-0.5">
           {(['list', 'grid'] as const).map((mode) => (
-            <button
+            <Button
+              variant="unstyled"
               key={mode}
               onClick={() => setMobileView(mode)}
               aria-pressed={mobileView === mode}
@@ -488,7 +498,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
             >
               {mode === 'list' ? <List className="h-3.5 w-3.5" /> : <CalendarRange className="h-3.5 w-3.5" />}
               {mode === 'list' ? 'List' : 'Week'}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -497,21 +507,23 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
             off-screen to reveal. */}
         {mobileView === 'grid' && (
           <div className="flex items-center gap-1">
-            <button
+            <Button
+              size="none"
               onClick={() => changeMobileZoom(1 / MOBILE_ZOOM_STEP)}
               disabled={mobileZoom === null}
               aria-label="Zoom out"
-              className="p-1.5 rounded-lg bg-secondary text-foreground disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              className="p-1.5 rounded-lg"
             >
               <ZoomOut className="h-3.5 w-3.5" />
-            </button>
-            <button
+            </Button>
+            <Button
+              size="none"
               onClick={() => changeMobileZoom(MOBILE_ZOOM_STEP)}
               aria-label="Zoom in"
-              className="p-1.5 rounded-lg bg-secondary text-foreground cursor-pointer"
+              className="p-1.5 rounded-lg"
             >
               <ZoomIn className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -548,7 +560,8 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               ) : (
                 <div className="space-y-1.5">
                   {dayEvents.map((ev) => (
-                    <button
+                    <Button
+                      variant="unstyled"
                       key={ev.id}
                       onClick={() => handleOpenEditMobile(ev)}
                       className="w-full flex items-start gap-2.5 text-left px-2.5 py-2 rounded-lg bg-secondary/60 hover:bg-secondary cursor-pointer event-card-clickable"
@@ -570,7 +583,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                           {ev.time_range}
                         </span>
                       </span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}
@@ -674,7 +687,8 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                           ((ev.height || 0) / 60) * mobileZoomLevel - 1
                         );
                         return (
-                          <button
+                          <Button
+                            variant="unstyled"
                             key={ev.id}
                             onClick={() => handleOpenEditMobile(ev)}
                             // The block carries no text, so the label is the
@@ -810,12 +824,14 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
           <div className="bg-card border border-border p-6 rounded-t-2xl md:rounded-lg w-full md:max-w-sm space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <h3 className="text-lg font-bold text-foreground">Add Event</h3>
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => setShowAddModal(false)}
-                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
               >
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div>
