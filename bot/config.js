@@ -22,7 +22,7 @@ module.exports = {
 
   // How far /fetch will expand its search before giving up on finding a
   // marker. Discord's history endpoint pages 100 messages at a time.
-  maxMessages: Number(process.env.FETCH_MAX_MESSAGES || 500),
+  maxMessages: Number(process.env.FETCH_MAX_MESSAGES || 1000),
 
   // Whether the bot drops a `---` in the channel once a staged batch is
   // approved, so the next /fetch stops there instead of re-reading what it
