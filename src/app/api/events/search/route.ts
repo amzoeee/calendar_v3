@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { db } from '@/db';
-import { events } from '@/db/schema';
-import { eq, and, or, like, desc } from 'drizzle-orm';
+import { searchEvents } from '@/features/events/server/queries';
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -22,32 +20,8 @@ export async function GET(request: NextRequest) {
   const parsedOffset = parseInt(searchParams.get('offset') || '0', 10);
   const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
 
-  const pattern = `%${q}%`;
-
   try {
-    const result = await db
-      .select({
-        id: events.id,
-        title: events.title,
-        startDatetime: events.startDatetime,
-        endDatetime: events.endDatetime,
-        tag: events.tag,
-      })
-      .from(events)
-      .where(
-        and(
-          eq(events.userId, session.userId),
-          eq(events.isPending, 0),
-          or(
-            like(events.title, pattern),
-            like(events.description, pattern),
-            like(events.tag, pattern)
-          )
-        )
-      )
-      .orderBy(desc(events.startDatetime))
-      .limit(PAGE_SIZE)
-      .offset(offset);
+    const result = await searchEvents(session.userId, q, PAGE_SIZE, offset);
 
     return NextResponse.json({ events: result });
   } catch (e: unknown) {

@@ -1,13 +1,12 @@
 import { getSession } from '@/lib/auth';
-import { db } from '@/db';
-import { events as eventsTable, tags as tagsTable } from '@/db/schema';
-import { eq, and, or, gte, lt } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import WeeklyCalendarClient from './WeeklyCalendarClient';
 import { todayForViewer } from '@/lib/server-timezone';
 import { previewPendingMerge } from '@/lib/merge-pending';
 import { shiftDateStr } from '@/lib/timezone';
 import { getSubtagDisplay } from '@/lib/server-tags';
+import { getEventsOverlapping } from '@/features/events/server/queries';
+import { getTags } from '@/features/tags/server/queries';
 import { getWeekStart } from '@/lib/server-week';
 import { startOfWeek, type WeekStart } from '@/lib/week';
 
@@ -53,38 +52,9 @@ export default async function WeeklyPage({ params }: PageProps) {
   const startStr = `${shiftDateStr(firstStr, -1)} 00:00:00`;
   const endStr = `${shiftDateStr(lastStr, 1)} 23:59:59`;
 
-  const dbEvents = await db
-    .select()
-    .from(eventsTable)
-    .where(
-      and(
-        eq(eventsTable.userId, session.userId),
-        or(
-          // Event starts within the week
-          and(
-            gte(eventsTable.startDatetime, startStr),
-            lt(eventsTable.startDatetime, endStr)
-          ),
-          // Event ends within the week
-          and(
-            gte(eventsTable.endDatetime, startStr),
-            lt(eventsTable.endDatetime, endStr)
-          ),
-          // Event fully spans the week
-          and(
-            lt(eventsTable.startDatetime, startStr),
-            gte(eventsTable.endDatetime, endStr)
-          )
-        )
-      )
-    )
-    .orderBy(eventsTable.startDatetime);
+  const dbEvents = await getEventsOverlapping(session.userId, startStr, endStr);
 
-  const dbTags = await db
-    .select()
-    .from(tagsTable)
-    .where(eq(tagsTable.userId, session.userId))
-    .orderBy(tagsTable.orderIndex);
+  const dbTags = await getTags(session.userId);
 
   return (
     <WeeklyCalendarClient
