@@ -13,7 +13,6 @@ import {
   CornerDownRight,
   ListChecks,
   MoreHorizontal,
-  Star,
   Tag as TagIcon,
 } from 'lucide-react';
 import {
@@ -58,6 +57,7 @@ import BoardNameDialog from './BoardNameDialog';
 import TaskComposer from './TaskComposer';
 import CompletedSection from './CompletedSection';
 import TaskItem from './TaskItem';
+import FilterOptions from './FilterOptions';
 
 /**
  * One board's column: its own header, composer, list and Completed section.
@@ -380,71 +380,18 @@ export default function BoardColumn({
     else handlers.run(() => setBoardSortAction(board.id, mode));
   };
 
-  const checkbox = (on: boolean) => (
-    <span
-      className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
-        on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'
-      }`}
-    >
-      {on && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
-    </span>
-  );
-
   const filterOptions = (
-    <>
-      {!starredList && (
-      <button
-        onClick={() => setStarredOnly((v) => !v)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-      >
-        {checkbox(starredOnly)}
-        <Star className="h-3.5 w-3.5 text-amber-400" fill="currentColor" />
-        Starred
-      </button>
-      )}
-
-      {/* The rail's toggle, for mobile where there is no rail. */}
-      <button
-        onClick={() => setRemindersOnly(!remindersOnly)}
-        className="md:hidden w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-      >
-        {checkbox(remindersOnly)}
-        <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-        Active reminders only
-      </button>
-
-      {tagsInUse.map((t) => {
-        const on = filterTagIds.includes(t.id);
-        return (
-          <button
-            key={t.id}
-            onClick={() =>
-              setFilterTagIds((prev) => (on ? prev.filter((x) => x !== t.id) : [...prev, t.id]))
-            }
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-          >
-            {checkbox(on)}
-            <span
-              className="h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: t.color }}
-            />
-            <span className="truncate">{t.name}</span>
-          </button>
-        );
-      })}
-
-      {activeFilters > 0 && (
-        <button
-          onClick={() => {
-            setFilterTagIds([]);
-            setStarredOnly(false);
-          }}
-          className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
-        >
-          Clear filters
-        </button>
-      )}
-    </>
+    <FilterOptions
+      starredList={starredList}
+      starredOnly={starredOnly}
+      setStarredOnly={setStarredOnly}
+      remindersOnly={remindersOnly}
+      setRemindersOnly={setRemindersOnly}
+      tags={tagsInUse}
+      filterTagIds={filterTagIds}
+      setFilterTagIds={setFilterTagIds}
+      activeFilters={activeFilters}
+    />
   );
 
   const sortOptions = (
