@@ -35,8 +35,7 @@ const SIZES = {
 export type ButtonVariant = keyof typeof VARIANTS;
 export type ButtonSize = keyof typeof SIZES;
 
-/** Button's classes, for elements that can't be a Button. */
-export function buttonClass(variant: ButtonVariant = 'secondary', size: ButtonSize = 'md') {
+function buttonClass(variant: ButtonVariant = 'secondary', size: ButtonSize = 'md') {
   if (variant === 'unstyled') return '';
   return `inline-flex items-center border cursor-pointer transition-colors focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]}`;
 }
