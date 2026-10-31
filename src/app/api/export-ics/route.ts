@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { track } from '@/lib/usage';
-import { db } from '@/db';
-import { events, tags } from '@/db/schema';
-import { eq, and, or, gte, lt } from 'drizzle-orm';
+import { getApprovedEvents } from '@/features/events/server/queries';
+import { getTags } from '@/features/tags/server/queries';
 import { generateIcs, IcsExportEvent } from '@/lib/ics';
 import { dbStringToUtcMillis } from '@/lib/timezone';
 import JSZip from 'jszip';
@@ -103,11 +102,7 @@ export async function GET(request: NextRequest) {
   const startDate = searchParams.get('start_date');
   const endDate = searchParams.get('end_date');
 
-  const userTags = await db
-    .select()
-    .from(tags)
-    .where(eq(tags.userId, session.userId))
-    .orderBy(tags.orderIndex);
+  const userTags = await getTags(session.userId);
 
   // `tags=1,2,3`, or the older single `tag=1`. Neither means every tag.
   const requested = (searchParams.get('tags') ?? searchParams.get('tag') ?? '')
@@ -124,10 +119,7 @@ export async function GET(request: NextRequest) {
 
   // Single tag export
   if (tagFilterName) {
-    const rawEvents = await db
-      .select()
-      .from(events)
-      .where(and(eq(events.userId, session.userId), eq(events.tag, tagFilterName), eq(events.isPending, 0)));
+    const rawEvents = await getApprovedEvents(session.userId, tagFilterName);
 
     const filtered = filterEventsByDate(rawEvents, startDate, endDate);
     const icsContent = generateIcs(filtered as IcsExportEvent[], tagFilterName, startDate || undefined, endDate || undefined);
@@ -146,10 +138,7 @@ export async function GET(request: NextRequest) {
   let hasContent = false;
 
   for (const tag of selectedTags) {
-    const rawEvents = await db
-      .select()
-      .from(events)
-      .where(and(eq(events.userId, session.userId), eq(events.tag, tag.name), eq(events.isPending, 0)));
+    const rawEvents = await getApprovedEvents(session.userId, tag.name);
 
     const filtered = filterEventsByDate(rawEvents, startDate, endDate);
     if (filtered.length > 0) {

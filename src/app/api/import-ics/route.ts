@@ -3,8 +3,7 @@ import { getSession } from '@/lib/auth';
 import { track } from '@/lib/usage';
 import { parseIcsContent } from '@/lib/ics';
 import { createRecurringEvent } from '@/lib/recurring';
-import { db } from '@/db';
-import { events } from '@/db/schema';
+import { insertApprovedEvent } from '@/features/events/server/queries';
 
 // Send the browser back to /settings after the multipart form POST.
 //
@@ -63,14 +62,12 @@ export async function POST(request: NextRequest) {
         );
         count += recurCount;
       } else {
-        await db.insert(events).values({
+        await insertApprovedEvent(session.userId, {
           startDatetime: event.start_datetime,
           endDatetime: event.end_datetime,
           title: event.title,
           description: event.description,
           tag: tag || null,
-          userId: session.userId,
-          isPending: 0,
         });
         count += 1;
       }
