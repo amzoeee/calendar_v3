@@ -10,8 +10,6 @@ import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import {
   Bell,
   Check,
-  ChevronDown,
-  ChevronRight,
   CornerDownRight,
   GripVertical,
   ListChecks,
@@ -63,6 +61,7 @@ import TagChips from './TagChips';
 import PasteListDialog from './PasteListDialog';
 import BoardNameDialog from './BoardNameDialog';
 import TaskComposer from './TaskComposer';
+import CompletedSection from './CompletedSection';
 
 /**
  * One board's column: its own header, composer, list and Completed section.
@@ -96,7 +95,6 @@ export default function BoardColumn({
   isPrimary: boolean;
 }) {
   const [subtaskValue, setSubtaskValue] = useState('');
-  const [showCompleted, setShowCompleted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -899,27 +897,11 @@ export default function BoardColumn({
           {openRender.map((row) => renderRow(row, false))}
         </div>
 
-        {completedCount > 0 && (
-          <div className="mt-5">
-            <button
-              onClick={() => setShowCompleted((s) => !s)}
-              aria-expanded={showCompleted}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              {showCompleted ? (
-                <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5" />
-              )}
-              Completed ({completedCount})
-            </button>
-            {showCompleted && (
-              <div className="space-y-0.5 mt-1">
-                {completedRender.map((row) => renderRow(row, true))}
-              </div>
-            )}
-          </div>
-        )}
+        <CompletedSection
+          count={completedCount}
+          rows={completedRender}
+          renderRow={(row) => renderRow(row, true)}
+        />
       </div>
     </div>
   );
