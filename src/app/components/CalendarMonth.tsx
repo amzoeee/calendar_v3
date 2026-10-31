@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DEFAULT_WEEK_START, weekdayOrder, type WeekStart } from '@/lib/week';
+import Button from './Button';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 export const toDateStr = (d: Date) =>
@@ -155,32 +156,38 @@ export default function CalendarMonth({
     <>
       {/* Header: month + prev/next */}
       <div className="relative flex items-center justify-between mb-2">
-        <button
+        <Button
+          variant="ghost"
+          size="none"
           type="button"
           onClick={() => goMonth(-1)}
           aria-label="Previous month"
-          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition cursor-pointer"
+          className="p-1 rounded text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className={s.chevron} />
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="none"
           type="button"
           ref={pickerButtonRef}
           onClick={togglePicker}
           aria-label="Choose month and year"
           aria-expanded={pickerOpen}
-          className={`${s.header} font-bold text-foreground select-none rounded px-1.5 py-0.5 hover:bg-muted transition cursor-pointer`}
+          className={`${s.header} font-bold text-foreground select-none rounded px-1.5 py-0.5`}
         >
           {monthLabel}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="none"
           type="button"
           onClick={() => goMonth(1)}
           aria-label="Next month"
-          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition cursor-pointer"
+          className="p-1 rounded text-muted-foreground hover:text-foreground"
         >
           <ChevronRight className={s.chevron} />
-        </button>
+        </Button>
 
         {/* Month + year picker */}
         {pickerOpen && (
@@ -190,23 +197,27 @@ export default function CalendarMonth({
             className={`absolute top-full left-1/2 -translate-x-1/2 mt-1 z-20 ${s.picker} bg-card border border-border rounded-lg shadow-lg p-2`}
           >
             <div className="flex items-center justify-between mb-1.5">
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 type="button"
                 onClick={() => setPickerYear((y) => y - 1)}
                 aria-label="Previous year"
-                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition cursor-pointer"
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
               >
                 <ChevronLeft className={s.chevron} />
-              </button>
+              </Button>
               <span className={`${s.header} font-bold text-foreground select-none`}>{pickerYear}</span>
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 type="button"
                 onClick={() => setPickerYear((y) => y + 1)}
                 aria-label="Next year"
-                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition cursor-pointer"
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
               >
                 <ChevronRight className={s.chevron} />
-              </button>
+              </Button>
             </div>
             <div className="grid grid-cols-4 gap-1">
               {MONTHS.map((m, i) => {
@@ -214,7 +225,8 @@ export default function CalendarMonth({
                 const isThisMonth =
                   pickerYear === new Date().getFullYear() && i === new Date().getMonth();
                 return (
-                  <button
+                  <Button
+                    variant="unstyled"
                     type="button"
                     key={m}
                     data-month={i}
@@ -230,7 +242,7 @@ export default function CalendarMonth({
                     }`}
                   >
                     {m.slice(0, 3)}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -267,7 +279,8 @@ export default function CalendarMonth({
                 : 'text-muted-foreground/40 hover:bg-muted/50';
 
           return (
-            <button
+            <Button
+              variant="unstyled"
               type="button"
               key={i}
               onClick={() => onSelect(dStr)}
@@ -276,7 +289,7 @@ export default function CalendarMonth({
               className={`${s.day} w-full rounded font-medium transition cursor-pointer flex items-center justify-center ${cls}`}
             >
               {d.getDate()}
-            </button>
+            </Button>
           );
         })}
       </div>

@@ -97,7 +97,8 @@ export default function MobileProfileMenu({
 
   return (
     <>
-      <button
+      <Button
+        variant="unstyled"
         ref={buttonRef}
         onClick={() => setOpen((o) => !o)}
         aria-label="Account menu"
@@ -105,7 +106,7 @@ export default function MobileProfileMenu({
         className="h-7 w-7 rounded-full bg-muted flex items-center justify-center font-bold text-foreground text-xs uppercase cursor-pointer"
       >
         {username[0]}
-      </button>
+      </Button>
       {menu}
     </>
   );
