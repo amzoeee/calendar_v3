@@ -2,6 +2,7 @@
 
 import DateInput from '@/app/components/DateInput';
 import { dateOfColumnStr, type LifetimeRange } from '@/lib/lifetime';
+import Button from '@/app/components/Button';
 
 interface RangePickerProps {
   range: LifetimeRange;
@@ -47,7 +48,8 @@ export default function RangePicker({ range, firstDay, lastDay, onChange }: Rang
     <div className="flex items-center gap-x-3 gap-y-2 flex-wrap">
       <div className="flex items-center gap-1.5">
         {PRESETS.map((p) => (
-          <button
+          <Button
+            variant="unstyled"
             key={p.kind}
             onClick={() => pick(p.kind)}
             aria-pressed={range.kind === p.kind}
@@ -58,7 +60,7 @@ export default function RangePicker({ range, firstDay, lastDay, onChange }: Rang
             }`}
           >
             {p.label}
-          </button>
+          </Button>
         ))}
       </div>
       {range.kind === 'custom' && (

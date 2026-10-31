@@ -13,6 +13,7 @@ import DateInput from '@/app/components/DateInput';
 import TimeInput from '@/app/components/TimeInput';
 import { FIELD_CLASS } from '../fieldClass';
 import ReminderPicker from './ReminderPicker';
+import Button from '@/app/components/Button';
 
 /**
  * Deadline and reminder for one task.
@@ -99,7 +100,8 @@ export default function SchedulePicker({
           <span className="text-[11px] md:text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Deadline
           </span>
-          <button
+          <Button
+            variant="unstyled"
             type="button"
             onClick={toggleAsap}
             aria-pressed={asap}
@@ -112,7 +114,7 @@ export default function SchedulePicker({
             }`}
           >
             ASAP
-          </button>
+          </Button>
         </div>
         {asap ? (
           <p className="text-[10px] text-muted-foreground">Due as soon as possible.</p>

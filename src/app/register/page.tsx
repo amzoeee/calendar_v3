@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { registerAction } from '../actions';
 import Link from 'next/link';
+import Button from '@/app/components/Button';
 
 export default function RegisterPage() {
   const [state, formAction, isPending] = useActionState(registerAction, null);
@@ -69,13 +70,14 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <button
+            <Button
               type="submit"
               disabled={isPending}
-              className="flex w-full justify-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 transition"
+              size="none"
+              className="w-full justify-center rounded-md px-3 py-2 text-sm font-semibold"
             >
               {isPending ? 'Registering...' : 'Register'}
-            </button>
+            </Button>
           </div>
         </form>
 

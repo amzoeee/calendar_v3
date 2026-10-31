@@ -5,6 +5,7 @@ import { events, tasks } from '@/db/schema';
 import { eq, and, sql, isNotNull, isNull, lte } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import Button from '@/app/components/Button';
 import MiniCalendar from '@/app/components/MiniCalendar';
 import SidebarNav from '@/app/components/SidebarNav';
 import MobileTabBar from '@/app/components/MobileTabBar';
@@ -124,13 +125,15 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             </Link>
           )}
           <form action={logoutAction}>
-            <button
+            <Button
               type="submit"
-              className="w-full flex items-center px-4 py-2.5 text-sm font-medium rounded-lg btn-destructive transition-all gap-3 cursor-pointer"
+              variant="destructive"
+              size="none"
+              className="w-full px-4 py-2.5 text-sm font-medium rounded-lg gap-3"
             >
               <LogOut className="h-5 w-5" />
               Sign Out
-            </button>
+            </Button>
           </form>
         </div>
       </aside>
@@ -169,12 +172,13 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
                     defaultValue={todayStr}
                     className="bg-secondary border border-border px-2 py-1 rounded text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 w-32"
                   />
-                  <button
+                  <Button
+                    size="none"
                     type="submit"
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-semibold shadow transition cursor-pointer"
+                    className="px-3 py-1.5 rounded text-xs font-semibold"
                   >
                     Shift Date
-                  </button>
+                  </Button>
                 </form>
               </div>
             </div>

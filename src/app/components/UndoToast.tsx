@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import Button from './Button';
 
 const UNDO_MS = 7000;
 
@@ -81,21 +82,25 @@ export function UndoProvider({ children }: { children: React.ReactNode }) {
         >
           <span className="text-sm text-foreground truncate">{toast.message}</span>
           {toast.undo && (
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={runUndo}
               disabled={busy}
-              className="text-sm font-semibold text-foreground underline underline-offset-2 hover:opacity-80 shrink-0 cursor-pointer disabled:opacity-50"
+              className="text-sm font-semibold text-foreground underline underline-offset-2 shrink-0"
             >
               {busy ? 'Undoing…' : 'Undo'}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={dismissUndo}
             aria-label="Dismiss"
-            className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+            className="text-muted-foreground hover:text-foreground shrink-0"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
       )}
     </UndoContext.Provider>

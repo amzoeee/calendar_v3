@@ -28,6 +28,7 @@ import { restoreEventsAction } from '@/app/actions';
 import { useUndo } from '@/app/components/UndoToast';
 import { normalizeTitle } from '@/lib/titleParts';
 import { track } from '@/lib/track';
+import Button from '@/app/components/Button';
 
 interface Tag {
   id: number;
@@ -379,7 +380,8 @@ export default function LifetimeClient({ data: allData, tags, todayStr, weekStar
             </div>
             <div className="hidden md:flex flex-wrap gap-1.5 mt-3">
               {legend.map((g) => (
-                <button
+                <Button
+                  variant="unstyled"
                   key={g}
                   onClick={() => toggleTag(g)}
                   aria-pressed={!hiddenTags.has(g)}
@@ -389,7 +391,7 @@ export default function LifetimeClient({ data: allData, tags, todayStr, weekStar
                 >
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colorOf(g) }} />
                   {g >= 0 ? data.tagNames[g] : 'Untagged'}
-                </button>
+                </Button>
               ))}
             </div>
           </section>

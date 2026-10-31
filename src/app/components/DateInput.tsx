@@ -5,6 +5,7 @@ import { createPortal, flushSync } from 'react-dom';
 import { X } from 'lucide-react';
 import { parseWeekStart, WEEK_START_COOKIE } from '@/lib/week';
 import CalendarMonth from './CalendarMonth';
+import Button from './Button';
 
 /**
  * Replacement for `<input type="date">`. Value is 'YYYY-MM-DD' or ''.
@@ -354,38 +355,42 @@ export default function DateInput({
               <div className="w-9 h-1 rounded-full bg-muted mx-auto md:hidden" />
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold tracking-tight">{rest['aria-label'] ?? 'Pick a date'}</h2>
-                <button
+                <Button
+                  variant="ghost"
+                  size="none"
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="p-1 rounded text-muted-foreground hover:text-foreground"
                   aria-label="Close"
                 >
                   <X className="h-5 w-5" />
-                </button>
+                </Button>
               </div>
               <div>
                 <CalendarMonth selected={selected} onSelect={pick} weekStart={weekStart} size="lg" />
               </div>
               <div className="flex gap-2">
-                <button
+                <Button
+                  size="none"
                   type="button"
                   onClick={() => pick(new Date().toLocaleDateString('en-CA'))}
-                  className="flex-1 px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold cursor-pointer"
+                  className="flex-1 px-4 py-2.5 rounded text-sm font-semibold"
                 >
                   Today
-                </button>
+                </Button>
                 {!required && (
-                  <button
+                  <Button
+                    size="none"
                     type="button"
                     onClick={() => {
                       setBuffer('');
                       emit(EMPTY);
                       setOpen(false);
                     }}
-                    className="flex-1 px-4 py-2.5 bg-secondary hover:bg-muted text-foreground rounded text-sm font-semibold cursor-pointer"
+                    className="flex-1 px-4 py-2.5 rounded text-sm font-semibold"
                   >
                     Clear
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>

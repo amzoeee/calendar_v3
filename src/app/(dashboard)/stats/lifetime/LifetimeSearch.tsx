@@ -5,6 +5,7 @@ import { track } from '@/lib/track';
 import { createPortal } from 'react-dom';
 import { Search, X } from 'lucide-react';
 import { normalizeTitle } from '@/lib/titleParts';
+import Button from '@/app/components/Button';
 
 const MAX_SUGGESTIONS = 30;
 const MAX_PART_SUGGESTIONS = 5;
@@ -175,14 +176,15 @@ export default function LifetimeSearch({
             }}
             className="max-h-96 overflow-y-auto border border-border rounded-lg shadow-2xl z-[100] py-1"
           >
-            <button onClick={() => choose(0)} onMouseEnter={() => setHighlight(0)} className={rowClass(0)}>
+            <Button variant="unstyled" onClick={() => choose(0)} onMouseEnter={() => setHighlight(0)} className={rowClass(0)}>
               <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <span className="text-sm text-foreground truncate">
                 Everything mentioning “{query.trim()}”
               </span>
-            </button>
+            </Button>
             {tagSuggestions.map(({ tag, count }, i) => (
-              <button
+              <Button
+                variant="unstyled"
                 key={`tag:${tag}`}
                 onClick={() => choose(i + 1)}
                 onMouseEnter={() => setHighlight(i + 1)}
@@ -194,10 +196,11 @@ export default function LifetimeSearch({
                   tag
                 </span>
                 <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{count}</span>
-              </button>
+              </Button>
             ))}
             {partSuggestions.map(({ part, count }, i) => (
-              <button
+              <Button
+                variant="unstyled"
                 key={`part:${part}`}
                 onClick={() => choose(i + 1 + tagRows)}
                 onMouseEnter={() => setHighlight(i + 1 + tagRows)}
@@ -209,12 +212,13 @@ export default function LifetimeSearch({
                   </span>
                 </span>
                 <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{count}</span>
-              </button>
+              </Button>
             ))}
             {suggestions.map((t, i) => {
               const row = i + 1 + tagRows + partSuggestions.length;
               return (
-                <button
+                <Button
+                  variant="unstyled"
                   key={t}
                   onClick={() => choose(row)}
                   onMouseEnter={() => setHighlight(row)}
@@ -222,7 +226,7 @@ export default function LifetimeSearch({
                 >
                   <span className="min-w-0 flex-1 text-sm font-semibold text-foreground truncate">{titles[t]}</span>
                   <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{counts[t]}</span>
-                </button>
+                </Button>
               );
             })}
           </div>,
@@ -247,13 +251,15 @@ export default function LifetimeSearch({
           className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none w-full"
         />
         {query && (
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={clear}
             aria-label="Clear search"
-            className="text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+            className="text-muted-foreground hover:text-foreground shrink-0"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         )}
       </div>
 

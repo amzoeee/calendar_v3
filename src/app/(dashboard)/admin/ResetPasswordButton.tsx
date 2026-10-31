@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { useConfirm } from '@/app/components/ConfirmDialog';
 import { resetPasswordAction } from '@/app/admin-actions';
+import Button from '@/app/components/Button';
 
 export default function ResetPasswordButton({ userId, username }: { userId: number; username: string }) {
   const { confirm } = useConfirm();
@@ -34,14 +35,15 @@ export default function ResetPasswordButton({ userId, username }: { userId: numb
   }
 
   return (
-    <button
+    <Button
+      size="none"
       type="button"
       onClick={reset}
       disabled={busy}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-muted disabled:opacity-50 text-foreground rounded text-xs font-semibold cursor-pointer"
+      className="inline-flex gap-1.5 px-3 py-1.5 rounded text-xs font-semibold"
     >
       <KeyRound className="h-3.5 w-3.5" />
       Reset password
-    </button>
+    </Button>
   );
 }

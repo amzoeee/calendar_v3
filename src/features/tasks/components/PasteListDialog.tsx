@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { formatDateInputValue, shiftDateStr } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
 import Select from '@/app/components/Select';
+import Button from '@/app/components/Button';
 
 /**
  * Naming a list, whether it's new or being renamed. Replaces window.prompt,
@@ -145,19 +146,22 @@ export default function PasteListDialog({
         )}
 
         <div className="flex justify-end gap-2">
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={onCancel}
-            className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => parsed.length > 0 && onCreate(parsed)}
             disabled={parsed.length === 0}
-            className="px-3 py-2 rounded text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            size="none"
+            className="px-3 py-2 rounded text-sm font-semibold"
           >
             Create {parsed.length || ''}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
