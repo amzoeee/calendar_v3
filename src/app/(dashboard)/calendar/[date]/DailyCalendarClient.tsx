@@ -18,7 +18,7 @@ import { track } from '@/lib/track';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import EventSearch from '@/app/components/EventSearch';
 import { addEventAction } from '@/app/actions';
-import { getBrowserTimeZone } from '@/lib/timezone';
+import { getBrowserTimeZone, shiftDateStr } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
 import TimeInput from '@/app/components/TimeInput';
 import { isInsideModal } from '@/app/components/ConfirmDialog';
@@ -73,8 +73,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
   // stepping forward; everything about the *events* keeps reading `date`,
   // since those are what the server actually rendered.
   const { active: activeDate, navigateTo } = useDateNavigation(date, (d) => `/calendar/${d}`);
-  const prevDayStr = new Date(new Date(activeDate + 'T00:00:00').getTime() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const nextDayStr = new Date(new Date(activeDate + 'T00:00:00').getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const prevDayStr = shiftDateStr(activeDate, -1);
+  const nextDayStr = shiftDateStr(activeDate, 1);
   const displayDate = new Date(activeDate + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
