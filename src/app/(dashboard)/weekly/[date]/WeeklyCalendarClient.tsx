@@ -22,7 +22,7 @@ import { track } from '@/lib/track';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import EventSearch from '@/app/components/EventSearch';
 import { addEventAction } from '@/app/actions';
-import { getBrowserTimeZone } from '@/lib/timezone';
+import { getBrowserTimeZone, shiftDateStr } from '@/lib/timezone';
 import DateInput from '@/app/components/DateInput';
 import TimeInput from '@/app/components/TimeInput';
 import { isInsideModal } from '@/app/components/ConfirmDialog';
@@ -112,7 +112,8 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
     const dates: Date[] = [];
     const start = new Date(first + 'T00:00:00');
     for (let i = 0; i < 7; i++) {
-      dates.push(new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
+      // Calendar days, not 24h steps — DST days are 23 or 25 hours.
+      dates.push(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
     }
     return dates;
   };
@@ -127,8 +128,8 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   // keeps stepping; the grid below keeps rendering `weekDates` — the week the
   // server actually sent — until the new one arrives.
   const { active: activeWeekStart, navigateTo } = useDateNavigation(weekStartDate, (d) => `/weekly/${d}`);
-  const prevWeekStr = new Date(new Date(activeWeekStart + 'T00:00:00').getTime() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
-  const nextWeekStr = new Date(new Date(activeWeekStart + 'T00:00:00').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA');
+  const prevWeekStr = shiftDateStr(activeWeekStart, -7);
+  const nextWeekStr = shiftDateStr(activeWeekStart, 7);
   const titleWeekDates = useMemo(() => getWeekDates(activeWeekStart), [activeWeekStart]);
   const weekStartStr = titleWeekDates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const weekEndStr = titleWeekDates[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
