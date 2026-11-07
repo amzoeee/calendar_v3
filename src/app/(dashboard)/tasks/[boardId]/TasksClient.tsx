@@ -594,7 +594,8 @@ export default function TasksClient({
                         ? `Hide ${b.name}`
                         : `Show ${b.name} alongside`
                   }
-                  className={`mr-2.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
+                  // The ::before widens the touch target to the row's height, partly over the name.
+                  className={`relative mr-2.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer touch-manipulation before:absolute before:-inset-y-3 before:-left-4 before:-right-3 disabled:cursor-not-allowed disabled:opacity-30 ${
                     shown
                       ? 'bg-primary border-primary text-primary-foreground'
                       : 'border-muted-foreground hover:border-foreground'
