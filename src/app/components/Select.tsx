@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
+import Button from './Button';
 
 export interface SelectOption<T extends string | number> {
   value: T;
@@ -255,7 +256,8 @@ export default function Select<T extends string | number>({
 
   return (
     <>
-      <button
+      <Button
+        variant="unstyled"
         ref={triggerRef}
         type="button"
         id={id}
@@ -275,7 +277,7 @@ export default function Select<T extends string | number>({
         <ChevronDown
           className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
         />
-      </button>
+      </Button>
       {name && <input type="hidden" name={name} value={String(value)} />}
 
       {open &&

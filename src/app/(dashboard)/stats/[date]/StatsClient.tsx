@@ -8,6 +8,7 @@ import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import StatsViewSwitch from '@/app/components/StatsViewSwitch';
 import { weekdayOrder, type WeekStart } from '@/lib/week';
+import Button from '@/app/components/Button';
 
 interface Tag {
   id: number;
@@ -359,26 +360,29 @@ export default function StatsClient({
         {/* Row 1: navigation + title + toggle */}
         <div className="flex items-center justify-between gap-2 md:gap-4 md:flex-wrap">
           <div className="flex items-center gap-1.5 md:gap-3">
-            <button
+            <Button
+              size="none"
               onClick={() => navigateTo(prevPeriod)}
-              className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 md:p-2 rounded-lg"
               aria-label="Previous period"
             >
               <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
-            </button>
-            <button
+            </Button>
+            <Button
+              size="none"
               onClick={() => navigateTo(todayPeriod())}
-              className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm font-semibold rounded-lg"
             >
               Today
-            </button>
-            <button
+            </Button>
+            <Button
+              size="none"
               onClick={() => navigateTo(nextPeriod)}
-              className="p-1.5 md:p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="p-1.5 md:p-2 rounded-lg"
               aria-label="Next period"
             >
               <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
-            </button>
+            </Button>
           </div>
 
           <h1 className="text-sm md:text-xl font-bold tracking-tight truncate min-w-0">
@@ -388,13 +392,14 @@ export default function StatsClient({
           </h1>
 
           <div className="flex items-center gap-2 md:gap-4 shrink-0">
-            <button
+            <Button
+              size="none"
               onClick={() => setShowMobileFilters(true)}
-              className="md:hidden p-2 rounded-lg bg-secondary hover:bg-muted text-foreground transition cursor-pointer"
+              className="md:hidden p-2 rounded-lg"
               aria-label="Range and filters"
             >
               <SlidersHorizontal className="h-4 w-4" />
-            </button>
+            </Button>
             <label className="hidden md:flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -414,7 +419,8 @@ export default function StatsClient({
         <div className="hidden md:flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
             {presets.map((p) => (
-              <button
+              <Button
+                variant="unstyled"
                 key={p.label}
                 onClick={() => {
                   track('stats.preset', { preset: p.label });
@@ -427,7 +433,7 @@ export default function StatsClient({
                 }`}
               >
                 {p.label}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -445,20 +451,23 @@ export default function StatsClient({
             <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold tracking-tight">Range and filters</h2>
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={() => setShowMobileFilters(false)}
-                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Presets</p>
               <div className="flex items-center gap-1.5 flex-wrap">
                 {presets.map((p) => (
-                  <button
+                  <Button
+                    variant="unstyled"
                     key={p.label}
                     onClick={() => {
                   track('stats.preset', { preset: p.label });
@@ -471,7 +480,7 @@ export default function StatsClient({
                     }`}
                   >
                     {p.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>

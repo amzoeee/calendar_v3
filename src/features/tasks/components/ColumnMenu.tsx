@@ -13,6 +13,7 @@ import {
 import { useConfirm } from '@/app/components/ConfirmDialog';
 import { useUndo } from '@/app/components/UndoToast';
 import { type BoardSummary, type VisibleBoard, type ColumnHandlers } from '../types';
+import Button from '@/app/components/Button';
 
 /** A board column's "…" menu: paste, rename, default, and the two deletes. */
 export default function ColumnMenu({
@@ -55,19 +56,21 @@ export default function ColumnMenu({
   const sortOptions = (
     <>
       {sortModes.map((mode) => (
-        <button
+        <Button
+          variant="ghost"
+          size="none"
           key={mode}
           onClick={() => {
             setMenuOpen(false);
             changeSort(mode);
           }}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+          className="w-full gap-2 px-2 py-1.5 text-sm rounded"
         >
           <span className="h-3.5 w-3.5 shrink-0 flex items-center justify-center">
             {board.sortMode === mode && <Check className="h-3 w-3" strokeWidth={3} />}
           </span>
           {SORT_LABELS[mode]}
-        </button>
+        </Button>
       ))}
     </>
   );
@@ -80,11 +83,13 @@ export default function ColumnMenu({
 
   return (
     <div className="relative">
-      <button
+      <Button
+        variant="ghost"
+        size="none"
         onClick={() => setMenuOpen((o) => !o)}
         aria-label={`${board.name} options`}
         aria-expanded={menuOpen}
-        className="relative p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+        className="relative p-1.5 rounded text-muted-foreground hover:text-foreground"
       >
         <MoreHorizontal className="h-4 w-4" />
         {/* With the filter folded away, this dot is the only thing saying
@@ -92,7 +97,7 @@ export default function ColumnMenu({
         {collapsed && activeFilters > 0 && (
           <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-foreground" />
         )}
-      </button>
+      </Button>
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
@@ -111,36 +116,44 @@ export default function ColumnMenu({
                 <div className="my-1 border-t border-border" />
               </>
             )}
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={() => {
                 setMenuOpen(false);
                 onPaste();
               }}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+              className="w-full text-left px-3 py-2 text-sm rounded"
             >
               Paste a list…
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="none"
               onClick={() => {
                 setMenuOpen(false);
                 onRename();
               }}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+              className="w-full text-left px-3 py-2 text-sm rounded"
             >
               Rename list
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="none"
               onClick={() => {
                 setMenuOpen(false);
                 run(() => setDefaultBoardAction(board.id));
               }}
               disabled={isDefaultBoard}
               title="Where All tasks and Starred add a new task"
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full text-left px-3 py-2 text-sm rounded"
             >
               {isDefaultBoard ? 'Default list' : 'Make default list'}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="none"
               onClick={async () => {
                 setMenuOpen(false);
                 if (completedCount === 0) return;
@@ -165,11 +178,13 @@ export default function ColumnMenu({
                 });
               }}
               disabled={completedCount === 0}
-              className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full text-left px-3 py-2 text-sm rounded"
             >
               Delete completed
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="destructive"
+              size="none"
               onClick={async () => {
                 setMenuOpen(false);
                 const others = boards.filter((b) => b.id !== board.id);
@@ -204,10 +219,10 @@ export default function ColumnMenu({
               }}
               disabled={boards.length <= 1}
               title={boards.length <= 1 ? 'Your only list can’t be deleted' : undefined}
-              className="w-full text-left px-3 py-2 text-sm rounded text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-red-400"
+              className="w-full text-left px-3 py-2 text-sm rounded"
             >
               Delete list
-            </button>
+            </Button>
           </div>
         </>
       )}
