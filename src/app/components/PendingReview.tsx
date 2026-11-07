@@ -223,7 +223,7 @@ export default function PendingReview() {
               variant="ghost"
               size="none"
               onClick={() => setSelected(new Set())}
-              className="text-xs text-muted-foreground hover:text-foreground"
+              className="rounded px-1 py-0.5 -mx-1 -my-0.5 text-xs text-muted-foreground hover:text-foreground"
             >
               Clear selection
             </Button>
@@ -281,7 +281,7 @@ export default function PendingReview() {
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="flex-1">{notice.text}</span>
             {notice.previous && notice.previous.length > 0 && (
-              <Button variant="ghost" size="none" onClick={undo} disabled={busy} className="font-semibold text-foreground">
+              <Button variant="ghost" size="none" onClick={undo} disabled={busy} className="rounded px-1 py-0.5 -mx-1 -my-0.5 font-semibold text-foreground">
                 Undo
               </Button>
             )}

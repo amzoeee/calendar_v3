@@ -920,7 +920,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               size="none"
               type="button"
               onClick={() => setExportTagIds(null)}
-              className="text-xs text-muted-foreground hover:text-foreground"
+              className="rounded px-1 py-0.5 -mx-1 -my-0.5 text-xs text-muted-foreground hover:text-foreground"
             >
               All
             </Button>
@@ -929,7 +929,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
               size="none"
               type="button"
               onClick={() => setExportTagIds(new Set())}
-              className="text-xs text-muted-foreground hover:text-foreground"
+              className="rounded px-1 py-0.5 -mx-1 -my-0.5 text-xs text-muted-foreground hover:text-foreground"
             >
               None
             </Button>
@@ -1096,7 +1096,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                   variant="destructive"
                   size="none"
                   onClick={() => handleUnlinkDiscord(link.discordUserId)}
-                  className="gap-1 text-xs"
+                  className="rounded px-1 py-0.5 -mx-1 -my-0.5 gap-1 text-xs"
                 >
                   <Link2Off className="h-3.5 w-3.5" />
                   Unlink

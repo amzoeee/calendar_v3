@@ -256,7 +256,7 @@ export default function LifetimeSearch({
             size="none"
             onClick={clear}
             aria-label="Clear search"
-            className="text-muted-foreground hover:text-foreground shrink-0"
+            className="rounded p-0.5 -m-0.5 text-muted-foreground hover:text-foreground shrink-0"
           >
             <X className="h-3.5 w-3.5" />
           </Button>

@@ -456,7 +456,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               variant="ghost"
               size="none"
               onClick={resetZoom}
-              className="text-xs font-bold text-muted-foreground px-1 hover:text-foreground"
+              className="rounded py-0.5 -my-0.5 text-xs font-bold text-muted-foreground px-1 hover:text-foreground"
               title="Reset Zoom (Cmd 0)">
               {Math.round((zoomLevel / 60) * 100)}%
             </Button>

@@ -681,7 +681,7 @@ export default function TasksClient({
               size="none"
               onClick={() => setSelectedId(null)}
               aria-label="Close"
-              className="text-muted-foreground hover:text-foreground"
+              className="rounded p-0.5 -m-0.5 text-muted-foreground hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </Button>
