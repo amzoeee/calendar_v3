@@ -87,7 +87,7 @@ export function UndoProvider({ children }: { children: React.ReactNode }) {
               size="none"
               onClick={runUndo}
               disabled={busy}
-              className="rounded px-1 py-0.5 -mx-1 -my-0.5 text-sm font-semibold text-foreground underline underline-offset-2 shrink-0"
+              className="rounded px-1 py-0.5 -mx-[5px] -my-[3px] text-sm font-semibold text-foreground underline underline-offset-2 shrink-0"
             >
               {busy ? 'Undoing…' : 'Undo'}
             </Button>
@@ -97,7 +97,7 @@ export function UndoProvider({ children }: { children: React.ReactNode }) {
             size="none"
             onClick={dismissUndo}
             aria-label="Dismiss"
-            className="rounded p-0.5 -m-0.5 text-muted-foreground hover:text-foreground shrink-0"
+            className="rounded p-0.5 -m-[3px] text-muted-foreground hover:text-foreground shrink-0"
           >
             <X className="h-3.5 w-3.5" />
           </Button>
