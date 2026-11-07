@@ -7,21 +7,7 @@ import {
   useState,
 } from 'react';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
-import {
-  Bell,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  CornerDownRight,
-  GripVertical,
-  ListChecks,
-  MoreHorizontal,
-  Plus,
-  Repeat,
-  Star,
-  Tag as TagIcon,
-} from 'lucide-react';
+import { CornerDownRight, ListChecks } from 'lucide-react';
 import {
   buildTaskTree,
   sortTaskTree,
@@ -30,46 +16,20 @@ import {
   sortTasksFlat,
   nestedRenderRows,
   completedRenderRows,
-  ACTIVE_SORT_MODES,
-  SORT_LABELS,
   MAX_TASK_DEPTH,
-  VIRTUAL_LISTS,
-  VIRTUAL_LIST_NAMES,
-  VIRTUAL_SORT_MODES,
-  isVirtualList,
-  type NewTaskDetails,
-  type SortMode,
   type VirtualList,
   type TaskRow,
   type TaskNode,
   type TaskRenderRow,
 } from '@/lib/tasks';
-import {
-  restoreTasksAction,
-  restoreBoardAction,
-  renameBoardAction,
-  setDefaultBoardAction,
-  deleteBoardAction,
-  setBoardSortAction,
-  deleteCompletedTasksAction,
-  createTasksBulkAction,
-} from '@/features/tasks/server/actions';
-import { displayTitle, repeatLabel, DEFAULT_REMIND_TIME } from '@/lib/taskSchedule';
-import DateInput from '@/app/components/DateInput';
-import TimeInput from '@/app/components/TimeInput';
-import Select from '@/app/components/Select';
-import { useConfirm } from '@/app/components/ConfirmDialog';
-import { useUndo } from '@/app/components/UndoToast';
-import { FIELD_CLASS } from '../fieldClass';
-import { reminderFired, hasActiveReminder } from '../reminders';
+import { displayTitle } from '@/lib/taskSchedule';
+import { hasActiveReminder } from '../reminders';
 import { type BoardSummary, type VisibleBoard, type TaskTag, type ColumnHandlers } from '../types';
-import EditableTitle from './EditableTitle';
-import DueChip from './DueChip';
-import TagChips from './TagChips';
-import TagPicker from './TagPicker';
-import ReminderPicker from './ReminderPicker';
-import PasteListDialog from './PasteListDialog';
-import BoardNameDialog from './BoardNameDialog';
+import TaskComposer from './TaskComposer';
+import CompletedSection from './CompletedSection';
+import TaskItem from './TaskItem';
+import FilterOptions from './FilterOptions';
+import ColumnHeader from './ColumnHeader';
 
 /**
  * One board's column: its own header, composer, list and Completed section.
@@ -102,29 +62,10 @@ export default function BoardColumn({
   onNewBoard: () => void;
   isPrimary: boolean;
 }) {
-  const [composerValue, setComposerValue] = useState('');
-  // The composer's expandable half. It applies to one task and then empties
-  // itself, so a deadline can never reach a task you didn't set it on.
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [draftDate, setDraftDate] = useState('');
-  const [draftTime, setDraftTime] = useState('');
-  const [draftAsap, setDraftAsap] = useState(false);
-  const [draftTagIds, setDraftTagIds] = useState<number[]>([]);
-  const [draftRemindMinutes, setDraftRemindMinutes] = useState<number | null>(null);
-  const [draftRemindDays, setDraftRemindDays] = useState<number | null>(null);
-  const [draftRemindTime, setDraftRemindTime] = useState(DEFAULT_REMIND_TIME);
   const [subtaskValue, setSubtaskValue] = useState('');
-  const [showCompleted, setShowCompleted] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [pasting, setPasting] = useState(false);
-  const { confirm, choose } = useConfirm();
-  const { raiseUndo } = useUndo();
   const [filterTagIds, setFilterTagIds] = useState<number[]>([]);
   const [starredOnly, setStarredOnly] = useState(false);
 
-  const inputRef = useRef<HTMLInputElement | null>(null);
   const subtaskRef = useRef<HTMLInputElement>(null);
 
   // Keyed by the list this column is showing, not by its position, so that
@@ -144,9 +85,7 @@ export default function BoardColumn({
   // spans several.
   const boardNames = useMemo(() => new Map(boards.map((b) => [b.id, b.name])), [boards]);
 
-  const isDefaultBoard = boards.some((b) => b.id === board.id && b.isDefault);
-
-  const { subtaskParent, setSubtaskParent, editingId, setEditingId } = handlers;
+  const { subtaskParent, setSubtaskParent } = handlers;
 
   useEffect(() => {
     if (subtaskParent != null && rows.some((r) => r.id === subtaskParent)) {
@@ -333,176 +272,29 @@ export default function BoardColumn({
     });
   };
 
-  // `level` is the row's position in the list being rendered, which is not
-  // always node.depth: buildTaskTree promotes a row whose parent isn't in the
-  // list to the top level, and a flat sort draws every row flush.
-  //
-  // The `data-depth`/`data-parent-id` a row carries follow `level` for the same
-  // reason: a drag resolves its drop against the rows the viewer can see, and
-  // under a flat sort every one of those looks top level.
-  //
+  // `level` is the row's position in the list being rendered — see TaskItem.
   const renderRow = (row: TaskRenderRow, done: boolean, level = 0) => {
     const node = row.node;
-    const isEditing = editingId === node.id;
     const indent = level * 24;
     // A row drawn flush that has a parent somewhere else in the list names it.
     const parentTitle = level === 0 && node.parentId != null ? titleById.get(node.parentId) : undefined;
-    const descendants = flattenTaskTree([node]);
-    const subtreeIds = descendants.map((n) => n.id);
-    // Deepest level below this task: a parent can't be nested, a leaf can.
-    const height = Math.max(...descendants.map((n) => n.depth)) - node.depth;
-    const dragging = handlers.draggingId != null && subtreeIds.includes(handlers.draggingId);
-    const rowTags = handlers.tagsFor(node.id);
 
     return (
       <div key={node.id}>
-        <div
-          data-task-row
-          data-task-id={node.id}
-          data-board-id={node.boardId}
-          data-parent-id={level > 0 ? node.parentId ?? '' : ''}
-          data-depth={level}
-          className={`group/row flex items-start gap-1.5 rounded-lg pr-1 py-2 transition-colors ${
-            handlers.selectedId === node.id ? 'bg-secondary' : 'hover:bg-secondary/50'
-          } ${dragging ? 'opacity-40' : ''}`}
-          style={{ paddingLeft: 2 + indent }}
-        >
-          {/* No handle on a virtual list: manual order is per board and per
-              parent, so there's no order across boards for a drag to express.
-              The space is kept so rows line up the same everywhere. */}
-          {board.virtual ? (
-            <span aria-hidden="true" className="mt-0.5 shrink-0 w-[18px]" />
-          ) : (
-            <button
-              {...handlers.dragHandleProps(node.id, subtreeIds, height)}
-              aria-label={`Reorder “${node.title}”`}
-              title="Drag to reorder, or right to make it a subtask"
-              className="mt-0.5 shrink-0 text-muted-foreground/30 hover:text-foreground transition-colors cursor-grab active:cursor-grabbing touch-none p-0.5"
-            >
-              <GripVertical className="h-3.5 w-3.5" />
-            </button>
-          )}
-
-          <button
-            onClick={() => handlers.requestCompletion(node, !done)}
-            aria-label={
-              done
-                ? `Mark “${displayTitle(node.title, node.counterValue)}” not done`
-                : `Mark “${displayTitle(node.title, node.counterValue)}” done`
-            }
-            className={`mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
-              done
-                ? 'bg-primary border-primary text-primary-foreground'
-                : 'border-muted-foreground hover:border-foreground'
-            }`}
-          >
-            {done && <Check className="h-3 w-3" strokeWidth={3} />}
-          </button>
-
-          <div className="flex-1 min-w-0">
-            {parentTitle && (
-              <span className="block text-[11px] leading-tight text-muted-foreground/60 truncate">
-                {parentTitle}
-              </span>
-            )}
-            {isEditing ? (
-              <EditableTitle
-                initial={node.title}
-                onCommit={(value) => handlers.saveTitle(node.id, value)}
-                onCancel={() => setEditingId(null)}
-                onMove={board.virtual ? undefined : (action) => keyboardMove(node, action)}
-              />
-            ) : (
-              <button
-                onClick={() => setEditingId(node.id)}
-                className={`block w-full text-left text-sm cursor-text break-words ${
-                  done ? 'line-through text-muted-foreground' : 'text-foreground'
-                }`}
-              >
-                {displayTitle(node.title, node.counterValue)}
-              </button>
-            )}
-            {node.description && !isEditing && (
-              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
-            )}
-            {(board.virtual || node.dueDatetime || node.dueAsap === 1 || node.rrule || rowTags.length > 0 || reminderFired(node)) && (
-              /* gap-x/gap-y separately: a single `gap` on a wrapping flex
-                 applies to both axes, so the deadline wrapping above the tags
-                 opened a full row-gap between them. The top margin lives here
-                 rather than on the chips, so a task with neither doesn't carry
-                 an empty strip. */
-              <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                {board.virtual && (
-                  <span className="text-[10px] leading-none text-muted-foreground/70 shrink-0 truncate max-w-[8rem]">
-                    {boardNames.get(node.boardId)}
-                  </span>
-                )}
-                <DueChip
-                  due={node.dueDatetime}
-                  hasTime={node.dueHasTime === 1}
-                  asap={node.dueAsap === 1}
-                  done={done}
-                />
-                {reminderFired(node) && (
-                  <span title="Reminder has gone off" className="shrink-0 text-amber-400">
-                    <Bell className="h-2.5 w-2.5" />
-                  </span>
-                )}
-                {node.rrule && (
-                  <span
-                    title={repeatLabel(node.rrule) ?? undefined}
-                    className="flex items-center gap-1 text-[10px] leading-none text-muted-foreground shrink-0"
-                  >
-                    <Repeat className="h-2.5 w-2.5" />
-                    {repeatLabel(node.rrule)}
-                  </span>
-                )}
-                <TagChips tags={rowTags} />
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-0.5 shrink-0">
-            {node.depth < MAX_TASK_DEPTH && !done && (
-              <button
-                onClick={() => {
-                  setSubtaskParent(node.id);
-                  setSubtaskValue('');
-                }}
-                aria-label={`Add a subtask to “${node.title}”`}
-                title="Add subtask"
-                className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
-              >
-                <CornerDownRight className="h-3.5 w-3.5" />
-              </button>
-            )}
-            <button
-              onClick={() => handlers.toggleStar(node)}
-              aria-label={node.isStarred ? `Unstar “${node.title}”` : `Star “${node.title}”`}
-              aria-pressed={node.isStarred === 1}
-              className={`p-1 transition-colors cursor-pointer ${
-                node.isStarred ? 'text-amber-400' : 'text-muted-foreground/60 hover:text-foreground'
-              }`}
-            >
-              <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
-            </button>
-            <button
-              onClick={(e) => {
-                // A keyboard-activated click reports 0,0 — fall back to the
-                // button itself so the dialog doesn't fly to the corner.
-                const r = e.currentTarget.getBoundingClientRect();
-                handlers.openEditor(
-                  node.id,
-                  e.detail === 0 ? { x: r.left, y: r.top } : { x: e.clientX, y: e.clientY }
-                );
-              }}
-              aria-label={`Edit “${node.title}”`}
-              className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
+        <TaskItem
+          node={node}
+          done={done}
+          level={level}
+          virtual={Boolean(board.virtual)}
+          boardName={board.virtual ? boardNames.get(node.boardId) : undefined}
+          parentTitle={parentTitle}
+          handlers={handlers}
+          onMove={board.virtual ? undefined : (action) => keyboardMove(node, action)}
+          onAddSubtask={() => {
+            setSubtaskParent(node.id);
+            setSubtaskValue('');
+          }}
+        />
 
         {subtaskParent === node.id && (
           <div className="flex items-center gap-2.5 py-1" style={{ paddingLeft: 22 + indent + 24 }}>
@@ -536,140 +328,25 @@ export default function BoardColumn({
     );
   };
 
-  const composerDetails: NewTaskDetails = {
-    dueDate: draftDate || null,
-    dueTime: draftTime || null,
-    asap: draftAsap,
-    tagIds: draftTagIds,
-    remindOffsetMinutes: draftRemindMinutes,
-    remindOffsetDays: draftRemindDays,
-    remindTimeOfDay: draftRemindDays != null ? draftRemindTime : null,
-  };
-
-  // Spent on the task it was set for. The panel stays open, empty and ready,
-  // rather than quietly carrying a deadline onto whatever you type next.
-  const clearDetails = () => {
-    setDraftDate('');
-    setDraftTime('');
-    setDraftAsap(false);
-    setDraftTagIds([]);
-    setDraftRemindMinutes(null);
-    setDraftRemindDays(null);
-    setDraftRemindTime(DEFAULT_REMIND_TIME);
-  };
-
-  const closeDetails = () => {
-    setDetailsOpen(false);
-    clearDetails();
-  };
-
   const hasFilterables =
     tagsInUse.length > 0 ||
     (!starredList && (starredOnly || rows.some((r) => r.isStarred)));
 
-  // Sort and filter are rendered either as their own header controls or as
-  // sections of the overflow menu, depending on how much room the column has.
-  // Defined once here so the two placements can't drift apart.
-  // A virtual list can't offer My order: orderIndex is scoped to a board and a
-  // parent, so two tasks on different boards have no order between them. Its
-  // choice goes to a cookie rather than a task_boards row.
-  const sortModes = board.virtual ? VIRTUAL_SORT_MODES : ACTIVE_SORT_MODES;
-  const changeSort = (mode: SortMode) => {
-    if (board.virtual) handlers.setVirtualSort(board.virtual, mode);
-    else handlers.run(() => setBoardSortAction(board.id, mode));
-  };
-
-  const checkbox = (on: boolean) => (
-    <span
-      className={`h-3.5 w-3.5 shrink-0 rounded-sm border flex items-center justify-center ${
-        on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground'
-      }`}
-    >
-      {on && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
-    </span>
-  );
-
+  // Filtering is rendered either as its own header control or as a section of
+  // the overflow menu, depending on how much room the column has. Defined once
+  // here so the two placements can't drift apart.
   const filterOptions = (
-    <>
-      {!starredList && (
-      <button
-        onClick={() => setStarredOnly((v) => !v)}
-        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-      >
-        {checkbox(starredOnly)}
-        <Star className="h-3.5 w-3.5 text-amber-400" fill="currentColor" />
-        Starred
-      </button>
-      )}
-
-      {/* The rail's toggle, for mobile where there is no rail. */}
-      <button
-        onClick={() => setRemindersOnly(!remindersOnly)}
-        className="md:hidden w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-      >
-        {checkbox(remindersOnly)}
-        <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-        Active reminders only
-      </button>
-
-      {tagsInUse.map((t) => {
-        const on = filterTagIds.includes(t.id);
-        return (
-          <button
-            key={t.id}
-            onClick={() =>
-              setFilterTagIds((prev) => (on ? prev.filter((x) => x !== t.id) : [...prev, t.id]))
-            }
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-          >
-            {checkbox(on)}
-            <span
-              className="h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: t.color }}
-            />
-            <span className="truncate">{t.name}</span>
-          </button>
-        );
-      })}
-
-      {activeFilters > 0 && (
-        <button
-          onClick={() => {
-            setFilterTagIds([]);
-            setStarredOnly(false);
-          }}
-          className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
-        >
-          Clear filters
-        </button>
-      )}
-    </>
-  );
-
-  const sortOptions = (
-    <>
-      {sortModes.map((mode) => (
-        <button
-          key={mode}
-          onClick={() => {
-            setMenuOpen(false);
-            changeSort(mode);
-          }}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-        >
-          <span className="h-3.5 w-3.5 shrink-0 flex items-center justify-center">
-            {board.sortMode === mode && <Check className="h-3 w-3" strokeWidth={3} />}
-          </span>
-          {SORT_LABELS[mode]}
-        </button>
-      ))}
-    </>
-  );
-
-  const sectionLabel = (text: string) => (
-    <p className="px-2 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-      {text}
-    </p>
+    <FilterOptions
+      starredList={starredList}
+      starredOnly={starredOnly}
+      setStarredOnly={setStarredOnly}
+      remindersOnly={remindersOnly}
+      setRemindersOnly={setRemindersOnly}
+      tags={tagsInUse}
+      filterTagIds={filterTagIds}
+      setFilterTagIds={setFilterTagIds}
+      activeFilters={activeFilters}
+    />
   );
 
   return (
@@ -678,234 +355,23 @@ export default function BoardColumn({
       data-board-id={board.id}
       className={`flex-1 min-w-0 flex flex-col ${isPrimary ? '' : 'hidden md:flex'}`}
     >
-      <div className="shrink-0 border-b border-border px-3 md:px-4 py-3 flex items-center gap-2">
-        {/* Mobile shows one list at a time, chosen here. */}
-        <div className="md:hidden flex-1 min-w-0">
-          <Select<string | number>
-            value={board.virtual ?? board.id}
-            onChange={(value) => {
-              if (value === 'new') onNewBoard();
-              else if (typeof value === 'string' && isVirtualList(value)) onPickList(value);
-              else onPickBoard(Number(value));
-            }}
-            aria-label="Choose a list"
-            className="w-full bg-transparent text-lg font-bold text-foreground focus:outline-none cursor-pointer"
-            options={[
-              ...VIRTUAL_LISTS.map((kind) => ({ value: kind, label: VIRTUAL_LIST_NAMES[kind] })),
-              ...boards.map((b) => ({ value: b.id, label: b.name })),
-              { value: 'new', label: '+ New list…' },
-            ]}
-          />
-        </div>
-
-        <h2 className="hidden md:block flex-1 min-w-0 truncate text-base font-bold text-foreground">
-          {board.name}
-          {openCount > 0 && (
-            <span className="ml-2 text-xs font-medium text-muted-foreground">{openCount}</span>
-          )}
-        </h2>
-
-        {!collapsed && (
-          <div className={`relative shrink-0 ${hasFilterables ? '' : 'md:hidden'}`}>
-            <button
-              onClick={() => setFilterOpen((o) => !o)}
-              aria-expanded={filterOpen}
-              aria-label={`Filter ${board.name}`}
-              className={`flex items-center gap-1 px-2 py-1 rounded border text-xs transition-colors cursor-pointer ${
-                activeFilters > 0
-                  ? 'bg-secondary border-foreground/30 text-foreground'
-                  : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <TagIcon className="h-3 w-3" />
-              {activeFilters > 0 ? activeFilters : 'Filter'}
-              {/* Mobile has no rail to show the toggle is on. */}
-              {remindersOnly && <Bell className="h-3 w-3 md:hidden" />}
-            </button>
-            {filterOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1 max-h-72 overflow-y-auto">
-                  {filterOptions}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {!collapsed && (
-          <Select
-            value={board.sortMode}
-            onChange={changeSort}
-            aria-label={`Sort ${board.name}`}
-            className="bg-secondary border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer max-w-[7.5rem]"
-            options={sortModes.map((mode) => ({ value: mode, label: SORT_LABELS[mode] }))}
-          />
-        )}
-
-        {/* Everything in this menu acts on a board — renaming it, pasting into
-            it, deleting it — so a virtual list has no use for it. Its sort and
-            filter live in the header, since it's never shown alongside
-            another column. */}
-        {!board.virtual && (
-        <div className="relative">
-          <button
-            onClick={() => setMenuOpen((o) => !o)}
-            aria-label={`${board.name} options`}
-            aria-expanded={menuOpen}
-            className="relative p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-            {/* With the filter folded away, this dot is the only thing saying
-                the list is showing a subset. */}
-            {collapsed && activeFilters > 0 && (
-              <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-foreground" />
-            )}
-          </button>
-          {menuOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 w-52 z-50 bg-card border border-border rounded-lg shadow-2xl p-1 max-h-[70vh] overflow-y-auto">
-                {/* Side by side, the columns are too narrow for their own sort
-                    and filter controls, so both fold in here. */}
-                {collapsed && (
-                  <>
-                    {sectionLabel('Sort')}
-                    {sortOptions}
-                    <div className={hasFilterables ? '' : 'md:hidden'}>
-                      <div className="my-1 border-t border-border" />
-                      {sectionLabel('Filter')}
-                      {filterOptions}
-                    </div>
-                    <div className="my-1 border-t border-border" />
-                  </>
-                )}
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setPasting(true);
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-                >
-                  Paste a list…
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setRenaming(true);
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
-                >
-                  Rename list
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    handlers.run(() => setDefaultBoardAction(board.id));
-                  }}
-                  disabled={isDefaultBoard}
-                  title="Where All tasks and Starred add a new task"
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {isDefaultBoard ? 'Default list' : 'Make default list'}
-                </button>
-                <button
-                  onClick={async () => {
-                    setMenuOpen(false);
-                    if (completedCount === 0) return;
-                    const ok = await confirm({
-                      title: `Delete ${completedCount} completed task${completedCount === 1 ? '' : 's'}?`,
-                      message: `They’ll be removed from “${board.name}”. Your stats keep the history.`,
-                      confirmLabel: 'Delete',
-                      destructive: true,
-                    });
-                    if (!ok) return;
-                    handlers.run(async () => {
-                      const snapshot = await deleteCompletedTasksAction(board.id);
-                      const n = snapshot.tasks.length;
-                      raiseUndo({
-                        message: `Deleted ${n} completed task${n === 1 ? '' : 's'}`,
-                        undo: () =>
-                          handlers.run(async () => {
-                            const res = await restoreTasksAction(snapshot);
-                            if (res.error) raiseUndo({ message: `Couldn’t undo: ${res.error.toLowerCase()}`, undo: null });
-                          }),
-                      });
-                    });
-                  }}
-                  disabled={completedCount === 0}
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Delete completed
-                </button>
-                <button
-                  onClick={async () => {
-                    setMenuOpen(false);
-                    const others = boards.filter((b) => b.id !== board.id);
-                    const n = rows.length;
-                    const choice =
-                      n === 0
-                        ? await choose({
-                            title: `Delete “${board.name}”?`,
-                            choices: [{ label: 'Delete list', value: 'delete' as const, tone: 'danger' }],
-                          })
-                        : await choose({
-                            title: `Delete “${board.name}”?`,
-                            message: `It has ${n} task${n === 1 ? '' : 's'}. Move ${n === 1 ? 'it' : 'them'} to “${others[0].name}”, or delete ${n === 1 ? 'it' : 'them'} with the list?`,
-                            choices: [
-                              { label: `Delete ${n === 1 ? 'task' : 'tasks'}`, value: 'delete' as const, tone: 'danger' },
-                              { label: `Move ${n === 1 ? 'task' : 'tasks'}`, value: 'move' as const, tone: 'primary' },
-                            ],
-                          });
-                    if (!choice) return;
-                    handlers.run(async () => {
-                      const snapshot = await deleteBoardAction(board.id, choice === 'move' ? others[0].id : null);
-                      raiseUndo({
-                        message: `Deleted “${board.name}”`,
-                        undo: () =>
-                          handlers.run(async () => {
-                            await restoreBoardAction(snapshot);
-                            onPickBoard(board.id);
-                          }),
-                      });
-                    });
-                    onPickBoard(others[0].id);
-                  }}
-                  disabled={boards.length <= 1}
-                  title={boards.length <= 1 ? 'Your only list can’t be deleted' : undefined}
-                  className="w-full text-left px-3 py-2 text-sm rounded text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-red-400"
-                >
-                  Delete list
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-        )}
-      </div>
-
-      {pasting && (
-        <PasteListDialog
-          onCancel={() => setPasting(false)}
-          onCreate={(items) => {
-            setPasting(false);
-            handlers.run(() => createTasksBulkAction(board.id, items));
-          }}
-        />
-      )}
-
-      {renaming && (
-        <BoardNameDialog
-          heading="Rename list"
-          initialValue={board.name}
-          submitLabel="Rename"
-          onCancel={() => setRenaming(false)}
-          onSubmit={(name) => {
-            setRenaming(false);
-            if (name !== board.name) handlers.run(() => renameBoardAction(board.id, name));
-          }}
-        />
-      )}
+      <ColumnHeader
+        board={board}
+        boards={boards}
+        taskCount={rows.length}
+        openCount={openCount}
+        completedCount={completedCount}
+        collapsed={collapsed}
+        filterOptions={filterOptions}
+        activeFilters={activeFilters}
+        hasFilterables={hasFilterables}
+        remindersOnly={remindersOnly}
+        run={handlers.run}
+        setVirtualSort={handlers.setVirtualSort}
+        onPickBoard={onPickBoard}
+        onPickList={onPickList}
+        onNewBoard={onNewBoard}
+      />
 
       {/* The column's scroll container. Tagged so a drag reaching the top or
           bottom edge can scroll it — see useTaskDrag. */}
@@ -914,116 +380,12 @@ export default function BoardColumn({
         data-task-scroller
         className="flex-1 min-h-0 overflow-y-auto px-2 md:px-3 pt-1 pb-3"
       >
-        <div className="mb-1.5 border-b border-border">
-          <div className="flex items-center gap-2.5 px-2 py-1.5">
-            <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
-            <input
-              ref={(el) => {
-                inputRef.current = el;
-                registerComposer(board.id, el);
-              }}
-              value={composerValue}
-              onChange={(e) => setComposerValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handlers.addTask(
-                    board.id,
-                    composerValue,
-                    null,
-                    composerDetails,
-                    board.virtual === 'starred'
-                  );
-                  setComposerValue('');
-                  clearDetails();
-                }
-                if (e.key === 'Escape') {
-                  setComposerValue('');
-                  closeDetails();
-                  inputRef.current?.blur();
-                }
-              }}
-              /* A list that isn't a list still has to put a new task
-                 somewhere. It goes to the first list, named here rather than
-                 left to be discovered. */
-              placeholder={board.virtual ? `Add to ${board.targetName}` : 'Add a task'}
-              className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
-            />
-            <button
-              onClick={() => (detailsOpen ? closeDetails() : setDetailsOpen(true))}
-              aria-expanded={detailsOpen}
-              aria-label={detailsOpen ? 'Hide deadline, reminder and tags' : 'Add a deadline, reminder or tags'}
-              title="Deadline, reminder and tags"
-              className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
-            >
-              {detailsOpen ? (
-                <ChevronUp className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5" />
-              )}
-            </button>
-          </div>
-
-          {/* Deadline, reminder and tags before the task exists, so the common
-              case — "read chapter 4, due Friday, #school" — is one step
-              instead of create, open, fill in. */}
-          {detailsOpen && (
-            <div className="px-2 pb-2 space-y-2">
-              <div className="flex gap-1.5 items-center">
-                {draftAsap ? (
-                  <p className="flex-1 min-w-0 text-[10px] text-muted-foreground">
-                    Due as soon as possible.
-                  </p>
-                ) : (
-                  <>
-                    <DateInput
-                      value={draftDate}
-                      onChange={setDraftDate}
-                      aria-label="Deadline for the new task"
-                      className={`${FIELD_CLASS} flex-1 min-w-0 cursor-pointer`}
-                    />
-                    <TimeInput
-                      value={draftTime}
-                      disabled={!draftDate}
-                      onChange={setDraftTime}
-                      aria-label="Time of day for the new task"
-                      className={`${FIELD_CLASS} w-[6.25rem] cursor-pointer disabled:opacity-40`}
-                    />
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraftAsap((a) => !a);
-                    setDraftDate('');
-                    setDraftTime('');
-                  }}
-                  aria-pressed={draftAsap}
-                  title="Due as soon as possible"
-                  className={`shrink-0 text-[10px] font-semibold px-1.5 py-1 rounded border transition-colors cursor-pointer ${
-                    draftAsap
-                      ? 'bg-amber-400/15 text-amber-400 border-amber-400/40'
-                      : 'text-muted-foreground border-border hover:text-foreground'
-                  }`}
-                >
-                  ASAP
-                </button>
-              </div>
-              {draftDate && (
-                <ReminderPicker
-                  dueDate={draftDate}
-                  dueTime={draftTime}
-                  minutes={draftRemindMinutes}
-                  days={draftRemindDays}
-                  remindTime={draftRemindTime}
-                  onMinutesChange={setDraftRemindMinutes}
-                  onDaysChange={setDraftRemindDays}
-                  onRemindTimeChange={setDraftRemindTime}
-                />
-              )}
-              <TagPicker all={availableTags} selected={draftTagIds} onChange={setDraftTagIds} />
-            </div>
-          )}
-        </div>
+        <TaskComposer
+          board={board}
+          availableTags={availableTags}
+          addTask={handlers.addTask}
+          registerComposer={registerComposer}
+        />
 
         {openRender.length === 0 && (
           <div className="py-12 text-center px-3">
@@ -1049,27 +411,11 @@ export default function BoardColumn({
           {openRender.map((row) => renderRow(row, false))}
         </div>
 
-        {completedCount > 0 && (
-          <div className="mt-5">
-            <button
-              onClick={() => setShowCompleted((s) => !s)}
-              aria-expanded={showCompleted}
-              className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            >
-              {showCompleted ? (
-                <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5" />
-              )}
-              Completed ({completedCount})
-            </button>
-            {showCompleted && (
-              <div className="space-y-0.5 mt-1">
-                {completedRender.map((row) => renderRow(row, true))}
-              </div>
-            )}
-          </div>
-        )}
+        <CompletedSection
+          count={completedCount}
+          rows={completedRender}
+          renderRow={(row) => renderRow(row, true)}
+        />
       </div>
     </div>
   );
