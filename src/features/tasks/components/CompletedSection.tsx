@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { type TaskRenderRow } from '@/lib/tasks';
+import Button from '@/app/components/Button';
 
 /**
  * A column's collapsible Completed pile. Always mounted, even when empty, so
@@ -23,10 +24,12 @@ export default function CompletedSection({
 
   return (
     <div className="mt-5">
-      <button
+      <Button
+        variant="ghost"
+        size="none"
         onClick={() => setShowCompleted((s) => !s)}
         aria-expanded={showCompleted}
-        className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        className="gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
       >
         {showCompleted ? (
           <ChevronDown className="h-3.5 w-3.5" />
@@ -34,7 +37,7 @@ export default function CompletedSection({
           <ChevronRight className="h-3.5 w-3.5" />
         )}
         Completed ({count})
-      </button>
+      </Button>
       {showCompleted && (
         <div className="space-y-0.5 mt-1">
           {rows.map(renderRow)}
