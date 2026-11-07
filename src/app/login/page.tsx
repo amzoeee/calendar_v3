@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import { loginAction } from '../actions';
+import { loginAction } from '@/features/auth/server/actions';
 import Link from 'next/link';
 
 export default function LoginPage() {

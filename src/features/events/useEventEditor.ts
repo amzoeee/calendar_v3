@@ -9,7 +9,7 @@ import {
   updateEventAction,
   updateRecurringSeriesAction,
   type EventRow,
-} from '@/app/actions';
+} from '@/features/events/server/actions';
 import { isInsideModal, useConfirm } from '@/app/components/ConfirmDialog';
 import { selectStateOf } from '@/app/components/Select';
 import { useUndo } from '@/app/components/UndoToast';

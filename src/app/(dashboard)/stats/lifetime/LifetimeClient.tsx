@@ -24,7 +24,7 @@ import LifetimePanel from './LifetimePanel';
 import LifetimeSearch from './LifetimeSearch';
 import RangePicker from './RangePicker';
 import type { BulkResult, BulkTarget } from './BulkEdit';
-import { restoreEventsAction } from '@/app/actions';
+import { restoreEventsAction } from '@/features/events/server/actions';
 import { useUndo } from '@/app/components/UndoToast';
 import { normalizeTitle } from '@/lib/titleParts';
 import { track } from '@/lib/track';

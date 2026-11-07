@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { ListChecks, Search, X } from 'lucide-react';
 import TagSelect from '@/app/components/TagSelect';
 import Overlay from '@/app/components/Overlay';
-import { listPendingEventsAction, retagPendingEventsAction, restoreEventsAction, type EventSnapshot } from '@/app/actions';
+import { listPendingEventsAction, retagPendingEventsAction } from '@/features/import/server/actions';
+import { restoreEventsAction, type EventSnapshot } from '@/features/events/server/actions';
 import { pacificDbStringToDate } from '@/lib/timezone';
 
 type Data = Awaited<ReturnType<typeof listPendingEventsAction>>;
