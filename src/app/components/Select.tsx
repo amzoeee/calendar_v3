@@ -198,7 +198,7 @@ export default function Select<T extends string | number>({
       const needed = Math.min(MENU_MAX_HEIGHT, (menuRef.current?.scrollHeight ?? MENU_MAX_HEIGHT) + 2);
       const flip = below < needed && above > below;
       setPlacement({
-        left: Math.max(GAP, Math.min(r.left, window.innerWidth - r.width - GAP)),
+        left: r.left,
         minWidth: r.width,
         maxHeight: Math.min(MENU_MAX_HEIGHT, flip ? above : below),
         ...(flip ? { bottom: window.innerHeight - r.top + GAP } : { top: r.bottom + GAP }),
@@ -218,6 +218,15 @@ export default function Select<T extends string | number>({
       window.removeEventListener('scroll', onScroll, true);
     };
   }, [open]);
+
+  // Keep the menu on screen. Measured here because the placement sets the font
+  // and min-width that decide its width.
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!menu || !placement) return;
+    const left = Math.max(GAP, Math.min(placement.left, window.innerWidth - menu.offsetWidth - GAP));
+    if (left !== placement.left) setPlacement({ ...placement, left });
+  }, [placement]);
 
   // Close on a press anywhere else. Presses inside the menu stop at the menu
   // (below), so a popover's own click-outside handler doesn't treat picking an
