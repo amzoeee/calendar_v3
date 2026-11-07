@@ -14,8 +14,10 @@ interface SelectProps<T extends string | number> {
   value: T;
   options: SelectOption<T>[];
   onChange: (value: T) => void;
-  /** Classes for the trigger; the menu takes its font size from it. */
+  /** Classes for the trigger; the menu takes its font size from it unless `menuFontSize` is set. */
   className?: string;
+  /** For a trigger styled as a heading, whose font size wouldn't suit a list of options. */
+  menuFontSize?: string;
   id?: string;
   /** Submits the value with a surrounding form. */
   name?: string;
@@ -52,6 +54,7 @@ export default function Select<T extends string | number>({
   options,
   onChange,
   className = '',
+  menuFontSize,
   id,
   name,
   disabled,
@@ -202,7 +205,7 @@ export default function Select<T extends string | number>({
         minWidth: r.width,
         maxHeight: Math.min(MENU_MAX_HEIGHT, flip ? above : below),
         ...(flip ? { bottom: window.innerHeight - r.top + GAP } : { top: r.bottom + GAP }),
-        fontSize: getComputedStyle(trigger).fontSize,
+        fontSize: menuFontSize ?? getComputedStyle(trigger).fontSize,
       });
     };
     // The menu's own scrolling must not re-place it: a new placement re-runs
@@ -217,7 +220,7 @@ export default function Select<T extends string | number>({
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', onScroll, true);
     };
-  }, [open]);
+  }, [open, menuFontSize]);
 
   // Close on a press anywhere else. Presses inside the menu stop at the menu
   // (below), so a popover's own click-outside handler doesn't treat picking an
