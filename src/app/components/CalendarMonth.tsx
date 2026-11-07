@@ -22,6 +22,7 @@ const SIZES = {
     headerPad: 'px-0.5',
     chevron: 'h-4 w-4',
     chevronPad: 'p-px',
+    headerRow: '-mx-1',
     weekday: 'text-[9px]',
     gap: 'gap-0.5',
     day: 'h-6 text-[10px]',
@@ -33,6 +34,7 @@ const SIZES = {
     headerPad: 'px-1',
     chevron: 'h-5 w-5',
     chevronPad: 'p-1',
+    headerRow: '',
     weekday: 'text-xs',
     gap: 'gap-1',
     day: 'h-10 text-sm',
@@ -159,7 +161,7 @@ export default function CalendarMonth({
   return (
     <>
       {/* Header: month + prev/next */}
-      <div className="relative flex items-center justify-between mb-2">
+      <div className={`relative flex items-center justify-between mb-2 ${s.headerRow}`}>
         <Button
           variant="ghost"
           size="none"
