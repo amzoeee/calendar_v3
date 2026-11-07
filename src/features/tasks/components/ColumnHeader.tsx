@@ -84,6 +84,7 @@ export default function ColumnHeader({
             }}
             aria-label="Choose a list"
             className="w-full bg-transparent text-lg font-bold text-foreground focus:outline-none cursor-pointer"
+            menuFontSize="0.875rem"
             options={[
               ...VIRTUAL_LISTS.map((kind) => ({ value: kind, label: VIRTUAL_LIST_NAMES[kind] })),
               ...boards.map((b) => ({ value: b.id, label: b.name })),
