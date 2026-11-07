@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import Overlay from './Overlay';
 import Button, { type ButtonVariant } from './Button';
 
 type Tone = 'default' | 'primary' | 'danger';
@@ -115,26 +116,13 @@ function Dialog({
   const titleId = React.useId();
   const messageId = React.useId();
 
-  // Focus the last (primary) choice so Enter confirms, as window.confirm does,
-  // and hand focus back to whatever opened the dialog.
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const buttons = panelRef.current?.querySelectorAll('button');
-    buttons?.[buttons.length - 1]?.focus();
-    return () => previous?.focus?.();
-  }, []);
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    const buttons = Array.from(panelRef.current?.querySelectorAll('button') ?? []);
-    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-
-    if (e.key === 'Escape') {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      // Arrows cycle through the buttons; Overlay handles Tab and Escape.
       e.preventDefault();
-      onSettle(null);
-    } else if (e.key === 'Tab' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      // Keep focus inside, cycling through the buttons.
-      e.preventDefault();
-      const step = e.key === 'ArrowLeft' || (e.key === 'Tab' && e.shiftKey) ? -1 : 1;
+      const buttons = Array.from(panelRef.current?.querySelectorAll('button') ?? []);
+      const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      const step = e.key === 'ArrowLeft' ? -1 : 1;
       buttons[(index + step + buttons.length) % buttons.length]?.focus();
     }
     // Page-level shortcuts shouldn't see keys meant for the dialog.
@@ -142,51 +130,48 @@ function Dialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={() => onSettle(null)} />
-      <div
-        ref={panelRef}
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={message ? messageId : undefined}
-        onKeyDown={handleKeyDown}
-        // Focusable so a click on the panel's text keeps keys inside the dialog.
-        tabIndex={-1}
-        className="relative w-full focus:outline-none max-w-sm bg-card border border-border rounded-xl p-5 space-y-3 shadow-2xl"
-      >
-        <h2 id={titleId} className="text-sm font-bold text-foreground">
-          {title}
-        </h2>
-        {message && (
-          <div id={messageId} className="text-sm text-muted-foreground whitespace-pre-line">
-            {message}
-          </div>
-        )}
-        <div className="flex flex-wrap justify-end gap-2 pt-2">
-          <Button
-            variant="ghost"
-            size="none"
-            onClick={() => onSettle(null)}
-            className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            {cancelLabel}
-          </Button>
-          {choices.map((c) => (
-            <Button
-              key={c.label}
-              variant={TONE_VARIANTS[c.tone ?? 'default']}
-              size="none"
-              onClick={() => onSettle(c.value)}
-              className={`px-3 py-2 rounded text-sm ${
-                c.tone && c.tone !== 'default' ? 'font-semibold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {c.label}
-            </Button>
-          ))}
+    <Overlay
+      onClose={() => onSettle(null)}
+      role="alertdialog"
+      panelRef={panelRef}
+      // The last (primary) choice, so Enter confirms as window.confirm does.
+      initialFocus={(panel) => Array.from(panel.querySelectorAll('button')).at(-1)}
+      aria-labelledby={titleId}
+      aria-describedby={message ? messageId : undefined}
+      onKeyDown={handleKeyDown}
+      className="max-w-sm p-5 space-y-3"
+    >
+      <h2 id={titleId} className="text-sm font-bold text-foreground">
+        {title}
+      </h2>
+      {message && (
+        <div id={messageId} className="text-sm text-muted-foreground whitespace-pre-line">
+          {message}
         </div>
+      )}
+      <div className="flex flex-wrap justify-end gap-2 pt-2">
+        <Button
+          variant="ghost"
+          size="none"
+          onClick={() => onSettle(null)}
+          className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          {cancelLabel}
+        </Button>
+        {choices.map((c) => (
+          <Button
+            key={c.label}
+            variant={TONE_VARIANTS[c.tone ?? 'default']}
+            size="none"
+            onClick={() => onSettle(c.value)}
+            className={`px-3 py-2 rounded text-sm ${
+              c.tone && c.tone !== 'default' ? 'font-semibold' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {c.label}
+          </Button>
+        ))}
       </div>
-    </div>
+    </Overlay>
   );
 }

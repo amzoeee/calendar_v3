@@ -59,7 +59,7 @@ import {
   postponeOccurrenceAction,
   restoreTaskDeadlineAction,
   setTaskReminderActiveAction,
-} from '@/app/task-actions';
+} from '@/features/tasks/server/actions';
 import { dateToServerDbString, pacificDbStringToDate } from '@/lib/timezone';
 import { formatDue, displayTitle } from '@/lib/taskSchedule';
 import { useTaskDrag, type DropTarget } from '@/features/tasks/useTaskDrag';

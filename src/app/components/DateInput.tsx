@@ -5,6 +5,7 @@ import { createPortal, flushSync } from 'react-dom';
 import { X } from 'lucide-react';
 import { parseWeekStart, WEEK_START_COOKIE } from '@/lib/week';
 import CalendarMonth from './CalendarMonth';
+import Overlay from './Overlay';
 import Button from './Button';
 
 /**
@@ -342,62 +343,58 @@ export default function DateInput({
       : null;
 
   const sheet =
-    open && coarse
-      ? createPortal(
-          <div ref={pickerRefCallback} className="fixed inset-0 z-[100] flex items-end md:items-center md:justify-center">
-            <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={rest['aria-label'] ?? 'Pick a date'}
-              className="relative w-full md:w-96 bg-card border-t md:border border-border rounded-t-2xl md:rounded-2xl p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4"
+    open && coarse ? (
+      <Overlay
+        variant="responsive"
+        onClose={() => setOpen(false)}
+        layerRef={pickerRefCallback}
+        // The field keeps focus, so its blur still commits once a date is picked.
+        manageFocus={false}
+        aria-label={rest['aria-label'] ?? 'Pick a date'}
+        className="md:w-96 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold tracking-tight">{rest['aria-label'] ?? 'Pick a date'}</h2>
+          <Button
+            variant="ghost"
+            size="none"
+            type="button"
+            onClick={() => setOpen(false)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+        <div>
+          <CalendarMonth selected={selected} onSelect={pick} weekStart={weekStart} size="lg" />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="none"
+            type="button"
+            onClick={() => pick(new Date().toLocaleDateString('en-CA'))}
+            className="flex-1 px-4 py-2.5 rounded text-sm font-semibold"
+          >
+            Today
+          </Button>
+          {!required && (
+            <Button
+              size="none"
+              type="button"
+              onClick={() => {
+                setBuffer('');
+                emit(EMPTY);
+                setOpen(false);
+              }}
+              className="flex-1 px-4 py-2.5 rounded text-sm font-semibold"
             >
-              <div className="w-9 h-1 rounded-full bg-muted mx-auto md:hidden" />
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold tracking-tight">{rest['aria-label'] ?? 'Pick a date'}</h2>
-                <Button
-                  variant="ghost"
-                  size="none"
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="p-1 rounded text-muted-foreground hover:text-foreground"
-                  aria-label="Close"
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
-              <div>
-                <CalendarMonth selected={selected} onSelect={pick} weekStart={weekStart} size="lg" />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="none"
-                  type="button"
-                  onClick={() => pick(new Date().toLocaleDateString('en-CA'))}
-                  className="flex-1 px-4 py-2.5 rounded text-sm font-semibold"
-                >
-                  Today
-                </Button>
-                {!required && (
-                  <Button
-                    size="none"
-                    type="button"
-                    onClick={() => {
-                      setBuffer('');
-                      emit(EMPTY);
-                      setOpen(false);
-                    }}
-                    className="flex-1 px-4 py-2.5 rounded text-sm font-semibold"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      : null;
+              Clear
+            </Button>
+          )}
+        </div>
+      </Overlay>
+    ) : null;
 
   return (
     <>
@@ -441,6 +438,8 @@ export default function DateInput({
             e.preventDefault();
             openPicker();
           } else if (e.key === 'Escape' && open) {
+            // Claimed so an Overlay this field sits in stays open.
+            e.preventDefault();
             setOpen(false);
           } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
             e.preventDefault();

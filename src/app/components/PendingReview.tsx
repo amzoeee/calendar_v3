@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ListChecks, Search, X } from 'lucide-react';
 import TagSelect from '@/app/components/TagSelect';
+import Overlay from '@/app/components/Overlay';
 import { listPendingEventsAction, retagPendingEventsAction, restoreEventsAction, type EventSnapshot } from '@/app/actions';
 import { pacificDbStringToDate } from '@/lib/timezone';
-import Button from '@/app/components/Button';
+import Button from './Button';
 
 type Data = Awaited<ReturnType<typeof listPendingEventsAction>>;
 type Filter = 'all' | 'untagged' | 'selected';
@@ -55,17 +55,6 @@ export default function PendingReview() {
     setNotice(null);
     load();
   };
-
-  useEffect(() => {
-    if (!open) return;
-    // Skipped on touch, where focusing opens the keyboard over the list.
-    if (window.matchMedia('(pointer: fine)').matches) searchRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
 
   const rows = useMemo(
     () =>
@@ -150,170 +139,172 @@ export default function PendingReview() {
   };
 
   const panel = (
-    <div className="fixed inset-0 z-[90] flex md:justify-end">
-      <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Review import"
-        className="relative mt-12 md:mt-0 w-full md:max-w-md flex flex-col bg-card border-t md:border-t-0 md:border-l border-border rounded-t-xl md:rounded-none shadow-2xl min-h-0"
-      >
-        <div className="p-4 space-y-3 border-b border-border">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-bold text-foreground">Review import</h2>
-            <div className="flex items-center gap-3">
-              {data && (
-                <span className="text-xs text-muted-foreground">
-                  {rows.length} staged · {untaggedCount} untagged
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                size="none"
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-                className="p-1 rounded text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <input
-                ref={searchRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    selectMatches();
-                  }
-                }}
-                placeholder="Search titles"
-                className="w-full rounded bg-secondary border border-border pl-8 pr-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
+    <Overlay
+      variant="none"
+      onClose={() => setOpen(false)}
+      zIndex={90}
+      layerClassName="md:justify-end"
+      backdropClassName="bg-black/50"
+      // Search is skipped on touch, where focusing opens the keyboard over the list.
+      initialFocus={() => (window.matchMedia('(pointer: fine)').matches ? searchRef.current : null)}
+      aria-label="Review import"
+      className="relative mt-12 md:mt-0 w-full md:max-w-md flex flex-col bg-card border-t md:border-t-0 md:border-l border-border rounded-t-xl md:rounded-none shadow-2xl min-h-0"
+    >
+      <div className="p-4 space-y-3 border-b border-border">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-bold text-foreground">Review import</h2>
+          <div className="flex items-center gap-3">
+            {data && (
+              <span className="text-xs text-muted-foreground">
+                {rows.length} staged · {untaggedCount} untagged
+              </span>
+            )}
             <Button
-              variant="unstyled"
-              onClick={selectMatches}
-              className="px-3 py-1.5 rounded border border-border text-xs font-semibold text-foreground hover:bg-secondary whitespace-nowrap cursor-pointer"
+              variant="ghost"
+              size="none"
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+              className="p-1 rounded text-muted-foreground hover:text-foreground"
             >
-              {!unselectedMatches.length
-                ? q ? 'All matches selected' : 'All selected'
-                : q
-                  ? `Select ${unselectedMatches.length} match${unselectedMatches.length === 1 ? '' : 'es'}`
-                  : 'Select all'}
+              <X className="h-4 w-4" />
             </Button>
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            {FILTERS.map((f) => (
-              <Button
-                variant="unstyled"
-                key={f.value}
-                onClick={() => setFilter(f.value)}
-                aria-pressed={filter === f.value}
-                className={`px-2.5 py-0.5 rounded-full border text-xs cursor-pointer transition ${
-                  filter === f.value
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'border-border text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {f.label}
-              </Button>
-            ))}
-            <span className="flex-1" />
-            {selected.size > 0 && (
-              <Button
-                variant="ghost"
-                size="none"
-                onClick={() => setSelected(new Set())}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Clear selection
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  selectMatches();
+                }
+              }}
+              placeholder="Search titles"
+              className="w-full rounded bg-secondary border border-border pl-8 pr-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <Button
+            variant="unstyled"
+            onClick={selectMatches}
+            className="px-3 py-1.5 rounded border border-border text-xs font-semibold text-foreground hover:bg-secondary whitespace-nowrap cursor-pointer"
+          >
+            {!unselectedMatches.length
+              ? q ? 'All matches selected' : 'All selected'
+              : q
+                ? `Select ${unselectedMatches.length} match${unselectedMatches.length === 1 ? '' : 'es'}`
+                : 'Select all'}
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {FILTERS.map((f) => (
+            <Button
+              variant="unstyled"
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              aria-pressed={filter === f.value}
+              className={`px-2.5 py-0.5 rounded-full border text-xs cursor-pointer transition ${
+                filter === f.value
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {f.label}
+            </Button>
+          ))}
+          <span className="flex-1" />
+          {selected.size > 0 && (
+            <Button
+              variant="ghost"
+              size="none"
+              onClick={() => setSelected(new Set())}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Clear selection
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {!data ? (
+          <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+        ) : !visible.length ? (
+          <p className="p-4 text-sm text-muted-foreground">
+            {filter === 'selected' ? 'Nothing selected.' : filter === 'untagged' ? 'Everything has a tag.' : 'No staged events.'}
+          </p>
+        ) : (
+          visible.map((r, i) => {
+            const header = i === 0 || visible[i - 1].day !== r.day ? r.day : null;
+            const isSelected = selected.has(r.id);
+            const color = r.tag ? tagColors.get(r.tag) : undefined;
+            return (
+              <React.Fragment key={r.id}>
+                {header && (
+                  <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase text-muted-foreground">{header}</div>
+                )}
+                <Button
+                  variant="unstyled"
+                  onClick={(e) => toggle(r.id, e.shiftKey)}
+                  aria-pressed={isSelected}
+                  className={`w-full flex items-center gap-3 px-4 py-2 text-left text-sm border-t border-border/50 cursor-pointer select-none transition ${
+                    isSelected ? 'bg-primary/15' : 'hover:bg-secondary/60'
+                  } ${q && !matches(r.title) ? 'text-muted-foreground/60' : 'text-foreground'}`}
+                >
+                  <input type="checkbox" checked={isSelected} readOnly tabIndex={-1} className="pointer-events-none accent-primary" />
+                  <span className="w-16 shrink-0 text-xs text-muted-foreground tabular-nums">{r.time}</span>
+                  <span className="flex-1 min-w-0 truncate">
+                    <Highlight text={r.title} query={q} />
+                  </span>
+                  {r.tag ? (
+                    <span className="flex items-center gap-1.5 shrink-0 text-xs text-muted-foreground">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                      {r.tag}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-xs italic text-muted-foreground/70">untagged</span>
+                  )}
+                </Button>
+              </React.Fragment>
+            );
+          })
+        )}
+      </div>
+
+      <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-border space-y-2 bg-secondary/30">
+        {notice && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="flex-1">{notice.text}</span>
+            {notice.previous && notice.previous.length > 0 && (
+              <Button variant="ghost" size="none" onClick={undo} disabled={busy} className="font-semibold text-foreground">
+                Undo
               </Button>
             )}
           </div>
-        </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {!data ? (
-            <p className="p-4 text-sm text-muted-foreground">Loading…</p>
-          ) : !visible.length ? (
-            <p className="p-4 text-sm text-muted-foreground">
-              {filter === 'selected' ? 'Nothing selected.' : filter === 'untagged' ? 'Everything has a tag.' : 'No staged events.'}
-            </p>
-          ) : (
-            visible.map((r, i) => {
-              const header = i === 0 || visible[i - 1].day !== r.day ? r.day : null;
-              const isSelected = selected.has(r.id);
-              const color = r.tag ? tagColors.get(r.tag) : undefined;
-              return (
-                <React.Fragment key={r.id}>
-                  {header && (
-                    <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase text-muted-foreground">{header}</div>
-                  )}
-                  <Button
-                    variant="unstyled"
-                    onClick={(e) => toggle(r.id, e.shiftKey)}
-                    aria-pressed={isSelected}
-                    className={`w-full flex items-center gap-3 px-4 py-2 text-left text-sm border-t border-border/50 cursor-pointer select-none transition ${
-                      isSelected ? 'bg-primary/15' : 'hover:bg-secondary/60'
-                    } ${q && !matches(r.title) ? 'text-muted-foreground/60' : 'text-foreground'}`}
-                  >
-                    <input type="checkbox" checked={isSelected} readOnly tabIndex={-1} className="pointer-events-none accent-primary" />
-                    <span className="w-16 shrink-0 text-xs text-muted-foreground tabular-nums">{r.time}</span>
-                    <span className="flex-1 min-w-0 truncate">
-                      <Highlight text={r.title} query={q} />
-                    </span>
-                    {r.tag ? (
-                      <span className="flex items-center gap-1.5 shrink-0 text-xs text-muted-foreground">
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                        {r.tag}
-                      </span>
-                    ) : (
-                      <span className="shrink-0 text-xs italic text-muted-foreground/70">untagged</span>
-                    )}
-                  </Button>
-                </React.Fragment>
-              );
-            })
-          )}
-        </div>
-
-        <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-border space-y-2 bg-secondary/30">
-          {notice && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="flex-1">{notice.text}</span>
-              {notice.previous && notice.previous.length > 0 && (
-                <Button variant="ghost" size="none" onClick={undo} disabled={busy} className="font-semibold text-foreground">
-                  Undo
-                </Button>
-              )}
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-foreground shrink-0">
-              {selected.size ? `${selected.size} selected` : 'None selected'}
-            </span>
-            <div className="flex-1 min-w-0">
-              <TagSelect tags={data?.tags ?? []} value={tag} onChange={setTag} />
-            </div>
-            <Button
-              onClick={apply}
-              disabled={busy}
-              size="none"
-              className="px-3 py-2 rounded text-xs font-bold whitespace-nowrap"
-            >
-              Apply tag
-            </Button>
+        )}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-foreground shrink-0">
+            {selected.size ? `${selected.size} selected` : 'None selected'}
+          </span>
+          <div className="flex-1 min-w-0">
+            <TagSelect tags={data?.tags ?? []} value={tag} onChange={setTag} />
           </div>
+          <Button
+            size="none"
+            onClick={apply}
+            disabled={busy}
+            className="px-3 py-2 rounded text-xs font-bold whitespace-nowrap"
+          >
+            Apply tag
+          </Button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 
   return (
@@ -327,7 +318,7 @@ export default function PendingReview() {
         <ListChecks className="h-3.5 w-3.5" />
         Review
       </Button>
-      {open && createPortal(panel, document.body)}
+      {open && panel}
     </>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Overlay from '@/app/components/Overlay';
 import Button from '@/app/components/Button';
 
 export default function BoardNameDialog({
@@ -20,44 +21,37 @@ export default function BoardNameDialog({
   const trimmed = name.trim();
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
-      <div className="relative w-full max-w-sm bg-card border border-border rounded-xl p-5 space-y-4 shadow-2xl">
-        <h2 className="text-sm font-bold text-foreground">{heading}</h2>
-        <input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && trimmed) onSubmit(trimmed);
-            if (e.key === 'Escape') {
-              e.stopPropagation();
-              onCancel();
-            }
-          }}
-          placeholder="List name"
-          className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        />
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="none"
-            onClick={onCancel}
-            className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => trimmed && onSubmit(trimmed)}
-            disabled={!trimmed}
-            size="none"
-            className="px-3 py-2 rounded text-sm font-semibold"
-          >
-            {submitLabel}
-          </Button>
-        </div>
+    <Overlay onClose={onCancel} zIndex={60} aria-label={heading} className="max-w-sm p-5 space-y-4">
+      <h2 className="text-sm font-bold text-foreground">{heading}</h2>
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && trimmed) onSubmit(trimmed);
+        }}
+        placeholder="List name"
+        className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="none"
+          onClick={onCancel}
+          className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          Cancel
+        </Button>
+        <Button
+          size="none"
+          onClick={() => trimmed && onSubmit(trimmed)}
+          disabled={!trimmed}
+          className="px-3 py-2 rounded text-sm font-semibold"
+        >
+          {submitLabel}
+        </Button>
       </div>
-    </div>
+    </Overlay>
   );
 }
