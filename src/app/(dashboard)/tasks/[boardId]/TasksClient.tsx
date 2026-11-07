@@ -754,60 +754,62 @@ export default function TasksClient({
             />
           </label>
 
-          {selected.depth < MAX_TASK_DEPTH && (
+          <div className="flex flex-col items-start gap-0.5">
+            {selected.depth < MAX_TASK_DEPTH && (
+              <Button
+                variant="ghost"
+                size="none"
+                onClick={() => {
+                  setSubtaskParent(selected.id);
+                  setSelectedId(null);
+                }}
+                className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground"
+              >
+                <CornerDownRight className="h-3.5 w-3.5" />
+                Add subtask
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="none"
-              onClick={() => {
-                setSubtaskParent(selected.id);
-                setSelectedId(null);
-              }}
-              className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground"
+              onClick={() => toggleStar(selected)}
+              className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground hover:text-amber-400"
             >
-              <CornerDownRight className="h-3.5 w-3.5" />
-              Add subtask
+              <Star
+                className={`h-3.5 w-3.5 ${selected.isStarred ? 'text-amber-400' : ''}`}
+                fill={selected.isStarred ? 'currentColor' : 'none'}
+              />
+              {selected.isStarred ? 'Starred' : 'Add star'}
             </Button>
-          )}
 
-          <Button
-            variant="ghost"
-            size="none"
-            onClick={() => toggleStar(selected)}
-            className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground hover:text-amber-400"
-          >
-            <Star
-              className={`h-3.5 w-3.5 ${selected.isStarred ? 'text-amber-400' : ''}`}
-              fill={selected.isStarred ? 'currentColor' : 'none'}
-            />
-            {selected.isStarred ? 'Starred' : 'Add star'}
-          </Button>
-
-          {/* ASAP tasks always count as reminded, so there's nothing to toggle. */}
-          {!selected.completedAt && selected.dueAsap !== 1 && (
-            reminderFired(selected) ? (
-              <Button
-                variant="ghost"
-                size="none"
-                onClick={() => setReminderActive(selected, false)}
-                title="Turn the reminder off"
-                className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground hover:text-amber-400"
-              >
-                <BellOff className="h-3.5 w-3.5" />
-                Dismiss reminder
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="none"
-                onClick={() => setReminderActive(selected, true)}
-                title="Count this task as reminded from now"
-                className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground hover:text-amber-400"
-              >
-                <Bell className="h-3.5 w-3.5" />
-                Set reminder active
-              </Button>
-            )
-          )}
+            {/* ASAP tasks always count as reminded, so there's nothing to toggle. */}
+            {!selected.completedAt && selected.dueAsap !== 1 && (
+              reminderFired(selected) ? (
+                <Button
+                  variant="ghost"
+                  size="none"
+                  onClick={() => setReminderActive(selected, false)}
+                  title="Turn the reminder off"
+                  className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground hover:text-amber-400"
+                >
+                  <BellOff className="h-3.5 w-3.5" />
+                  Dismiss reminder
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="none"
+                  onClick={() => setReminderActive(selected, true)}
+                  title="Count this task as reminded from now"
+                  className="gap-2 px-2.5 py-1.5 -ml-2.5 rounded text-sm md:text-xs text-foreground hover:text-amber-400"
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  Set reminder active
+                </Button>
+              )
+            )}
+          </div>
 
           <div className="pt-2 border-t border-border">
             <Button
