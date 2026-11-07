@@ -19,7 +19,9 @@ const MONTHS = [
 const SIZES = {
   sm: {
     header: 'text-xs',
+    headerPad: 'px-0.5',
     chevron: 'h-4 w-4',
+    chevronPad: 'p-0.5',
     weekday: 'text-[9px]',
     gap: 'gap-0.5',
     day: 'h-6 text-[10px]',
@@ -28,7 +30,9 @@ const SIZES = {
   },
   lg: {
     header: 'text-sm',
+    headerPad: 'px-1',
     chevron: 'h-5 w-5',
+    chevronPad: 'p-1',
     weekday: 'text-xs',
     gap: 'gap-1',
     day: 'h-10 text-sm',
@@ -162,7 +166,7 @@ export default function CalendarMonth({
           type="button"
           onClick={() => goMonth(-1)}
           aria-label="Previous month"
-          className="p-1 rounded text-muted-foreground hover:text-foreground"
+          className={`${s.chevronPad} rounded text-muted-foreground hover:text-foreground`}
         >
           <ChevronLeft className={s.chevron} />
         </Button>
@@ -174,7 +178,7 @@ export default function CalendarMonth({
           onClick={togglePicker}
           aria-label="Choose month and year"
           aria-expanded={pickerOpen}
-          className={`${s.header} font-bold text-foreground select-none whitespace-nowrap rounded px-1 py-0.5`}
+          className={`${s.header} ${s.headerPad} font-bold text-foreground select-none whitespace-nowrap rounded py-0.5`}
         >
           {monthLabel}
         </Button>
@@ -184,7 +188,7 @@ export default function CalendarMonth({
           type="button"
           onClick={() => goMonth(1)}
           aria-label="Next month"
-          className="p-1 rounded text-muted-foreground hover:text-foreground"
+          className={`${s.chevronPad} rounded text-muted-foreground hover:text-foreground`}
         >
           <ChevronRight className={s.chevron} />
         </Button>
@@ -203,7 +207,7 @@ export default function CalendarMonth({
                 type="button"
                 onClick={() => setPickerYear((y) => y - 1)}
                 aria-label="Previous year"
-                className="p-1 rounded text-muted-foreground hover:text-foreground"
+                className={`${s.chevronPad} rounded text-muted-foreground hover:text-foreground`}
               >
                 <ChevronLeft className={s.chevron} />
               </Button>
@@ -214,7 +218,7 @@ export default function CalendarMonth({
                 type="button"
                 onClick={() => setPickerYear((y) => y + 1)}
                 aria-label="Next year"
-                className="p-1 rounded text-muted-foreground hover:text-foreground"
+                className={`${s.chevronPad} rounded text-muted-foreground hover:text-foreground`}
               >
                 <ChevronRight className={s.chevron} />
               </Button>
