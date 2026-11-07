@@ -21,7 +21,7 @@ const SIZES = {
     header: 'text-xs',
     headerPad: 'px-0.5',
     chevron: 'h-4 w-4',
-    chevronPad: 'p-0.5',
+    chevronPad: 'p-px',
     weekday: 'text-[9px]',
     gap: 'gap-0.5',
     day: 'h-6 text-[10px]',
