@@ -28,8 +28,8 @@ import {
 } from 'lucide-react';
 import {
   overridePendingDateAction,
-  logoutAction,
-} from '@/app/actions';
+} from '@/features/import/server/actions';
+import { logoutAction } from '@/features/auth/server/actions';
 import DateInput from '@/app/components/DateInput';
 
 interface DashboardLayoutProps {

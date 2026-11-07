@@ -1,13 +1,11 @@
 import { getSession } from '@/lib/auth';
-import { db } from '@/db';
-import { tags as tagsTable } from '@/db/schema';
-import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import { getBuildInfo } from '@/lib/version';
 import SettingsClient from './SettingsClient';
 import { getWeekStart } from '@/lib/server-week';
 import { getSubtagDisplay } from '@/lib/server-tags';
 import { getLinksForUser } from '@/lib/discord-link';
+import { getTags } from '@/features/tags/server/queries';
 
 export default async function SettingsPage() {
   const session = await getSession();
@@ -16,11 +14,7 @@ export default async function SettingsPage() {
   }
 
   // Fetch all tags for user
-  const dbTags = await db
-    .select()
-    .from(tagsTable)
-    .where(eq(tagsTable.userId, session.userId))
-    .orderBy(tagsTable.orderIndex);
+  const dbTags = await getTags(session.userId);
 
   return (
     <SettingsClient

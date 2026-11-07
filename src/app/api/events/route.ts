@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { db } from '@/db';
-import { events } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { getApprovedEvents } from '@/features/events/server/queries';
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -14,29 +12,7 @@ export async function GET(request: NextRequest) {
   const tag = searchParams.get('tag');
 
   try {
-    let result;
-    if (tag) {
-      result = await db
-        .select()
-        .from(events)
-        .where(
-          and(
-            eq(events.userId, session.userId),
-            eq(events.tag, tag),
-            eq(events.isPending, 0)
-          )
-        );
-    } else {
-      result = await db
-        .select()
-        .from(events)
-        .where(
-          and(
-            eq(events.userId, session.userId),
-            eq(events.isPending, 0)
-          )
-        );
-    }
+    const result = await getApprovedEvents(session.userId, tag);
 
     return NextResponse.json({ events: result });
   } catch (e: any) {

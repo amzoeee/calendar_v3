@@ -9,7 +9,7 @@ import {
   discardAllPendingAction,
   restoreDiscardedImportAction,
   unapproveImportAction,
-} from '@/app/actions';
+} from '@/features/import/server/actions';
 import Button from './Button';
 
 const plural = (n: number) => `${n} event${n === 1 ? '' : 's'}`;

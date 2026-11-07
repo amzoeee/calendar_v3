@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import { registerAction } from '../actions';
+import { registerAction } from '@/features/auth/server/actions';
 import Link from 'next/link';
 import Button from '@/app/components/Button';
 
