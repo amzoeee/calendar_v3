@@ -5,6 +5,10 @@
 
 export const normalizeTitle = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 
+// What autotagging matches on: the title with every [bracketed] part removed,
+// so "[home] read" and "read [ch 3]" both match "read".
+export const tagMatchKey = (title: string) => normalizeTitle(title.replace(/\[[^\]]*\]/g, ' '));
+
 // Standalone emoticons: ":>", ":3", ":D", ">:(", ":thumbsup:".
 const EMOTICON_RE = /(^|\s)>?[:;](?:[^\sa-z]+|[dpo]|[a-z_]+:)(?=\s|$)/g;
 
