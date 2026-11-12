@@ -6,6 +6,7 @@ import { type TaskRow } from '@/lib/tasks';
 import { postponeLabel, REPEAT_OPTIONS } from '@/lib/taskSchedule';
 import Select from '@/app/components/Select';
 import { FIELD_CLASS } from '../fieldClass';
+import Button from '@/app/components/Button';
 
 /**
  * Repeat rule and optional numbering for one task.
@@ -106,24 +107,28 @@ export default function RepeatPicker({
               occurrence and moves it, skipping gives up on it and counts it
               as gone. The postpone label names the step it will take. */}
           {postponeLabel(rrule) && (
-            <button
+            <Button
+              variant="ghost"
+              size="none"
               onClick={onPostpone}
               title="Same task, later"
-              className="w-full flex items-center gap-2 px-2 py-2 rounded text-sm md:text-xs text-foreground hover:bg-secondary transition-colors cursor-pointer"
+              className="w-full gap-2 px-2 py-2 rounded text-sm md:text-xs text-foreground"
             >
               <CalendarPlus className="h-3.5 w-3.5" />
               Postpone {postponeLabel(rrule)}
-            </button>
+            </Button>
           )}
 
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={onSkip}
             title="Not doing this one"
-            className="w-full flex items-center gap-2 px-2 py-2 rounded text-sm md:text-xs text-foreground hover:bg-secondary transition-colors cursor-pointer"
+            className="w-full gap-2 px-2 py-2 rounded text-sm md:text-xs text-foreground"
           >
             <SkipForward className="h-3.5 w-3.5" />
             Skip this one
-          </button>
+          </Button>
         </>
       )}
     </div>

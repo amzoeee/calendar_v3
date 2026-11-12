@@ -22,6 +22,7 @@ import { type BoardSummary, type VisibleBoard, type ColumnHandlers } from '../ty
 import PasteListDialog from './PasteListDialog';
 import BoardNameDialog from './BoardNameDialog';
 import ColumnMenu from './ColumnMenu';
+import Button from '@/app/components/Button';
 
 /** A column's header — its name, filter, sort and menu — and the dialogs the menu opens. */
 export default function ColumnHeader({
@@ -101,7 +102,8 @@ export default function ColumnHeader({
 
         {!collapsed && (
           <div className={`relative shrink-0 ${hasFilterables ? '' : 'md:hidden'}`}>
-            <button
+            <Button
+              variant="unstyled"
               onClick={() => setFilterOpen((o) => !o)}
               aria-expanded={filterOpen}
               aria-label={`Filter ${board.name}`}
@@ -115,7 +117,7 @@ export default function ColumnHeader({
               {activeFilters > 0 ? activeFilters : 'Filter'}
               {/* Mobile has no rail to show the toggle is on. */}
               {remindersOnly && <Bell className="h-3 w-3 md:hidden" />}
-            </button>
+            </Button>
             {filterOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />

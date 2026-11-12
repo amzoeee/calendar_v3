@@ -16,6 +16,7 @@ import { type ColumnHandlers } from '../types';
 import EditableTitle from './EditableTitle';
 import DueChip from './DueChip';
 import TagChips from './TagChips';
+import Button from '@/app/components/Button';
 
 /**
  * One task's row in a column, without its subtasks.
@@ -80,17 +81,19 @@ export default function TaskItem({
       {virtual ? (
         <span aria-hidden="true" className="mt-0.5 shrink-0 w-[18px]" />
       ) : (
-        <button
+        <Button
+          variant="unstyled"
           {...handlers.dragHandleProps(node.id, subtreeIds, height)}
           aria-label={`Reorder “${node.title}”`}
           title="Drag to reorder, or right to make it a subtask"
           className="mt-0.5 shrink-0 text-muted-foreground/30 hover:text-foreground transition-colors cursor-grab active:cursor-grabbing touch-none p-0.5"
         >
           <GripVertical className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       )}
 
-      <button
+      <Button
+        variant="unstyled"
         onClick={() => handlers.requestCompletion(node, !done)}
         aria-label={
           done
@@ -104,7 +107,7 @@ export default function TaskItem({
         }`}
       >
         {done && <Check className="h-3 w-3" strokeWidth={3} />}
-      </button>
+      </Button>
 
       <div className="flex-1 min-w-0">
         {parentTitle && (
@@ -120,14 +123,15 @@ export default function TaskItem({
             onMove={onMove}
           />
         ) : (
-          <button
+          <Button
+            variant="unstyled"
             onClick={() => setEditingId(node.id)}
             className={`block w-full text-left text-sm cursor-text break-words ${
               done ? 'line-through text-muted-foreground' : 'text-foreground'
             }`}
           >
             {displayTitle(node.title, node.counterValue)}
-          </button>
+          </Button>
         )}
         {node.description && !isEditing && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{node.description}</p>
@@ -171,16 +175,19 @@ export default function TaskItem({
 
       <div className="flex items-center gap-0.5 shrink-0">
         {node.depth < MAX_TASK_DEPTH && !done && (
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             onClick={onAddSubtask}
             aria-label={`Add a subtask to “${node.title}”`}
             title="Add subtask"
-            className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
+            className="text-muted-foreground/60 hover:text-foreground p-1"
           >
             <CornerDownRight className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         )}
-        <button
+        <Button
+          variant="unstyled"
           onClick={() => handlers.toggleStar(node)}
           aria-label={node.isStarred ? `Unstar “${node.title}”` : `Star “${node.title}”`}
           aria-pressed={node.isStarred === 1}
@@ -189,8 +196,10 @@ export default function TaskItem({
           }`}
         >
           <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="none"
           onClick={(e) => {
             // A keyboard-activated click reports 0,0 — fall back to the
             // button itself so the dialog doesn't fly to the corner.
@@ -201,10 +210,10 @@ export default function TaskItem({
             );
           }}
           aria-label={`Edit “${node.title}”`}
-          className="text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer p-1"
+          className="text-muted-foreground/60 hover:text-foreground p-1"
         >
           <MoreHorizontal className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import { FIELD_CLASS } from '../fieldClass';
 import { type VisibleBoard, type TaskTag, type ColumnHandlers } from '../types';
 import ReminderPicker from './ReminderPicker';
 import TagPicker from './TagPicker';
+import Button from '@/app/components/Button';
 
 /** A column's new-task input, with its expandable deadline/reminder/tags half. */
 export default function TaskComposer({
@@ -99,19 +100,21 @@ export default function TaskComposer({
           placeholder={board.virtual ? `Add to ${board.targetName}` : 'Add a task'}
           className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none py-1"
         />
-        <button
+        <Button
+          variant="ghost"
+          size="none"
           onClick={() => (detailsOpen ? closeDetails() : setDetailsOpen(true))}
           aria-expanded={detailsOpen}
           aria-label={detailsOpen ? 'Hide deadline, reminder and tags' : 'Add a deadline, reminder or tags'}
           title="Deadline, reminder and tags"
-          className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+          className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground"
         >
           {detailsOpen ? (
             <ChevronUp className="h-3.5 w-3.5" />
           ) : (
             <ChevronDown className="h-3.5 w-3.5" />
           )}
-        </button>
+        </Button>
       </div>
 
       {/* Deadline, reminder and tags before the task exists, so the common
@@ -141,7 +144,8 @@ export default function TaskComposer({
                 />
               </>
             )}
-            <button
+            <Button
+              variant="unstyled"
               type="button"
               onClick={() => {
                 setDraftAsap((a) => !a);
@@ -157,7 +161,7 @@ export default function TaskComposer({
               }`}
             >
               ASAP
-            </button>
+            </Button>
           </div>
           {draftDate && (
             <ReminderPicker

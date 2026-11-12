@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Overlay from '@/app/components/Overlay';
+import Button from '@/app/components/Button';
 
 export default function BoardNameDialog({
   heading,
@@ -34,19 +35,22 @@ export default function BoardNameDialog({
         className="w-full rounded bg-secondary border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
       />
       <div className="flex justify-end gap-2">
-        <button
+        <Button
+          variant="ghost"
+          size="none"
           onClick={onCancel}
-          className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
+          className="px-3 py-2 rounded text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
+          size="none"
           onClick={() => trimmed && onSubmit(trimmed)}
           disabled={!trimmed}
-          className="px-3 py-2 rounded text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-3 py-2 rounded text-sm font-semibold"
         >
           {submitLabel}
-        </button>
+        </Button>
       </div>
     </Overlay>
   );
