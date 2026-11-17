@@ -3,6 +3,7 @@ import { events, tags } from '../db/schema';
 import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
 import { dropUnapprovedStages } from './discord-markers';
 import { planPendingMerge } from './merge-pending';
+import { tagMatchKey } from './titleParts';
 import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, pacificDbStringToDate, SERVER_TIMEZONE } from './timezone';
 
 export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
@@ -118,27 +119,35 @@ export function getNextOccurrence(
   return validOptions[0];
 }
 
-export async function predictTag(userId: number, title: string): Promise<string | null> {
-  const searchTitle = title.replace(/^\[.*?\]\s*/, '').trim();
-
-  // Find most recent matching event tag
+// Tag of the most recent event per bracket-free title, for predicting tags.
+export async function loadTagIndex(userId: number): Promise<Map<string, string>> {
+  const latest = sql<string>`max(${events.startDatetime})`;
   const rows = await db
-    .select({ tag: events.tag })
+    .select({ title: events.title, tag: events.tag })
     .from(events)
     .leftJoin(tags, and(eq(events.tag, tags.name), eq(tags.userId, events.userId)))
     .where(
       and(
         eq(events.userId, userId),
-        eq(sql`lower(${events.title})`, searchTitle.toLowerCase()),
         isNotNull(events.tag),
         ne(events.tag, ''),
         or(isNull(tags.isArchived), eq(tags.isArchived, 0))
       )
     )
-    .orderBy(desc(events.startDatetime))
-    .limit(1);
+    .groupBy(events.title, events.tag)
+    .orderBy(desc(latest));
 
-  return rows.length > 0 ? rows[0].tag : null;
+  const index = new Map<string, string>();
+  for (const r of rows) {
+    const key = tagMatchKey(r.title);
+    if (key && r.tag && !index.has(key)) index.set(key, r.tag);
+  }
+  return index;
+}
+
+export function predictTag(index: Map<string, string>, title: string): string | null {
+  const key = tagMatchKey(title);
+  return (key && index.get(key)) || null;
 }
 
 export async function getLastEventEndTime(
@@ -413,6 +422,7 @@ export async function parseLogText(
   warnings.push(`Scheduling starts after: ${currentTime.toLocaleDateString()} ${currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
 
   const eventsResult: Array<{ start: string; end: string; title: string; tag: string }> = [];
+  const tagIndex = await loadTagIndex(userId);
 
   for (const act of activities) {
     const timeParsed = parseShorthandTime(act.timeStr, act.ampm, leadingZeroIs24h);
@@ -429,7 +439,7 @@ export async function parseLogText(
     }
 
     if (startTime.getTime() < endTime.getTime()) {
-      const tag = await predictTag(userId, act.title);
+      const tag = predictTag(tagIndex, act.title);
       eventsResult.push({
         start: dateToServerDbString(startTime),
         end: dateToServerDbString(endTime),

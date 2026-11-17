@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 // The module also holds the DB-backed staging; only the parsers are under test.
 vi.mock('../db', () => ({ db: {} }));
 
-const { getNextOccurrence, parseDiscordDate, parseShorthandTime } = await import('./discord-log');
+const { getNextOccurrence, parseDiscordDate, parseShorthandTime, predictTag } = await import('./discord-log');
 const { isValidShorthandTime } = createRequire(import.meta.url)('../../bot/log-lines.js');
 
 describe('parseShorthandTime', () => {
@@ -70,5 +70,18 @@ describe('getNextOccurrence', () => {
   it('reads the typed time in the browser’s zone', () => {
     // 9am New York is 6am Pacific.
     expect(iso(getNextOccurrence(at('2026-07-01T05:00'), 9, 0, 9, 'America/New_York'))).toBe(iso(at('2026-07-01T06:00')));
+  });
+});
+
+describe('predictTag', () => {
+  const index = new Map([['read', 'school']]);
+
+  it.each(['read', '[home] read', 'read [ch 3]', '[bus] READ [ch 3]'])('ignores brackets in %s', (title) => {
+    expect(predictTag(index, title)).toBe('school');
+  });
+
+  it('returns null with no match or only brackets', () => {
+    expect(predictTag(index, 'write')).toBeNull();
+    expect(predictTag(index, '[read]')).toBeNull();
   });
 });

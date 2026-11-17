@@ -116,11 +116,12 @@ export default async function AdminPage({
             Uses per feature over the last {days} days. Mobile % only covers in-browser interactions.
           </p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          {/* Own scroll container on both axes so the header row and feature column can stick. */}
+          <div className="overflow-auto max-h-[70vh] overscroll-contain">
+            <table className="w-full text-sm border-separate border-spacing-0">
               <thead>
-                <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                  <th className="py-2 pr-4 font-semibold">Feature</th>
+                <tr className="text-left text-xs text-muted-foreground *:sticky *:top-0 *:z-10 *:bg-card *:border-b *:border-border">
+                  <th className="py-2 pr-4 font-semibold left-0 z-20!">Feature</th>
                   <th className="py-2 px-2 font-semibold text-right">Total</th>
                   {columns.map((c) => (
                     <th key={c.id ?? 'unlinked'} className="py-2 px-2 font-semibold text-right">
@@ -135,15 +136,15 @@ export default async function AdminPage({
                 <tbody key={group}>
                   <tr>
                     <td colSpan={columns.length + 4} className="pt-5 pb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      {group}
+                      <span className="sticky left-0">{group}</span>
                     </td>
                   </tr>
                   {features.map(({ name, label }) => {
                     const s = stats.get(name);
                     return (
-                      <tr key={name} className={`border-b border-border/50 ${s ? '' : 'text-muted-foreground/60'}`}>
-                        <td className="py-1.5 pr-4">
-                          {label} <span className="ml-1 font-mono text-[11px] text-muted-foreground">{name}</span>
+                      <tr key={name} className={`*:border-b *:border-border/50 ${s ? '' : 'text-muted-foreground/60'}`}>
+                        <td className="py-1.5 pr-4 sticky left-0 z-[1] bg-card min-w-36 max-w-[45vw] lg:max-w-none">
+                          {label} <span className="block lg:inline lg:ml-1 font-mono text-[11px] text-muted-foreground">{name}</span>
                         </td>
                         <td className="py-1.5 px-2 text-right font-semibold tabular-nums">{s?.total ?? 0}</td>
                         {columns.map((c) => (

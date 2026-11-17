@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeTitle, replaceInTitle, retitleKeepingBrackets, titleParts } from './titleParts';
+import { normalizeTitle, replaceInTitle, retitleKeepingBrackets, tagMatchKey, titleParts } from './titleParts';
 
 describe('titleParts', () => {
   it.each([
@@ -25,6 +25,18 @@ describe('titleParts', () => {
 
   it('dedupes repeated parts', () => {
     expect(titleParts('drive + drive')).toEqual(['drive']);
+  });
+});
+
+describe('tagMatchKey', () => {
+  it.each([
+    ['[home] Read', 'read'],
+    ['read [ch 3]', 'read'],
+    ['[bus] read [ch 3] book', 'read book'],
+    ['read', 'read'],
+    ['[home]', ''],
+  ])('%s -> %s', (title, key) => {
+    expect(tagMatchKey(title)).toBe(key);
   });
 });
 
