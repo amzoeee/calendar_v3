@@ -4,7 +4,13 @@ import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-
 import { dropUnapprovedStages } from './discord-markers';
 import { planPendingMerge } from './merge-pending';
 import { tagMatchKey } from './titleParts';
-import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, pacificDbStringToDate, SERVER_TIMEZONE } from './timezone';
+import { dateStrInTimeZone, instantForWallClock, dayStrOfInstant, dateToServerDbString, dbStringToUtcMillis, pacificDbStringToDate, shiftDateStr, SERVER_TIMEZONE } from './timezone';
+
+// A day's midnight-to-midnight bounds in `timeZone`, as server DB strings.
+function dayBounds(dateStr: string, timeZone: string): { start: string; end: string } {
+  const midnight = (d: string) => dateToServerDbString(new Date(instantForWallClock(`${d}T00:00`, timeZone)));
+  return { start: midnight(dateStr), end: midnight(shiftDateStr(dateStr, 1)) };
+}
 
 export function parseDiscordDate(line: string, browserTimeZone: string = SERVER_TIMEZONE): string | null {
   const match = line.match(/^.*?\s*[-—]\s*(.+)$/i);
@@ -167,7 +173,8 @@ export async function getLastEventEndTime(
   const targetMidnight = new Date(instantForWallClock(`${targetDateStr}T00:00`, browserTimeZone));
   const prevMidnight = new Date(targetMidnight.getTime() - 24 * 60 * 60 * 1000);
 
-  const limitDateStr = continueFromLatest ? `${targetDateStr} 23:59:59` : `${targetDateStr} 00:00:00`;
+  const day = dayBounds(targetDateStr, browserTimeZone);
+  const limitDateStr = continueFromLatest ? day.end : day.start;
 
   const rows = await db
     .select({ endDatetime: events.endDatetime })
@@ -237,9 +244,12 @@ export async function getExistingEventsForRange(
   }));
 }
 
-export async function hasNonRepeatingEvents(userId: number, targetDateStr: string): Promise<boolean> {
-  const startStr = `${targetDateStr} 00:00:00`;
-  const endStr = `${targetDateStr} 23:59:59`;
+export async function hasNonRepeatingEvents(
+  userId: number,
+  targetDateStr: string,
+  browserTimeZone: string = SERVER_TIMEZONE,
+): Promise<boolean> {
+  const { start: startStr, end: endStr } = dayBounds(targetDateStr, browserTimeZone);
 
   const rows = await db
     .select({ count: sql<number>`count(*)` })
@@ -406,7 +416,7 @@ export async function parseLogText(
     throw new Error('No valid activities found in the log.');
   }
 
-  const continueFlag = await hasNonRepeatingEvents(userId, resolvedDate);
+  const continueFlag = await hasNonRepeatingEvents(userId, resolvedDate, browserTimeZone);
   if (continueFlag) {
     warnings.push('Auto-enabled continue mode: existing events found on this day.');
   }
