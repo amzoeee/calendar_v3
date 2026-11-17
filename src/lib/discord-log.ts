@@ -420,6 +420,7 @@ export async function parseLogText(
   }
 
   warnings.push(`Scheduling starts after: ${currentTime.toLocaleDateString()} ${currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+  const scheduleStart = currentTime;
 
   const eventsResult: Array<{ start: string; end: string; title: string; tag: string }> = [];
   const tagIndex = await loadTagIndex(userId);
@@ -449,6 +450,20 @@ export async function parseLogText(
     }
 
     currentTime = endTime;
+  }
+
+  // Otherwise staging "succeeds" with nothing and the caller can't tell.
+  if (eventsResult.length === 0) {
+    const after = new Intl.DateTimeFormat('en-US', {
+      timeZone: browserTimeZone,
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(scheduleStart);
+    throw new Error(
+      `Nothing to stage: every line overlaps events already on your calendar. ` +
+        `Scheduling started after ${after}` +
+        (continueFlag ? ', the end of your latest event that day.' : '.'),
+    );
   }
 
   return {
