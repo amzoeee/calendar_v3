@@ -172,9 +172,17 @@ export default function TasksClient({
   // one list's choice onto the other.
   const [virtualSort, setVirtualSortState] = useState<SortMode | null>(null);
   const [syncedList, setSyncedList] = useState(visibleKey);
+
+  // The selection the latest tap asked for, until its navigation lands. Taps
+  // build on this, because two quick ones would otherwise both start from the
+  // last server render and undo each other.
+  const [pendingIds, setPendingIds] = useState<number[] | null>(null);
+  const railIds = pendingIds ?? visibleIds;
+
   if (visibleKey !== syncedList) {
     setSyncedList(visibleKey);
     setVirtualSortState(null);
+    setPendingIds(null);
   }
 
   const setVirtualSort = (list: VirtualList, mode: SortMode) => {
@@ -215,8 +223,14 @@ export default function TasksClient({
 
   // ----- navigation between board selections -----
 
-  const showOnly = (id: number) => router.push(`/tasks/${id}`);
-  const showList = (kind: VirtualList) => router.push(`/tasks/${kind}`);
+  const showOnly = (id: number) => {
+    setPendingIds([id]);
+    router.push(`/tasks/${id}`);
+  };
+  const showList = (kind: VirtualList) => {
+    setPendingIds([]);
+    router.push(`/tasks/${kind}`);
+  };
 
   // ----- reordering the rail -----
 
@@ -239,10 +253,11 @@ export default function TasksClient({
   };
 
   const toggleColumn = (id: number) => {
-    const next = visibleIds.includes(id)
-      ? visibleIds.filter((v) => v !== id)
-      : [...visibleIds, id].slice(0, MAX_VISIBLE_BOARDS);
+    const next = railIds.includes(id)
+      ? railIds.filter((v) => v !== id)
+      : [...railIds, id].slice(0, MAX_VISIBLE_BOARDS);
     if (next.length === 0) return;
+    setPendingIds(next);
     router.push(`/tasks/${next.join(',')}`);
   };
 
@@ -537,8 +552,8 @@ export default function TasksClient({
           <div className="!my-2 border-t border-border" />
 
           {railBoards.map((b, index) => {
-            const shown = visibleIds.includes(b.id);
-            const atLimit = !shown && visibleIds.length >= MAX_VISIBLE_BOARDS;
+            const shown = railIds.includes(b.id);
+            const atLimit = !shown && railIds.length >= MAX_VISIBLE_BOARDS;
             return (
               <div
                 key={b.id}
@@ -570,7 +585,7 @@ export default function TasksClient({
                 </button>
                 <button
                   onClick={() => toggleColumn(b.id)}
-                  disabled={atLimit || (shown && visibleIds.length === 1)}
+                  disabled={atLimit || (shown && railIds.length === 1)}
                   aria-pressed={shown}
                   title={
                     atLimit
@@ -579,7 +594,8 @@ export default function TasksClient({
                         ? `Hide ${b.name}`
                         : `Show ${b.name} alongside`
                   }
-                  className={`mr-2.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-30 ${
+                  // The ::before widens the touch target to the row's height, partly over the name.
+                  className={`relative mr-2.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center transition-colors cursor-pointer touch-manipulation before:absolute before:-inset-y-3 before:-left-4 before:-right-3 disabled:cursor-not-allowed disabled:opacity-30 ${
                     shown
                       ? 'bg-primary border-primary text-primary-foreground'
                       : 'border-muted-foreground hover:border-foreground'
