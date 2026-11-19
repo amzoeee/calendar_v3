@@ -1,5 +1,19 @@
 // Pure helpers for shaping what the bot says back.
 
+const { markerTime } = require('./log-lines');
+
+/** Where a scan's lines start from, for the reply. */
+function boundaryText(marker, messagesScanned) {
+  if (!marker) return `from the last ${messagesScanned} messages`;
+  const time = markerTime(marker);
+  return time ? `since the last \`---\`, starting at ${time}` : 'since the last `---`';
+}
+
+/** The text to stage. A timed marker goes along so the app starts there. */
+function stageText(marker, lines) {
+  return [...(marker && markerTime(marker) ? [marker] : []), ...lines].join('\n');
+}
+
 /**
  * Warns when a scan stopped because it ran out of lookback rather than because
  * it found a boundary — what it took may be only part of the log.
@@ -42,4 +56,4 @@ function chunkLines(lines, budget) {
   return chunks;
 }
 
-module.exports = { capWarning, chunkLines };
+module.exports = { boundaryText, capWarning, chunkLines, stageText };

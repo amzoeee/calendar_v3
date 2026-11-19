@@ -5,6 +5,10 @@
 // open with a digit, so nothing legitimate is swallowed.
 const MARKER = /^\s*[-—─]{3,}/;
 
+// A marker carrying the time tracking restarts from: `---10am`, `--- 1030`.
+// The first line after it then covers that time onward, not the gap before.
+const TIMED_MARKER = /^\s*[-—─]{3,}\s*(\d{1,2}:\d{2}|\d{1,4})\s*(am|pm)?\s*$/i;
+
 // A log line: a shorthand or colon time, an optional am/pm, then the activity.
 // Deliberately the same shape the calendar's own parser accepts, so the bot
 // never sends a line the app will silently drop.
@@ -40,6 +44,13 @@ function isValidShorthandTime(timeStr) {
   return !Number.isNaN(hour) && !Number.isNaN(minute) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }
 
+/** The time on a timed marker, like `10am`, or null for a plain one. */
+function markerTime(line) {
+  const match = line.match(TIMED_MARKER);
+  if (!match || !isValidShorthandTime(match[1])) return null;
+  return match[1] + (match[2] ?? '').toLowerCase();
+}
+
 function isLogLine(line) {
   const match = line.trim().match(LOG_LINE);
   return match !== null && isValidShorthandTime(match[1]);
@@ -59,13 +70,15 @@ function isLogLine(line) {
  * without one the caller knows it hit the end of its search rather than a
  * real boundary. `startAt` is when the marker was posted, since it marks the
  * end of the previous event, or the oldest line's message without one.
- * `latest` is the newest line and the message it came from.
+ * `latest` is the newest line and the message it came from. `marker` is the
+ * marker line itself, trimmed.
  */
 function collectLogLines(messages, userId) {
   const lines = [];
   let markerFound = false;
   let startAt = null;
   let latest = null;
+  let marker = null;
 
   outer: for (const message of messages) {
     const messageLines = message.content.split(/\r?\n/).reverse();
@@ -73,6 +86,7 @@ function collectLogLines(messages, userId) {
     for (const raw of messageLines) {
       if (isMarker(raw)) {
         markerFound = true;
+        marker = raw.trim();
         startAt = message.createdAt;
         break outer;
       }
@@ -85,7 +99,7 @@ function collectLogLines(messages, userId) {
     }
   }
 
-  return { lines: lines.reverse(), markerFound, startAt, latest };
+  return { lines: lines.reverse(), markerFound, startAt, latest, marker };
 }
 
 function activityOf(line) {
@@ -125,10 +139,31 @@ function possibleMinutes(line) {
   return [(hour % 12) * 60 + minute, ((hour % 12) + 12) * 60 + minute];
 }
 
+/**
+ * 0 when a timed marker's time had already come round on the day it was
+ * posted, `minutes` past midnight; -1 when it means the day before, like
+ * `---1130pm` posted at 1am.
+ */
+function markerDayOffset(marker, minutes) {
+  const time = markerTime(marker);
+  if (!time) return 0;
+  return possibleMinutes(`${time} x`).some((m) => m <= minutes) ? 0 : -1;
+}
+
 /** Whether two lines could carry the same time of day. */
 function sameTime(a, b) {
   const minutesA = possibleMinutes(a);
   return possibleMinutes(b).some((m) => minutesA.includes(m));
 }
 
-module.exports = { activityOf, collectLogLines, isLogLine, isMarker, isValidShorthandTime, mergeRepeats, sameTime };
+module.exports = {
+  activityOf,
+  collectLogLines,
+  isLogLine,
+  isMarker,
+  isValidShorthandTime,
+  markerDayOffset,
+  markerTime,
+  mergeRepeats,
+  sameTime,
+};

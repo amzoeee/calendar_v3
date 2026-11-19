@@ -13,8 +13,8 @@ const {
 
 const config = require('./config');
 const api = require('./api');
-const { activityOf, collectLogLines, isLogLine, isMarker, mergeRepeats, sameTime } = require('./log-lines');
-const { capWarning, chunkLines } = require('./reply');
+const { activityOf, collectLogLines, isLogLine, isMarker, markerDayOffset, markerTime, mergeRepeats, sameTime } = require('./log-lines');
+const { boundaryText, capWarning, chunkLines, stageText } = require('./reply');
 
 // en-CA formats as YYYY-MM-DD, the shape the calendar wants.
 function dateStrInZone(date, timeZone) {
@@ -278,7 +278,7 @@ async function handleFetch(interaction) {
     return;
   }
 
-  const { lines: scraped, markerFound, startAt, messagesScanned, hitCap } = await scrapeLogLines(
+  const { lines: scraped, markerFound, marker, startAt, messagesScanned, hitCap } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
@@ -297,7 +297,7 @@ async function handleFetch(interaction) {
   const result = await api.stageLog({
     discordUserId: interaction.user.id,
     channelId: interaction.channelId,
-    text: lines.join('\n'),
+    text: stageText(marker, lines),
     dateOverride: interaction.options.getString('date') || null,
     military: interaction.options.getBoolean('military') ?? true,
     // An instant. Which day it falls on is the app's call, using the timezone
@@ -310,7 +310,7 @@ async function handleFetch(interaction) {
     return;
   }
 
-  const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
+  const boundary = boundaryText(marker, messagesScanned);
   const preview = lines.slice(0, 10).join('\n');
   const elided = lines.length > 10 ? `\n...and ${lines.length - 10} more` : '';
 
@@ -364,7 +364,7 @@ function eventLine(event, timeZone) {
 // behind, and listing every event it made so the scheduling can be checked.
 async function handleDebugFetch(interaction) {
   const target = interaction.options.getUser('user');
-  const { lines: scraped, markerFound, startAt, messagesScanned, hitCap } = await scrapeLogLines(
+  const { lines: scraped, markerFound, marker, startAt, messagesScanned, hitCap } = await scrapeLogLines(
     interaction.channel,
     target ? target.id : null,
   );
@@ -384,7 +384,7 @@ async function handleDebugFetch(interaction) {
   const result = await api.stageLog({
     discordUserId: interaction.user.id,
     channelId: interaction.channelId,
-    text: lines.join('\n'),
+    text: stageText(marker, lines),
     dateOverride: interaction.options.getString('date') || null,
     military: interaction.options.getBoolean('military') ?? true,
     fallbackAt: startAt ? startAt.toISOString() : null,
@@ -396,7 +396,7 @@ async function handleDebugFetch(interaction) {
     return;
   }
 
-  const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
+  const boundary = boundaryText(marker, messagesScanned);
   const events = result.events || [];
 
   await interaction.editReply({
@@ -526,13 +526,27 @@ async function handleDeleteLogButton(interaction) {
 
 // A header the calendar's own paste form understands: it reads the date off
 // the line above the separator, so the printed block carries its day with it.
-function dateHeader(dateStr) {
+// A timed marker is kept so the paste form starts at its time too.
+function dateHeader(dateStr, marker) {
   const [year, month, day] = dateStr.split('-').map(Number);
-  return [`log — ${month}/${day}/${year}`, '---'];
+  return [`log — ${month}/${day}/${year}`, marker && markerTime(marker) ? marker : '---'];
+}
+
+function minutesInZone(date, timeZone) {
+  const [hour, minute] = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .format(date)
+    .split(':')
+    .map(Number);
+  return hour * 60 + minute;
+}
+
+function shiftDateStr(dateStr, days) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
 async function handleManualFetch(interaction) {
-  const { lines: scraped, markerFound, messagesScanned, hitCap, startAt } = await scrapeLogLines(
+  const { lines: scraped, markerFound, marker, messagesScanned, hitCap, startAt } = await scrapeLogLines(
     interaction.channel,
     interaction.user.id,
   );
@@ -549,17 +563,20 @@ async function handleManualFetch(interaction) {
     return;
   }
 
-  const boundary = markerFound ? 'since the last `---`' : `from the last ${messagesScanned} messages`;
+  const boundary = boundaryText(marker, messagesScanned);
 
   // Same zone /fetch would have used, so the printed day matches what staging
   // would have picked. Unlinked, there is no zone and no default.
   const status = await api.getLinkStatus(interaction.user.id);
   const zone = status.ok ? status.timeZone : null;
+  // The header dates the marker's time, which can be the day before it was posted.
   const dateStr =
     interaction.options.getString('date') ||
-    (startAt && zone ? dateStrInZone(startAt, zone) : null);
+    (startAt && zone
+      ? shiftDateStr(dateStrInZone(startAt, zone), marker ? markerDayOffset(marker, minutesInZone(startAt, zone)) : 0)
+      : null);
 
-  const body = dateStr ? [...dateHeader(dateStr), ...lines] : lines;
+  const body = dateStr ? [...dateHeader(dateStr, marker), ...lines] : lines;
   // Room for the code fences and the trailing newline inside the 2000 budget.
   const chunks = chunkLines(body, 1900);
 

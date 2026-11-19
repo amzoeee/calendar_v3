@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 // The module also holds the DB-backed staging; only the parsers are under test.
 vi.mock('../db', () => ({ db: {} }));
 
-const { getNextOccurrence, parseDiscordDate, parseShorthandTime, predictTag } = await import('./discord-log');
+const { getNextOccurrence, getPreviousOccurrence, parseDiscordDate, parseShorthandTime, predictTag } = await import('./discord-log');
 const { isValidShorthandTime } = createRequire(import.meta.url)('../../bot/log-lines.js');
 
 describe('parseShorthandTime', () => {
@@ -70,6 +70,25 @@ describe('getNextOccurrence', () => {
   it('reads the typed time in the browser’s zone', () => {
     // 9am New York is 6am Pacific.
     expect(iso(getNextOccurrence(at('2026-07-01T05:00'), 9, 0, 9, 'America/New_York'))).toBe(iso(at('2026-07-01T06:00')));
+  });
+});
+
+describe('getPreviousOccurrence', () => {
+  const at = (pacific: string) => new Date(Date.parse(`${pacific}-07:00`));
+  const iso = (d: Date) => d.toISOString();
+
+  it('picks the latest matching clock time up to the base', () => {
+    expect(iso(getPreviousOccurrence(at('2026-07-01T14:00'), 10, 0, 10))).toBe(iso(at('2026-07-01T10:00')));
+    expect(iso(getPreviousOccurrence(at('2026-07-01T14:00'), 10, 0, null))).toBe(iso(at('2026-07-01T10:00')));
+    expect(iso(getPreviousOccurrence(at('2026-07-01T23:00'), 10, 0, null))).toBe(iso(at('2026-07-01T22:00')));
+  });
+
+  it('includes the base itself', () => {
+    expect(iso(getPreviousOccurrence(at('2026-07-01T10:00'), 10, 0, 10))).toBe(iso(at('2026-07-01T10:00')));
+  });
+
+  it('reaches back to the day before', () => {
+    expect(iso(getPreviousOccurrence(at('2026-07-02T01:00'), 11, 30, 23))).toBe(iso(at('2026-07-01T23:30')));
   });
 });
 

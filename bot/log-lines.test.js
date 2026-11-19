@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 
-const { activityOf, collectLogLines, isLogLine, isMarker, mergeRepeats, sameTime } = createRequire(import.meta.url)(
+const { activityOf, collectLogLines, isLogLine, isMarker, markerDayOffset, markerTime, mergeRepeats, sameTime } = createRequire(
+  import.meta.url
+)(
   './log-lines.js'
 );
 
@@ -14,6 +16,39 @@ describe('isMarker', () => {
 
   it.each(['--', '930 study', 'a ---'])('%s is not', (line) => {
     expect(isMarker(line)).toBe(false);
+  });
+});
+
+describe('markerTime', () => {
+  it.each([
+    ['---10am', '10am'],
+    ['--- 10am', '10am'],
+    ['---  10 AM', '10am'],
+    ['———1030', '1030'],
+    ['--- 10:30pm ', '10:30pm'],
+  ])('%s starts at %s', (line, time) => {
+    expect(markerTime(line)).toBe(time);
+    expect(isMarker(line)).toBe(true);
+  });
+
+  it.each(['---', '--- Yesterday at 9:00 PM ---', '--- 10am study', '---2400', '10am ---'])('%s has no time', (line) => {
+    expect(markerTime(line)).toBeNull();
+  });
+});
+
+describe('markerDayOffset', () => {
+  it('is the same day once the time has come round', () => {
+    expect(markerDayOffset('---10am', 14 * 60)).toBe(0);
+    expect(markerDayOffset('---10', 9 * 60)).toBe(-1);
+    expect(markerDayOffset('---10', 23 * 60)).toBe(0);
+  });
+
+  it('is the day before for a time still to come', () => {
+    expect(markerDayOffset('---1130pm', 60)).toBe(-1);
+  });
+
+  it('is 0 for a plain marker', () => {
+    expect(markerDayOffset('---', 60)).toBe(0);
   });
 });
 
@@ -42,6 +77,11 @@ describe('collectLogLines', () => {
   it('only takes the given author’s lines, but stops at anyone’s marker', () => {
     const result = collectLogLines([msg('1000 mine'), msg('1100 theirs', 'them'), msg('---', 'them'), msg('900 old')], 'me');
     expect(result.lines).toEqual(['1000 mine']);
+  });
+
+  it('returns the marker line it stopped at', () => {
+    expect(collectLogLines([msg('1100 sleep'), msg(' ---10am ', 'me', 't1')], 'me').marker).toBe('---10am');
+    expect(collectLogLines([msg('1100 sleep')], 'me').marker).toBeNull();
   });
 
   it('takes everyone’s lines for a null user and reports a missing marker', () => {
