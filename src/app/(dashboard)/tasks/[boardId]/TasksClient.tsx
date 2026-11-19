@@ -146,7 +146,7 @@ export default function TasksClient({
   const [confirmParent, setConfirmParent] = useState<{ node: TaskNode; open: number } | null>(null);
   const [newBoardOpen, setNewBoardOpen] = useState(false);
 
-  // Each column's composer, so `n` can aim at the one under the pointer.
+  // Each column's composer, so `n` or Enter can aim at the one under the pointer.
   const composers = useRef(new Map<number, HTMLInputElement | null>());
 
   const registerComposer = useCallback((boardId: number, el: HTMLInputElement | null) => {
@@ -255,9 +255,12 @@ export default function TasksClient({
         setSelectedId(null);
         return;
       }
-      if (e.key !== 'n' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== 'n' && e.key !== 'Enter') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.isComposing) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+      // Enter still activates a focused button or link.
+      if (e.key === 'Enter' && t?.closest('button, a, summary, [role="button"], [tabindex]')) return;
       e.preventDefault();
       focusComposer();
     };
