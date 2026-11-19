@@ -41,6 +41,7 @@ import {
   TAG_SCOPE_BADGES,
   TAG_SCOPE_LABELS,
   SUBTAG_DISPLAY_COOKIE,
+  suggestTagColor,
   tagTreeOrder,
   type SubtagDisplay,
   type TagScope,
@@ -207,7 +208,9 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
 
   // --- Add Tag State ---
   const [newTagName, setNewTagName] = useState('');
-  const [newTagColor, setNewTagColor] = useState('#6b7280');
+  // Null until the user picks one, so the suggestion follows the tag list.
+  const [pickedTagColor, setPickedTagColor] = useState<string | null>(null);
+  const newTagColor = pickedTagColor ?? suggestTagColor(tagsList.map((t) => t.color));
   const [newTagScope, setNewTagScope] = useState<TagScope>('both');
   const [newTagParent, setNewTagParent] = useState<number | null>(null);
   const [addTagError, setAddTagError] = useState('');
@@ -332,7 +335,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
     try {
       await addTagAction(newTagName, newTagColor, newTagScope, newTagParent);
       setNewTagName('');
-      setNewTagColor('#6b7280');
+      setPickedTagColor(null);
       setNewTagScope('both');
       setNewTagParent(null);
       // Refresh local page data
@@ -765,7 +768,7 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
                 <input
                   type="color"
                   value={newTagColor}
-                  onChange={(e) => setNewTagColor(e.target.value)}
+                  onChange={(e) => setPickedTagColor(e.target.value)}
                   className="mt-1 block w-full h-8 rounded bg-secondary border border-border px-1 py-0.5 cursor-pointer"
                 />
               </div>
