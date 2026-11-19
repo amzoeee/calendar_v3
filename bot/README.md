@@ -62,6 +62,19 @@ for good. Approval happens in a browser, so the bot asks the app every
 `MARKER_POLL_SECONDS` whether anything it staged has been approved since. Set
 `FETCH_POST_MARKER=false` if you would rather post markers yourself.
 
+### Restarting from a time: `---10am`
+
+Normally the first line after a marker covers everything since the previous
+event, so after a day you didn't log, that line would stretch over the whole
+gap. A marker with a time, like `---10am` or `--- 1030`, says where tracking
+starts again instead. Post it, then log as usual: `11am sleep` becomes sleep
+from 10 to 11, and nothing is staged for the time before 10am.
+
+The time means the latest 10am at or before the marker was posted, so
+`---1130pm` posted just after midnight means last night. With
+`/fetch date:...` it's that time on the given day. It's best to `/fetch` your
+old lines first, then post the timed marker: anything above it is skipped.
+
 If a `---` went up too early, `/delete-marker` removes the newest one in the
 channel, whoever it was posted for. Only markers the bot posted can be deleted
 this way; it links you to one someone typed so they can delete it themselves.
@@ -84,7 +97,7 @@ match ignoring case.
 always 1:45am; with it off, `0145` is treated like `145` and lands on whichever
 of 1:45am or 1:45pm comes next. Times like `1430` or `0030` are still 24h.
 
-`/manual-fetch` heads its output with that date and a `---`, which is the shape
+`/manual-fetch` heads its output with that date and a `---` (or the timed marker it stopped at), which is the shape
 the calendar's own paste form reads, so the block you copy carries its day with
 it. `/manual-fetch date:2026-09-19` sets that header.
 
