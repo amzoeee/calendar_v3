@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { events, tags } from '../db/schema';
-import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gte } from 'drizzle-orm';
+import { eq, and, ne, isNotNull, desc, sql, or, isNull, lt, gt, gte } from 'drizzle-orm';
 import { dropUnapprovedStages } from './discord-markers';
 import { planPendingMerge } from './merge-pending';
 import { tagMatchKey } from './titleParts';
@@ -210,9 +210,10 @@ export async function getExistingEventsForRange(
   startDt: Date,
   endDt: Date
 ): Promise<{ start: Date; end: Date }[]> {
-  const dateStr = startDt.toISOString().substring(0, 10);
-  const startStr = `${dateStr} 00:00:00`;
-  const endStr = `${dateStr} 23:59:59`;
+  // Overlap with the range itself. Bounding by startDt's UTC date instead
+  // checked the wrong Pacific day from 4-5pm on, missing evening events.
+  const startStr = dateToServerDbString(startDt);
+  const endStr = dateToServerDbString(endDt);
 
   const rows = await db
     .select({
@@ -224,16 +225,8 @@ export async function getExistingEventsForRange(
       and(
         eq(events.userId, userId),
         eq(events.isPending, 0),
-        or(
-          and(
-            gte(events.startDatetime, startStr),
-            lt(events.startDatetime, endStr)
-          ),
-          and(
-            gte(events.endDatetime, startStr),
-            lt(events.endDatetime, endStr)
-          )
-        )
+        lt(events.startDatetime, endStr),
+        gt(events.endDatetime, startStr)
       )
     )
     .orderBy(events.startDatetime);
