@@ -3,11 +3,15 @@
 import { useLayoutEffect, useState, type RefObject } from 'react';
 import {
   clampOverlayTopMin,
+  clampOverlayX,
+  OVERLAY_WIDTH,
   computeInitialOverlayCoords,
   overlayClipPath,
   topMinToViewportTop,
   type OverlayCoords,
 } from '@/lib/overlayPosition';
+
+const BESIDE_GAP = 8;
 
 /**
  * Pins the desktop edit popover to the point that opened it, tracking the
@@ -48,6 +52,16 @@ export function useEditorPlacement({
     setCoords(
       computeInitialOverlayCoords(e.clientX, e.clientY, rect?.top ?? 0, container?.scrollTop ?? 0, zoomLevel, window.innerWidth)
     );
+  };
+
+  /**
+   * Anchors the popover at a timeline minute, just right of `column` when it
+   * fits there so it doesn't cover the new event; at `clientX` otherwise.
+   */
+  const anchorBeside = (topMin: number, column: DOMRect, clientX: number) => {
+    const beside = column.right + BESIDE_GAP;
+    const x = beside + OVERLAY_WIDTH <= window.innerWidth - BESIDE_GAP ? beside : clampOverlayX(clientX, window.innerWidth);
+    setCoords({ topMin, x });
   };
 
   const position = () => {
@@ -105,5 +119,5 @@ export function useEditorPlacement({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, coords, zoomLevel, nudgeMin]);
 
-  return { anchorAt };
+  return { anchorAt, anchorBeside };
 }

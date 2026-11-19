@@ -30,6 +30,9 @@ import { useEventEditor } from '@/features/events/useEventEditor';
 import { useEditorPlacement } from '@/features/events/useEditorPlacement';
 import EventEditor from '@/features/events/components/EventEditor';
 import EventBlock from '@/features/events/components/EventBlock';
+import DraftBlock from '@/features/events/components/DraftBlock';
+import { useDragCreate } from '@/features/events/useDragCreate';
+import { fieldsToRange, rangeToFields } from '@/features/events/dragCreate';
 import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
 import { useTimelineZoom } from '@/features/events/useTimelineZoom';
 import type { SubtagDisplay } from '@/lib/tags';
@@ -253,12 +256,29 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
 
   const editor = useEventEditor({ beforeMutate: saveScroll });
   const placement = useEditorPlacement({
-    open: editor.event !== null,
+    open: editor.isOpen,
     popoverRef: editorPopoverRef,
     containerRef: timelineContainerRef,
     zoomLevel,
   });
-  const activeOverlayId = editor.event?.id ?? null;
+
+  const dragCreate = useDragCreate({
+    zoomLevel,
+    suspended: editor.isOpen,
+    onCreate: (day, range, e) => {
+      saveScroll();
+      placement.anchorBeside(range.startMin, e.currentTarget.getBoundingClientRect(), e.clientX);
+      editor.openNew(rangeToFields(day, range));
+    },
+  });
+  const draftRangeFor = (dayStr: string) =>
+    dragCreate.preview
+      ? dragCreate.preview.date === dayStr
+        ? dragCreate.preview
+        : null
+      : editor.isNew
+        ? fieldsToRange(dayStr, editor.fields)
+        : null;
 
   const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
     saveScroll();
@@ -270,18 +290,6 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
   const handleOpenEditMobile = (ev: PositionedEvent) => {
     saveScroll();
     editor.open(ev);
-  };
-
-  const handleGridClick = (day: Date, hour: number) => {
-    saveScroll();
-    const dateStr = day.toLocaleDateString('en-CA');
-    setAddStartDate(dateStr);
-    setAddEndDate(dateStr);
-    const startHourStr = String(hour).padStart(2, '0');
-    const endHourStr = String((hour + 1) % 24).padStart(2, '0');
-    setAddStartTime(`${startHourStr}:00`);
-    setAddEndTime(`${endHourStr}:00`);
-    setShowAddModal(true);
   };
 
   // Handlers
@@ -375,7 +383,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
       saveScroll();
       navigateTo(prevWeekStr);
     },
-    enabled: activeOverlayId === null && !showAddModal,
+    enabled: !editor.isOpen && !showAddModal,
   });
 
   return (
@@ -758,13 +766,16 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
             {weekDates.map((day, colIdx) => {
               const isToday = day.toDateString() === new Date().toDateString();
               const dayEvents = positionedEventsByDay[colIdx];
+              const dayStr = day.toLocaleDateString('en-CA');
+              const draftRange = draftRangeFor(dayStr);
 
               return (
                 <div
                   key={colIdx}
-                  className={`h-full border-r border-border/40 relative ${
+                  className={`h-full border-r border-border/40 relative select-none ${
                     isToday ? 'bg-primary/5' : ''
                   }`}
+                  {...dragCreate.bind(dayStr)}
                 >
                   {/* Hourly lines & click listeners */}
                   <div className="absolute inset-0 pointer-events-none">
@@ -775,12 +786,10 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                           className="absolute left-0 right-0 border-t border-border/20"
                           style={{ top: `${hour * zoomLevel}px` }}
                         />
-                        {/* Click target to add event */}
+                        {/* Hover highlight; clicks and drags are handled by the column */}
                         <div
-                          onClick={() => handleGridClick(day, hour)}
                           className="absolute left-0 right-0 hover:bg-secondary/15 cursor-pointer pointer-events-auto"
                           style={{ top: `${hour * zoomLevel}px`, height: `${zoomLevel}px` }}
-                          title={`Schedule event on ${day.getDate()} at ${hour}:00`}
                         />
                       </React.Fragment>
                     ))}
@@ -791,6 +800,14 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                     {dayEvents.map((ev) => (
                       <EventBlock key={ev.id} ev={ev} zoomLevel={zoomLevel} density="week" onOpen={handleOpenEditOverlay} />
                     ))}
+                    {draftRange && (
+                      <DraftBlock
+                        range={draftRange}
+                        title={dragCreate.preview ? undefined : editor.fields.title}
+                        color={dragCreate.preview ? undefined : tags.find((t) => t.name === editor.fields.tag)?.color}
+                        zoomLevel={zoomLevel}
+                      />
+                    )}
                   </div>
 
                 </div>

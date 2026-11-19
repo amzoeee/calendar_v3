@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  addEventAction,
   copyEventAction,
   deleteEventAction,
   deleteRecurringSeriesAction,
@@ -32,7 +33,8 @@ const EMPTY: EditFields = { title: '', tag: '', desc: '', startDate: '', startTi
 /**
  * Editing one event from a calendar view: the form's state, save / delete /
  * copy (asking "this event or the series?" for recurring ones), Enter /
- * Escape / Delete, and closing on a click outside the editor.
+ * Escape / Delete, and closing on a click outside the editor. `openNew`
+ * opens the same form as a draft that saves as a new event.
  *
  * `beforeMutate` runs before every write, which the views use to save their
  * scroll position.
@@ -41,12 +43,14 @@ export function useEventEditor({ beforeMutate }: { beforeMutate?: () => void } =
   const { confirm, choose } = useConfirm();
   const { raiseUndo } = useUndo();
   const [event, setEvent] = useState<PositionedEvent | null>(null);
+  const [isNew, setIsNew] = useState(false);
   const [fields, setFields] = useState<EditFields>(EMPTY);
 
   const open = (ev: PositionedEvent) => {
     const start = pacificDbStringToDate(ev.startDatetime);
     const end = pacificDbStringToDate(ev.endDatetime);
     setEvent(ev);
+    setIsNew(false);
     setFields({
       title: ev.title,
       tag: ev.tag || '',
@@ -58,7 +62,17 @@ export function useEventEditor({ beforeMutate }: { beforeMutate?: () => void } =
     });
   };
 
-  const close = () => setEvent(null);
+  /** Opens a blank draft over a browser-local range. */
+  const openNew = (range: Pick<EditFields, 'startDate' | 'startTime' | 'endDate' | 'endTime'>) => {
+    setEvent(null);
+    setIsNew(true);
+    setFields({ ...EMPTY, ...range });
+  };
+
+  const close = () => {
+    setEvent(null);
+    setIsNew(false);
+  };
 
   const setField = <K extends keyof EditFields>(key: K, value: EditFields[K]) =>
     setFields((f) => ({ ...f, [key]: value }));
@@ -69,6 +83,19 @@ export function useEventEditor({ beforeMutate }: { beforeMutate?: () => void } =
   };
 
   const save = async () => {
+    if (isNew) {
+      beforeMutate?.();
+      await addEventAction({
+        title: fields.title,
+        description: fields.desc,
+        tag: fields.tag,
+        startDatetime: `${fields.startDate}T${fields.startTime}`,
+        endDatetime: `${fields.endDate}T${fields.endTime}`,
+        timeZone: getBrowserTimeZone(),
+      });
+      close();
+      return;
+    }
     if (!event) return;
     const scope = event.recurrenceId
       ? await choose({
@@ -99,6 +126,7 @@ export function useEventEditor({ beforeMutate }: { beforeMutate?: () => void } =
   };
 
   const remove = async () => {
+    if (isNew) return close();
     if (!event) return;
     const scope = event.recurrenceId
       ? await choose({
@@ -134,7 +162,7 @@ export function useEventEditor({ beforeMutate }: { beforeMutate?: () => void } =
     actions.current = { save, remove, close };
   });
 
-  const isOpen = event !== null;
+  const isOpen = event !== null || isNew;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -174,7 +202,7 @@ export function useEventEditor({ beforeMutate }: { beforeMutate?: () => void } =
     };
   }, [isOpen]);
 
-  return { event, fields, setField, open, close, save, remove, copy };
+  return { event, isNew, isOpen, fields, setField, open, openNew, close, save, remove, copy };
 }
 
 export type EventEditorState = ReturnType<typeof useEventEditor>;
