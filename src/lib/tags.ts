@@ -101,3 +101,44 @@ export function displayTag<T extends ColorTag>(tags: T[], name: string | null, d
 export function eventTagColor(tags: ColorTag[], name: string | null, display: SubtagDisplay): string | undefined {
   return displayTag(tags, name, display)?.color;
 }
+
+// Ordered so consecutive picks sit far apart on the color wheel.
+export const TAG_PALETTE = [
+  '#3b82f6', '#f97316', '#22c55e', '#ec4899', '#8b5cf6', '#eab308',
+  '#14b8a6', '#ef4444', '#6366f1', '#84cc16', '#06b6d4', '#d946ef',
+  '#f59e0b', '#10b981', '#0ea5e9', '#f43f5e', '#a855f7',
+];
+
+// Below this, two colors read as the same tag at a glance.
+const DISTINCT_DISTANCE = 120;
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  let h = hex.trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(h)) h = [...h].map((c) => c + c).join('');
+  if (!/^[0-9a-f]{6}$/i.test(h)) return null;
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+}
+
+// "Redmean" approximation of perceived difference.
+function colorDistance(a: [number, number, number], b: [number, number, number]): number {
+  const r = (a[0] + b[0]) / 2;
+  const [dr, dg, db] = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  return Math.sqrt((2 + r / 256) * dr * dr + 4 * dg * dg + (2 + (255 - r) / 256) * db * db);
+}
+
+/**
+ * A color for a new tag: the first palette color that looks unlike every color
+ * in `used`, or failing that, the one least like any of them.
+ */
+export function suggestTagColor(used: string[]): string {
+  const usedRgb = used.map(hexToRgb).filter((c) => c !== null);
+  let best = TAG_PALETTE[0];
+  let bestScore = -1;
+  for (const color of TAG_PALETTE) {
+    const rgb = hexToRgb(color)!;
+    const score = Math.min(Infinity, ...usedRgb.map((u) => colorDistance(rgb, u)));
+    if (score >= DISTINCT_DISTANCE) return color;
+    if (score > bestScore) [best, bestScore] = [color, score];
+  }
+  return best;
+}
