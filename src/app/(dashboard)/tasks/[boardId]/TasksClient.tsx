@@ -146,7 +146,7 @@ export default function TasksClient({
   const [confirmParent, setConfirmParent] = useState<{ node: TaskNode; open: number } | null>(null);
   const [newBoardOpen, setNewBoardOpen] = useState(false);
 
-  // Each column's composer, so `n` can aim at the one under the pointer.
+  // Each column's composer, so `n` or Enter can aim at the one under the pointer.
   const composers = useRef(new Map<number, HTMLInputElement | null>());
 
   const registerComposer = useCallback((boardId: number, el: HTMLInputElement | null) => {
@@ -249,20 +249,35 @@ export default function TasksClient({
   // ----- keyboard -----
 
   useEffect(() => {
+    // Whether focus last moved by click. Chrome makes even a clicked button
+    // :focus-visible once a key is pressed, so that can't tell us.
+    let clicked = false;
+    const onPointer = () => (clicked = true);
     const onKey = (e: KeyboardEvent) => {
+      const focusedByClick = clicked;
+      if (e.key !== 'Enter') clicked = false;
       if (isInsideModal(e.target)) return;
       if (e.key === 'Escape') {
         setSelectedId(null);
         return;
       }
-      if (e.key !== 'n' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key !== 'n' && e.key !== 'Enter') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.isComposing) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return;
+      // Enter still activates a control reached by keyboard. One that only
+      // kept focus after a click doesn't count.
+      const control = t?.closest('button, a, summary, [role="button"], [tabindex]');
+      if (e.key === 'Enter' && control && !focusedByClick) return;
       e.preventDefault();
       focusComposer();
     };
+    document.addEventListener('pointerdown', onPointer, true);
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer, true);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [focusComposer]);
 
   // ----- mutations -----
