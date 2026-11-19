@@ -55,7 +55,15 @@ export async function POST(request: NextRequest) {
   const timeZone = link.timeZone || SERVER_TIMEZONE;
   const fallbackDate = Number.isNaN(fallbackAt) ? null : dayStrOfInstant(fallbackAt, timeZone);
 
-  const result = await stageLogForUser(link.userId, text, dateOverride, timeZone, fallbackDate, military);
+  const result = await stageLogForUser(
+    link.userId,
+    text,
+    dateOverride,
+    timeZone,
+    fallbackDate,
+    military,
+    Number.isNaN(fallbackAt) ? null : fallbackAt,
+  );
   if (result.error) {
     return NextResponse.json({ error: result.code || result.error }, { status: result.code ? 409 : 422 });
   }
