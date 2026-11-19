@@ -59,6 +59,7 @@ function EditorFields({ editor, tags, size }: { editor: EventEditorState; tags: 
       <input
         type="text"
         required
+        autoFocus={editor.isNew}
         value={fields.title}
         onChange={(e) => setField('title', e.target.value)}
         placeholder="Title"
@@ -120,25 +121,27 @@ function EditorFields({ editor, tags, size }: { editor: EventEditorState; tags: 
         </button>
       </div>
 
-      <div className={`border-t border-border ${s.divider} flex justify-between gap-2`}>
-        <button
-          type="button"
-          onClick={editor.remove}
-          className={`flex-1 flex items-center justify-center gap-1.5 ${s.button} btn-destructive transition-all rounded font-semibold cursor-pointer`}
-        >
-          <Trash2 className={s.icon} />
-          Delete
-        </button>
-        <button
-          type="button"
-          onClick={editor.copy}
-          className={`${s.buttonPad} ${s.button} bg-secondary hover:bg-muted text-foreground rounded font-semibold flex items-center justify-center gap-1.5 cursor-pointer`}
-          title="Copy Event"
-        >
-          <Copy className={s.icon} />
-          Copy
-        </button>
-      </div>
+      {!editor.isNew && (
+        <div className={`border-t border-border ${s.divider} flex justify-between gap-2`}>
+          <button
+            type="button"
+            onClick={editor.remove}
+            className={`flex-1 flex items-center justify-center gap-1.5 ${s.button} btn-destructive transition-all rounded font-semibold cursor-pointer`}
+          >
+            <Trash2 className={s.icon} />
+            Delete
+          </button>
+          <button
+            type="button"
+            onClick={editor.copy}
+            className={`${s.buttonPad} ${s.button} bg-secondary hover:bg-muted text-foreground rounded font-semibold flex items-center justify-center gap-1.5 cursor-pointer`}
+            title="Copy Event"
+          >
+            <Copy className={s.icon} />
+            Copy
+          </button>
+        </div>
+      )}
     </>
   );
 }
@@ -156,7 +159,8 @@ export default function EventEditor({
   tags: Tag[];
   popoverRef: RefObject<HTMLDivElement | null>;
 }) {
-  if (!editor.event) return null;
+  if (!editor.isOpen) return null;
+  const heading = editor.isNew ? 'New event' : 'Edit event';
 
   return (
     <>
@@ -166,7 +170,7 @@ export default function EventEditor({
         className="hidden md:block fixed bg-card border border-border rounded-lg shadow-2xl p-4 w-72 space-y-3 z-50 text-left"
       >
         <div className="flex items-center justify-between border-b border-border pb-2">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Edit Event</h4>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{heading}</h4>
           <button
             onClick={editor.close}
             className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
@@ -186,7 +190,7 @@ export default function EventEditor({
         >
           <div className="w-9 h-1 rounded-full bg-muted mx-auto" />
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold tracking-tight">Edit event</h2>
+            <h2 className="text-lg font-bold tracking-tight">{heading}</h2>
             <button
               onClick={editor.close}
               className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
