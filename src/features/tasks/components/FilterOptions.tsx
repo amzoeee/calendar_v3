@@ -3,6 +3,7 @@
 import { type Dispatch, type SetStateAction } from 'react';
 import { Bell, Check, Star } from 'lucide-react';
 import { type TaskTag } from '../types';
+import Button from '@/app/components/Button';
 
 /**
  * A column's filter choices. Shown in its own dropdown or as a section of the
@@ -43,35 +44,41 @@ export default function FilterOptions({
   return (
     <>
       {!starredList && (
-        <button
+        <Button
+          variant="ghost"
+          size="none"
           onClick={() => setStarredOnly((v) => !v)}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+          className="w-full gap-2 px-2 py-1.5 text-sm rounded"
         >
           {checkbox(starredOnly)}
           <Star className="h-3.5 w-3.5 text-amber-400" fill="currentColor" />
           Starred
-        </button>
+        </Button>
       )}
 
       {/* The rail's toggle, for mobile where there is no rail. */}
-      <button
+      <Button
+        variant="ghost"
+        size="none"
         onClick={() => setRemindersOnly(!remindersOnly)}
-        className="md:hidden w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+        className="md:hidden w-full gap-2 px-2 py-1.5 text-sm rounded"
       >
         {checkbox(remindersOnly)}
         <Bell className="h-3.5 w-3.5 text-muted-foreground" />
         Active reminders only
-      </button>
+      </Button>
 
       {tags.map((t) => {
         const on = filterTagIds.includes(t.id);
         return (
-          <button
+          <Button
+            variant="ghost"
+            size="none"
             key={t.id}
             onClick={() =>
               setFilterTagIds((prev) => (on ? prev.filter((x) => x !== t.id) : [...prev, t.id]))
             }
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+            className="w-full gap-2 px-2 py-1.5 text-sm rounded"
           >
             {checkbox(on)}
             <span
@@ -79,20 +86,22 @@ export default function FilterOptions({
               style={{ backgroundColor: t.color }}
             />
             <span className="truncate">{t.name}</span>
-          </button>
+          </Button>
         );
       })}
 
       {activeFilters > 0 && (
-        <button
+        <Button
+          variant="ghost"
+          size="none"
           onClick={() => {
             setFilterTagIds([]);
             setStarredOnly(false);
           }}
-          className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
+          className="w-full text-left px-2 py-1.5 text-sm rounded text-muted-foreground hover:text-foreground"
         >
           Clear filters
-        </button>
+        </Button>
       )}
     </>
   );
