@@ -1,6 +1,9 @@
 import { db } from '@/db';
 import { taskBoards, tasks as tasksTable, taskTags, tags as tagsTable } from '@/db/schema';
-import { eq, and, asc, desc, inArray } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray, or, gte, lt, isNull, sql } from 'drizzle-orm';
+import { dateStrInTimeZone, shiftDateStr } from '@/lib/timezone';
+import { getViewerTimeZone } from '@/lib/server-timezone';
+import { bucketCalendarTasks, type CalendarTasksByDay } from '@/lib/calendarTasks';
 
 /**
  * The board every account is guaranteed to have. Accounts created before tasks
@@ -100,4 +103,42 @@ export async function getTagsByTask(taskIds: number[]): Promise<Record<number, n
   }
 
   return tagsByTask;
+}
+
+/**
+ * Tasks for the calendar's day banners over the viewer's days [from, to]:
+ * dated ones in that span and open ASAP ones (on today).
+ */
+export async function getCalendarTasks(userId: number, from: string, to: string): Promise<CalendarTasksByDay> {
+  // Deadlines are Pacific strings; a day of padding covers any viewer offset.
+  const lo = `${shiftDateStr(from, -1)} 00:00:00`;
+  const hi = `${shiftDateStr(to, 2)} 00:00:00`;
+
+  // Subqueries name the outer row as `tasks.id`; drizzle's column would render unqualified.
+  const rows = await db
+    .select({
+      id: tasksTable.id,
+      boardId: tasksTable.boardId,
+      title: tasksTable.title,
+      counterValue: tasksTable.counterValue,
+      dueDatetime: tasksTable.dueDatetime,
+      dueHasTime: tasksTable.dueHasTime,
+      dueAsap: tasksTable.dueAsap,
+      completedAt: tasksTable.completedAt,
+      openSubtasks: sql<number>`(SELECT COUNT(*) FROM tasks c WHERE c.parent_id = tasks.id AND c.completed_at IS NULL)`,
+      color: sql<string | null>`(SELECT t.color FROM task_tags tt JOIN tags t ON t.id = tt.tag_id WHERE tt.task_id = tasks.id ORDER BY t.order_index, t.id LIMIT 1)`,
+    })
+    .from(tasksTable)
+    .where(
+      and(
+        eq(tasksTable.userId, userId),
+        or(
+          and(gte(tasksTable.dueDatetime, lo), lt(tasksTable.dueDatetime, hi)),
+          and(eq(tasksTable.dueAsap, 1), isNull(tasksTable.completedAt))
+        )
+      )
+    );
+
+  const timeZone = await getViewerTimeZone();
+  return bucketCalendarTasks(rows, { from, to, today: dateStrInTimeZone(timeZone), timeZone });
 }

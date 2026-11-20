@@ -7,6 +7,7 @@ import { shiftDateStr } from '@/lib/timezone';
 import { getSubtagDisplay } from '@/lib/server-tags';
 import { getEventsOverlapping } from '@/features/events/server/queries';
 import { getTags } from '@/features/tags/server/queries';
+import { getCalendarTasks } from '@/features/tasks/server/queries';
 import { getWeekStart } from '@/lib/server-week';
 import { startOfWeek, type WeekStart } from '@/lib/week';
 
@@ -55,6 +56,7 @@ export default async function WeeklyPage({ params }: PageProps) {
   const dbEvents = await getEventsOverlapping(session.userId, startStr, endStr);
 
   const dbTags = await getTags(session.userId);
+  const tasksByDay = await getCalendarTasks(session.userId, firstStr, lastStr);
 
   return (
     <WeeklyCalendarClient
@@ -63,6 +65,7 @@ export default async function WeeklyPage({ params }: PageProps) {
       weekStart={weekStart}
       initialEvents={previewPendingMerge(dbEvents)}
       tags={dbTags}
+      tasksByDay={tasksByDay}
       subtagDisplay={await getSubtagDisplay()}
     />
   );

@@ -29,6 +29,8 @@ import EventBlock from '@/features/events/components/EventBlock';
 import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
 import { useTimelineZoom } from '@/features/events/useTimelineZoom';
 import type { SubtagDisplay } from '@/lib/tags';
+import type { CalendarTask } from '@/lib/calendarTasks';
+import CalendarDayTasks from '@/features/tasks/components/CalendarDayTasks';
 
 interface Tag {
   id: number;
@@ -43,10 +45,11 @@ interface DailyCalendarClientProps {
   date: string;
   initialEvents: any[];
   tags: Tag[];
+  tasks: CalendarTask[];
   subtagDisplay: SubtagDisplay;
 }
 
-export default function DailyCalendarClient({ date, initialEvents, tags, subtagDisplay }: DailyCalendarClientProps) {
+export default function DailyCalendarClient({ date, initialEvents, tags, tasks, subtagDisplay }: DailyCalendarClientProps) {
   // --- Popovers & Modals ---
   // Mobile-only: the always-visible desktop "Add Event" panel becomes a FAB +
   // bottom sheet on small screens (there's no room for a persistent side panel).
@@ -437,6 +440,13 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
             <EventSearch tags={tags} />
           </div>
         </div>
+
+        {/* Tasks due this day */}
+        {tasks.length > 0 && (
+          <div className="shrink-0 border-b border-border px-3 md:px-6 py-1.5 max-h-24 overflow-y-auto">
+            <CalendarDayTasks tasks={tasks} layout="row" />
+          </div>
+        )}
 
         {/* Scrollable Timeline Grid */}
         <div

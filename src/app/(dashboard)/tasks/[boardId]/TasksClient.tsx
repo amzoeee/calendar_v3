@@ -213,6 +213,20 @@ export default function TasksClient({
     [localRows, selectedId]
   );
 
+  // ?task=<id> (a link from the calendar) opens that task once, then drops the param.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = Number(params.get('task'));
+    if (!params.has('task')) return;
+    params.delete('task');
+    window.history.replaceState(null, '', window.location.pathname + (params.size ? `?${params}` : ''));
+    if (!rows.some((r) => r.id === id)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the URL is only readable after hydration
+    setSelectedId(id);
+    document.querySelector(`[data-task-id="${id}"]`)?.scrollIntoView({ block: 'center' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ----- navigation between board selections -----
 
   const showOnly = (id: number) => router.push(`/tasks/${id}`);
