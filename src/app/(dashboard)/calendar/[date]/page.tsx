@@ -7,6 +7,7 @@ import { shiftDateStr } from '@/lib/timezone';
 import { getSubtagDisplay } from '@/lib/server-tags';
 import { getEventsOverlapping } from '@/features/events/server/queries';
 import { getTags } from '@/features/tags/server/queries';
+import { getCalendarTasks } from '@/features/tasks/server/queries';
 
 interface PageProps {
   params: Promise<{ date: string }> | { date: string };
@@ -40,12 +41,14 @@ export default async function DailyPage({ params }: PageProps) {
   const dbEvents = await getEventsOverlapping(session.userId, startStr, endStr);
 
   const dbTags = await getTags(session.userId);
+  const tasksByDay = await getCalendarTasks(session.userId, date, date);
 
   return (
     <DailyCalendarClient
       date={date}
       initialEvents={previewPendingMerge(dbEvents)}
       tags={dbTags}
+      tasks={tasksByDay[date] ?? []}
       subtagDisplay={await getSubtagDisplay()}
     />
   );
