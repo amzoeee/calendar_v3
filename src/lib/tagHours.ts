@@ -35,3 +35,19 @@ export function groupTagHours(hours: Record<string, number>, tags: GroupableTag[
     }))
     .sort((a, b) => b.total - a.total);
 }
+
+/** What the stats hours panel covers: the range's average, or one day. */
+export const HOURS_MODE_COOKIE = 'statsHoursMode';
+export type HoursMode = 'range' | 'day';
+
+export function parseHoursMode(value: string | undefined): HoursMode {
+  return value === 'day' ? 'day' : 'range';
+}
+
+/**
+ * The latest of `days` ('YYYY-MM-DD', ascending) that isn't after `today`, or
+ * the first when they all are.
+ */
+export function defaultDay(days: string[], today: string): string | undefined {
+  return days.findLast((d) => d <= today) ?? days[0];
+}

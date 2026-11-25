@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupTagHours } from './tagHours';
+import { defaultDay, groupTagHours, parseHoursMode } from './tagHours';
 
 const tags = [
   { id: 1, name: 'Work', parentId: null },
@@ -34,5 +34,33 @@ describe('groupTagHours', () => {
 
   it('is empty with no hours', () => {
     expect(groupTagHours({}, tags)).toEqual([]);
+  });
+});
+
+describe('parseHoursMode', () => {
+  it('falls back to range', () => {
+    expect(parseHoursMode('day')).toBe('day');
+    expect(parseHoursMode(undefined)).toBe('range');
+    expect(parseHoursMode('junk')).toBe('range');
+  });
+});
+
+describe('defaultDay', () => {
+  const days = ['2026-11-23', '2026-11-24', '2026-11-25'];
+
+  it.each([
+    ['today when shown', '2026-11-24', '2026-11-24'],
+    ['the last day of a past range', '2026-12-30', '2026-11-25'],
+    ['the first day of a future range', '2026-11-01', '2026-11-23'],
+  ])('is %s', (_, today, expected) => {
+    expect(defaultDay(days, today)).toBe(expected);
+  });
+
+  it('is the weekday before a hidden weekend', () => {
+    expect(defaultDay(['2026-11-20', '2026-11-23'], '2026-11-22')).toBe('2026-11-20');
+  });
+
+  it('is undefined with no days', () => {
+    expect(defaultDay([], '2026-11-24')).toBeUndefined();
   });
 });
