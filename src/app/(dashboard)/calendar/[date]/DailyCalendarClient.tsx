@@ -443,8 +443,10 @@ export default function DailyCalendarClient({ date, initialEvents, tags, tasks, 
 
         {/* Tasks due this day */}
         {tasks.length > 0 && (
-          <div className="shrink-0 border-b border-border px-3 md:px-6 py-1.5 max-h-24 overflow-y-auto">
-            <CalendarDayTasks tasks={tasks} layout="row" />
+          <div className="shrink-0 border-b border-border px-3 md:px-6 py-1.5">
+            <div className="max-w-sm">
+              <CalendarDayTasks date={date} tasks={tasks} />
+            </div>
           </div>
         )}
 

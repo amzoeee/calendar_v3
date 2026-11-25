@@ -549,7 +549,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               </div>
               {dayTasks.length > 0 && (
                 <div className="mb-1.5">
-                  <CalendarDayTasks tasks={dayTasks} layout="stack" />
+                  <CalendarDayTasks date={day.toLocaleDateString('en-CA')} tasks={dayTasks} />
                 </div>
               )}
               {dayEvents.length === 0 ? (
@@ -752,9 +752,9 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
               return (
                 <div
                   key={colIdx}
-                  className={`min-w-0 border-r border-border/40 p-1 max-h-28 overflow-y-auto ${isToday ? 'bg-primary/5' : ''}`}
+                  className={`min-w-0 border-r border-border/40 p-1 ${isToday ? 'bg-primary/5' : ''}`}
                 >
-                  <CalendarDayTasks tasks={dayTasks} layout="stack" />
+                  <CalendarDayTasks date={day.toLocaleDateString('en-CA')} tasks={dayTasks} />
                 </div>
               );
             })}
