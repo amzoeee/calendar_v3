@@ -7,8 +7,9 @@ import { track } from '@/lib/track';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import StatsViewSwitch from '@/app/components/StatsViewSwitch';
-import { groupTagHours } from '@/lib/tagHours';
+import type { HoursMode } from '@/lib/tagHours';
 import { weekdayOrder, type WeekStart } from '@/lib/week';
+import TagHoursPanel from './TagHoursPanel';
 
 interface Tag {
   id: number;
@@ -29,6 +30,8 @@ interface StatsClientProps {
   endDate: string;
   weekdaysOnly: boolean;
   weekStart: WeekStart;
+  today: string;
+  initialHoursMode: HoursMode;
   tagHoursByDay: Record<string, Record<string, number>>;
   tags: Tag[];
   tasksDoneByDay: Record<string, Record<string, number>>;
@@ -74,6 +77,8 @@ export default function StatsClient({
   endDate,
   weekdaysOnly,
   weekStart,
+  today,
+  initialHoursMode,
   tagHoursByDay,
   tags,
   tasksDoneByDay,
@@ -227,8 +232,6 @@ export default function StatsClient({
     const totalHours = visibleDays.reduce((sum, d) => sum + (d.hours[tag] || 0), 0);
     tagAverages[tag] = activeDaysWithData > 0 ? totalHours / activeDaysWithData : 0;
   });
-
-  const averageGroups = groupTagHours(tagAverages, tags);
 
   // ---- Task completions ------------------------------------------------
   //
@@ -664,57 +667,16 @@ export default function StatsClient({
           </div>
         </div>
 
-        {/* Tag Averages Panel. `lg:self-start` lets it grow with its rows;
-            the 400px floor matches the chart so a short list lines up with it. */}
-        <div className="w-full lg:self-start lg:min-h-[400px] lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
-          <div>
-            <h2 className="text-lg font-bold">Daily Event Averages</h2>
-            <p className="text-xs text-muted-foreground mt-1">
-              Average event hours per tag (based on {activeDaysWithData} day
-              {activeDaysWithData === 1 ? '' : 's'} with events)
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {averageGroups.length > 0 ? (
-              averageGroups.map((group) => (
-                <div key={group.root} className="space-y-1.5">
-                  {group.hasSubtags && (
-                    <div className="flex items-center justify-between p-3 bg-secondary/60 rounded-lg border border-border">
-                      <div className="flex items-center gap-3 truncate">
-                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTagColor(group.root) }}></span>
-                        <span className="text-sm font-bold truncate text-foreground">{group.root} (total)</span>
-                      </div>
-                      <span className="text-sm font-extrabold text-primary shrink-0">
-                        {group.total.toFixed(1)}h / day
-                      </span>
-                    </div>
-                  )}
-                  {group.members.map((name) => (
-                    <div
-                      key={name}
-                      className={`flex items-center justify-between p-3 bg-secondary/35 rounded-lg border border-border/40 ${
-                        group.hasSubtags ? 'ml-6' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 truncate">
-                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTagColor(name) }}></span>
-                        <span className="text-sm font-semibold truncate text-foreground">{name}</span>
-                      </div>
-                      <span className="text-sm font-extrabold text-primary shrink-0">
-                        {(tagAverages[name] || 0).toFixed(1)}h / day
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-12 border border-dashed border-border rounded-lg">
-                <p className="text-sm text-muted-foreground">No events logged in this range.</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <TagHoursPanel
+          days={visibleDays}
+          averages={tagAverages}
+          activeDays={activeDaysWithData}
+          rangeLen={rangeLen}
+          today={today}
+          initialMode={initialHoursMode}
+          tags={tags}
+          getTagColor={getTagColor}
+        />
         </div>
 
       </div>
