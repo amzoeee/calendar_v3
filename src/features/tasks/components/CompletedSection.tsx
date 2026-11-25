@@ -11,13 +11,22 @@ import { type TaskRenderRow } from '@/lib/tasks';
 export default function CompletedSection({
   count,
   rows,
+  revealId,
   renderRow,
 }: {
   count: number;
   rows: TaskRenderRow[];
+  /** Opens the pile when this task is in it. */
+  revealId: number | null;
   renderRow: (row: TaskRenderRow) => ReactNode;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
+  const [revealed, setRevealed] = useState<number | null>(null);
+  if (revealId !== revealed) {
+    setRevealed(revealId);
+    const holds = (r: TaskRenderRow): boolean => r.node.id === revealId || r.children.some(holds);
+    if (rows.some(holds)) setShowCompleted(true);
+  }
 
   if (count === 0) return null;
 

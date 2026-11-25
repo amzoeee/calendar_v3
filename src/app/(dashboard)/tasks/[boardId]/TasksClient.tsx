@@ -138,6 +138,8 @@ export default function TasksClient({
 
   const [subtaskParent, setSubtaskParent] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // The task ?task= named, if any.
+  const [linkedId, setLinkedId] = useState<number | null>(null);
   // The point the edit dialog was opened from — its top-left corner lands
   // here, the way the calendar's event overlay does.
   const [editorAt, setEditorAt] = useState<{ x: number; y: number } | null>(null);
@@ -222,10 +224,22 @@ export default function TasksClient({
     window.history.replaceState(null, '', window.location.pathname + (params.size ? `?${params}` : ''));
     if (!rows.some((r) => r.id === id)) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the URL is only readable after hydration
-    setSelectedId(id);
-    document.querySelector(`[data-task-id="${id}"]`)?.scrollIntoView({ block: 'center' });
+    setLinkedId(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // After the commit that reveals the row: open its dialog where its own edit
+  // button would, or at the top of the list if a filter hides the row.
+  useEffect(() => {
+    if (linkedId === null) return;
+    const row = document.querySelector(`[data-task-id="${linkedId}"]`);
+    row?.scrollIntoView({ block: 'center' });
+    const anchor = row?.querySelector('[data-edit-task]') ?? document.querySelector('[data-board-column]');
+    const rect = anchor?.getBoundingClientRect();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the row's position is only known once laid out
+    setEditorAt(rect ? { x: rect.left, y: rect.top } : null);
+    setSelectedId(linkedId);
+  }, [linkedId]);
 
   // ----- navigation between board selections -----
 
@@ -508,6 +522,7 @@ export default function TasksClient({
     subtaskParent,
     setSubtaskParent,
     selectedId,
+    linkedId,
   };
 
   // Switching board remounts the page, which would otherwise send the rail
