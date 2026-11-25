@@ -26,6 +26,9 @@ import { useEventEditor } from '@/features/events/useEventEditor';
 import { useEditorPlacement } from '@/features/events/useEditorPlacement';
 import EventEditor from '@/features/events/components/EventEditor';
 import EventBlock from '@/features/events/components/EventBlock';
+import DraftBlock from '@/features/events/components/DraftBlock';
+import { useDragCreate } from '@/features/events/useDragCreate';
+import { fieldsToRange, rangeToFields } from '@/features/events/dragCreate';
 import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
 import { useTimelineZoom } from '@/features/events/useTimelineZoom';
 import type { SubtagDisplay } from '@/lib/tags';
@@ -138,18 +141,6 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
     }
   };
 
-  // Click handler to pre-fill time based on grid click
-  const handleGridClick = (hour: number, halfHour: boolean) => {
-    saveScroll();
-    const minStr = halfHour ? '30' : '00';
-    const startHourStr = String(hour).padStart(2, '0');
-    const endHourStr = String((hour + 1) % 24).padStart(2, '0');
-    setFormStartTime(`${startHourStr}:${minStr}`);
-    setFormEndTime(`${endHourStr}:${minStr}`);
-    setFormStartDate(date);
-    setFormEndDate(date);
-  };
-
   // Positions are in minutes, not pixels, so zooming doesn't recompute them.
   const positionedEvents = useMemo(
     () => positionEventsForDay(initialEvents, new Date(date + 'T00:00:00'), tags, subtagDisplay),
@@ -163,12 +154,23 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
 
   const editor = useEventEditor({ beforeMutate: saveScroll });
   const placement = useEditorPlacement({
-    open: editor.event !== null,
+    open: editor.isOpen,
     popoverRef: editorPopoverRef,
     containerRef: timelineContainerRef,
     zoomLevel,
   });
-  const activeOverlayId = editor.event?.id ?? null;
+
+  const dragCreate = useDragCreate({
+    zoomLevel,
+    suspended: editor.isOpen,
+    onCreate: (day, range, e) => {
+      saveScroll();
+      placement.anchorBeside(range.startMin, e.currentTarget.getBoundingClientRect(), e.clientX);
+      editor.openNew(rangeToFields(day, range));
+    },
+  });
+  const draftRange =
+    dragCreate.preview ?? (editor.isNew ? fieldsToRange(date, editor.fields) : null);
 
   const handleOpenEditOverlay = (ev: PositionedEvent, e: React.MouseEvent) => {
     saveScroll();
@@ -338,7 +340,7 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
       navigateTo(prevDayStr);
     },
     enabled:
-      activeOverlayId === null && !showMobileAddSheet,
+      !editor.isOpen && !showMobileAddSheet,
   });
 
   return (
@@ -462,8 +464,8 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
               })}
             </div>
 
-            {/* Grid Lines & Click Targets */}
-            <div className="absolute left-16 right-0 top-0 h-full">
+            {/* Grid lines; click or drag here to create an event */}
+            <div className="absolute left-16 right-0 top-0 h-full select-none" {...dragCreate.bind(date)}>
               {Array.from({ length: 24 }).map((_, hour) => (
                 <React.Fragment key={hour}>
                   {/* Hour line */}
@@ -471,12 +473,9 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
                     className="absolute left-0 right-0 border-t border-border/40"
                     style={{ top: `${hour * zoomLevel}px` }}
                   />
-                  {/* Click target for top half */}
                   <div
-                    onClick={() => handleGridClick(hour, false)}
                     className="absolute left-0 right-0 hover:bg-secondary/10 cursor-pointer"
                     style={{ top: `${hour * zoomLevel}px`, height: `${zoomLevel / 2}px` }}
-                    title={`Schedule event at ${hour}:00`}
                   />
                   
                   {/* Half-hour line */}
@@ -484,12 +483,9 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
                     className="absolute left-0 right-0 border-t border-border/10 border-dashed"
                     style={{ top: `${hour * zoomLevel + zoomLevel / 2}px` }}
                   />
-                  {/* Click target for bottom half */}
                   <div
-                    onClick={() => handleGridClick(hour, true)}
                     className="absolute left-0 right-0 hover:bg-secondary/10 cursor-pointer"
                     style={{ top: `${hour * zoomLevel + zoomLevel / 2}px`, height: `${zoomLevel / 2}px` }}
-                    title={`Schedule event at ${hour}:30`}
                   />
                 </React.Fragment>
               ))}
@@ -507,6 +503,14 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
                   onOpen={handleOpenEditOverlay}
                 />
               ))}
+              {draftRange && (
+                <DraftBlock
+                  range={draftRange}
+                  title={dragCreate.preview ? undefined : editor.fields.title}
+                  color={dragCreate.preview ? undefined : tags.find((t) => t.name === editor.fields.tag)?.color}
+                  zoomLevel={zoomLevel}
+                />
+              )}
             </div>
 
           </div>
