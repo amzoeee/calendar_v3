@@ -441,10 +441,14 @@ export default function DailyCalendarClient({ date, initialEvents, tags, tasks, 
           </div>
         </div>
 
-        {/* Tasks due this day */}
+        {/* Tasks due this day, lined up with the events below: the reserved
+            scrollbar gutter and 3px match the timeline and EventBlock. */}
         {tasks.length > 0 && (
-          <div className="shrink-0 border-b border-border px-3 md:px-6 py-1.5">
-            <div className="max-w-sm">
+          <div className="shrink-0 flex border-b border-border overflow-hidden [scrollbar-gutter:stable]">
+            <div className="w-16 shrink-0 border-r border-border flex items-start justify-end pr-3 pt-1.5 text-[10px] font-bold text-muted-foreground select-none">
+              Tasks
+            </div>
+            <div className="flex-1 min-w-0 py-1 pr-[3px]">
               <CalendarDayTasks date={date} tasks={tasks} />
             </div>
           </div>
