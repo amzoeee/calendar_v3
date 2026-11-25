@@ -204,6 +204,8 @@ to copy and paste it. `/fetch` pages back through the channel until it hits a
 as **pending** events — nothing lands in the calendar until you approve it in
 the day view, exactly like a pasted log. Once you approve, the bot posts a
 `---` of its own so the next `/fetch` starts where that one stopped.
+A marker with a time, like `---10am`, restarts tracking from then, so after a
+gap in logging `11am sleep` covers 10–11 rather than the whole gap.
 `/manual-fetch` runs the same scan but just prints the lines back for copying,
 headed with the date so the block pastes straight into the import form.
 

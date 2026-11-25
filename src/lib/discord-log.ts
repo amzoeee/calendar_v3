@@ -95,17 +95,19 @@ export function parseShorthandTime(
 // wall-clock time in `browserTimeZone`. Callers re-scheduling already-stored
 // (Pacific) times pass no `browserTimeZone`, which defaults to Pacific and
 // makes this a no-op conversion.
-export function getNextOccurrence(
+// Every instant the shorthand time could mean on the days `dayOffsets` from `baseDt`.
+function occurrences(
   baseDt: Date,
+  dayOffsets: number[],
   hour: number,
   minute: number,
   exact24h: number | null,
-  browserTimeZone: string = SERVER_TIMEZONE
-): Date {
+  browserTimeZone: string
+): Date[] {
   const options: Date[] = [];
   const pad = (n: number) => String(n).padStart(2, '0');
 
-  for (let dayOffset = 0; dayOffset < 3; dayOffset++) {
+  for (const dayOffset of dayOffsets) {
     const candidateMs = baseDt.getTime() + dayOffset * 24 * 60 * 60 * 1000;
     const dayStr = dayStrOfInstant(candidateMs, browserTimeZone);
 
@@ -118,12 +120,41 @@ export function getNextOccurrence(
       options.push(new Date(instantForWallClock(`${dayStr}T${pad(hPm)}:${pad(minute)}`, browserTimeZone)));
     }
   }
+  return options;
+}
 
-  const validOptions = options.filter((opt) => opt.getTime() > baseDt.getTime());
+export function getNextOccurrence(
+  baseDt: Date,
+  hour: number,
+  minute: number,
+  exact24h: number | null,
+  browserTimeZone: string = SERVER_TIMEZONE
+): Date {
+  const validOptions = occurrences(baseDt, [0, 1, 2], hour, minute, exact24h, browserTimeZone)
+    .filter((opt) => opt.getTime() > baseDt.getTime());
   validOptions.sort((a, b) => a.getTime() - b.getTime());
 
   return validOptions[0];
 }
+
+/** The latest instant at or before `baseDt` the shorthand time could mean. */
+export function getPreviousOccurrence(
+  baseDt: Date,
+  hour: number,
+  minute: number,
+  exact24h: number | null,
+  browserTimeZone: string = SERVER_TIMEZONE
+): Date {
+  const validOptions = occurrences(baseDt, [0, -1, -2], hour, minute, exact24h, browserTimeZone)
+    .filter((opt) => opt.getTime() <= baseDt.getTime());
+  validOptions.sort((a, b) => b.getTime() - a.getTime());
+
+  return validOptions[0];
+}
+
+// `---10am`, `--- 1030`: a separator naming when tracking restarts.
+// Mirrors TIMED_MARKER in bot/log-lines.js.
+const TIMED_MARKER = /^\s*[-—─]{3,}\s*(\d{1,2}:\d{2}|\d{1,4})\s*(am|pm)?\s*$/i;
 
 // Tag of the most recent event per bracket-free title, for predicting tags.
 export async function loadTagIndex(userId: number): Promise<Map<string, string>> {
@@ -334,7 +365,10 @@ export async function parseLogText(
   // date of the oldest message it scraped, so a channel log that is just bare
   // times still lands on the right day instead of being rejected.
   fallbackDate?: string | null,
-  leadingZeroIs24h: boolean = true
+  leadingZeroIs24h: boolean = true,
+  // When the separator was posted, so a timed one (`---10am`) means the
+  // latest 10am up to then. Without it, the time is read on the log's date.
+  markerAt?: number | null
 ): Promise<{
   events: Array<{ start: string; end: string; title: string; tag: string }>;
   dateUsed: string;
@@ -346,6 +380,7 @@ export async function parseLogText(
   // Detect separator and date
   let resolvedDate = dateOverride || null;
   let lastDashIdx = -1;
+  let markerTime: ReturnType<typeof parseShorthandTime> = null;
 
   for (let i = 0; i < lines.length; i++) {
     if (/[-—─]{3,}/.test(lines[i])) {
@@ -354,6 +389,9 @@ export async function parseLogText(
   }
 
   if (lastDashIdx !== -1) {
+    const timed = lines[lastDashIdx].match(TIMED_MARKER);
+    if (timed) markerTime = parseShorthandTime(timed[1], timed[2], leadingZeroIs24h);
+
     let parsedDate: string | null = null;
     for (let j = lastDashIdx - 1; j >= 0; j--) {
       parsedDate = parseDiscordDate(lines[j].trim(), browserTimeZone);
@@ -378,6 +416,14 @@ export async function parseLogText(
     }
   }
 
+  // The marker's own time dates the log better than the day it was posted on.
+  let markerStart: Date | null = null;
+  if (markerTime && markerAt != null && !dateOverride) {
+    const { hour, minute, exact24h } = markerTime;
+    markerStart = getPreviousOccurrence(new Date(markerAt), hour, minute, exact24h, browserTimeZone);
+    resolvedDate = dayStrOfInstant(markerStart.getTime(), browserTimeZone);
+  }
+
   if (!resolvedDate && fallbackDate) {
     resolvedDate = fallbackDate;
     warnings.push(`No date in the log; used ${resolvedDate}.`);
@@ -385,6 +431,12 @@ export async function parseLogText(
 
   if (!resolvedDate) {
     throw new Error('Could not extract a start date from the log. Provide one manually.');
+  }
+
+  if (markerTime && !markerStart) {
+    const { hour, minute, exact24h } = markerTime;
+    const midnight = instantForWallClock(`${resolvedDate}T00:00`, browserTimeZone);
+    markerStart = getNextOccurrence(new Date(midnight - 1), hour, minute, exact24h, browserTimeZone);
   }
 
   // Parse activity lines
@@ -409,13 +461,14 @@ export async function parseLogText(
     throw new Error('No valid activities found in the log.');
   }
 
-  const continueFlag = await hasNonRepeatingEvents(userId, resolvedDate, browserTimeZone);
+  // A timed marker says where the log starts, so the gap before it stays empty.
+  const continueFlag = !markerStart && (await hasNonRepeatingEvents(userId, resolvedDate, browserTimeZone));
   if (continueFlag) {
     warnings.push('Auto-enabled continue mode: existing events found on this day.');
   }
 
-  let currentTime = await getLastEventEndTime(userId, resolvedDate, continueFlag, browserTimeZone);
-  if (!continueFlag) {
+  let currentTime = markerStart ?? (await getLastEventEndTime(userId, resolvedDate, continueFlag, browserTimeZone));
+  if (!continueFlag && !markerStart) {
     const targetMidnight = new Date(instantForWallClock(`${resolvedDate}T00:00`, browserTimeZone));
     if (currentTime.getTime() < targetMidnight.getTime()) {
       currentTime = targetMidnight;
@@ -465,7 +518,11 @@ export async function parseLogText(
     throw new Error(
       `Nothing to stage: every line overlaps events already on your calendar. ` +
         `Scheduling started after ${after}` +
-        (continueFlag ? ', the end of your latest event that day.' : '.'),
+        (continueFlag
+          ? ', the end of your latest event that day.'
+          : markerStart
+            ? ', the time on your --- marker.'
+            : '.'),
     );
   }
 
@@ -501,6 +558,7 @@ export async function stageLogForUser(
   browserTimeZone: string = SERVER_TIMEZONE,
   fallbackDate?: string | null,
   leadingZeroIs24h: boolean = true,
+  markerAt?: number | null,
 ): Promise<StageLogResult> {
   try {
     const hasPendingResult = await db
@@ -522,6 +580,7 @@ export async function stageLogForUser(
       browserTimeZone,
       fallbackDate,
       leadingZeroIs24h,
+      markerAt,
     );
 
     const valuesToInsert = parsedEvents.map((e) => ({
