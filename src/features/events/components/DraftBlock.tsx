@@ -26,11 +26,11 @@ export default function DraftBlock({
   return (
     <div
       data-draft-block
-      className={`absolute left-0 right-0.5 rounded border-2 border-primary bg-primary/70 shadow-lg pointer-events-none px-1.5 py-0.5 overflow-hidden z-20 ${text}`}
+      className={`absolute left-0 right-0.5 rounded border border-black/10 bg-primary/70 shadow-lg pointer-events-none px-1.5 py-0.5 overflow-hidden z-20 ${text}`}
       style={{
         top: `${(range.startMin / 60) * zoomLevel}px`,
         height: `${heightPx}px`,
-        ...(color ? { backgroundColor: color, borderColor: color } : {}),
+        ...(color ? { backgroundColor: color } : {}),
       }}
     >
       <div className={`truncate leading-tight font-extrabold text-xs ${heightPx < 30 ? 'inline' : 'block'}`}>
