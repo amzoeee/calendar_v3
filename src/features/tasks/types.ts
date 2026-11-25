@@ -60,4 +60,6 @@ export interface ColumnHandlers {
   subtaskParent: number | null;
   setSubtaskParent: (id: number | null) => void;
   selectedId: number | null;
+  /** A task linked to from elsewhere, whose row has to be on screen. */
+  linkedId: number | null;
 }

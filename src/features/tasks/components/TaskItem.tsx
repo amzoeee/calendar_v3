@@ -191,6 +191,7 @@ export default function TaskItem({
           <Star className="h-3.5 w-3.5" fill={node.isStarred ? 'currentColor' : 'none'} />
         </button>
         <button
+          data-edit-task
           onClick={(e) => {
             // A keyboard-activated click reports 0,0 — fall back to the
             // button itself so the dialog doesn't fly to the corner.

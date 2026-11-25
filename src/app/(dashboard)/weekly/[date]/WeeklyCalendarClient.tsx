@@ -33,6 +33,8 @@ import EventBlock from '@/features/events/components/EventBlock';
 import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
 import { useTimelineZoom } from '@/features/events/useTimelineZoom';
 import type { SubtagDisplay } from '@/lib/tags';
+import type { CalendarTasksByDay } from '@/lib/calendarTasks';
+import CalendarDayTasks from '@/features/tasks/components/CalendarDayTasks';
 
 interface Tag {
   id: number;
@@ -72,10 +74,12 @@ interface WeeklyCalendarClientProps {
   weekStart: WeekStart;
   initialEvents: any[];
   tags: Tag[];
+  /** Keyed by the viewer's "YYYY-MM-DD". */
+  tasksByDay: CalendarTasksByDay;
   subtagDisplay: SubtagDisplay;
 }
 
-export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags, subtagDisplay }: WeeklyCalendarClientProps) {
+export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, initialEvents, tags, tasksByDay, subtagDisplay }: WeeklyCalendarClientProps) {
 
   // --- Zoom & Scroll ---
   const timelineContainerRef = useRef<HTMLDivElement>(null);
@@ -524,6 +528,7 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
         {weekDates.map((day, idx) => {
           const isToday = day.toDateString() === today.toDateString();
           const dayEvents = positionedEventsByDay[idx];
+          const dayTasks = tasksByDay[day.toLocaleDateString('en-CA')] ?? [];
           return (
             <div key={idx} className="px-4 py-3" {...(isToday ? { 'data-today-section': true } : {})}>
               <div className="flex items-center gap-2 mb-2">
@@ -542,8 +547,13 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
                   {day.getDate()}
                 </span>
               </div>
+              {dayTasks.length > 0 && (
+                <div className="mb-1.5">
+                  <CalendarDayTasks date={day.toLocaleDateString('en-CA')} tasks={dayTasks} />
+                </div>
+              )}
               {dayEvents.length === 0 ? (
-                <p className="text-xs text-muted-foreground pl-1">No events</p>
+                dayTasks.length === 0 && <p className="text-xs text-muted-foreground pl-1">No events</p>
               ) : (
                 <div className="space-y-1.5">
                   {dayEvents.map((ev) => (
@@ -728,6 +738,29 @@ export default function WeeklyCalendarClient({ date, weekStartDate, weekStart, i
           })}
         </div>
       </div>
+
+      {/* Tasks due each day, under the day headers — desktop only */}
+      {weekDates.some((d) => tasksByDay[d.toLocaleDateString('en-CA')]?.length) && (
+        <div className="hidden md:flex shrink-0 border-b border-border bg-background">
+          <div className="w-16 shrink-0 border-r border-border flex items-start justify-end pr-3 pt-1.5 text-[10px] font-bold text-muted-foreground select-none">
+            Tasks
+          </div>
+          <div className="flex-1 grid grid-cols-7">
+            {weekDates.map((day, colIdx) => {
+              const dayTasks = tasksByDay[day.toLocaleDateString('en-CA')] ?? [];
+              const isToday = day.toDateString() === new Date().toDateString();
+              return (
+                <div
+                  key={colIdx}
+                  className={`min-w-0 border-r border-border/40 p-1 ${isToday ? 'bg-primary/5' : ''}`}
+                >
+                  <CalendarDayTasks date={day.toLocaleDateString('en-CA')} tasks={dayTasks} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Scrollable timeline area — desktop only, see mobile agenda above */}
       <div

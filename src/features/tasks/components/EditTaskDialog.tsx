@@ -23,10 +23,12 @@ import Overlay from '@/app/components/Overlay';
  */
 export default function EditTaskDialog({
   at,
+  label = 'Edit task',
   onClose,
   children,
 }: {
   at: { x: number; y: number } | null;
+  label?: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -73,7 +75,7 @@ export default function EditTaskDialog({
         variant="sheet"
         onClose={onClose}
         zIndex={50}
-        aria-label="Edit task"
+        aria-label={label}
         className="max-h-[85vh] overflow-y-auto p-5 pb-8 space-y-4"
       >
         {children}
@@ -88,7 +90,7 @@ export default function EditTaskDialog({
       zIndex={50}
       backdropClassName=""
       panelRef={ref}
-      aria-label="Edit task"
+      aria-label={label}
       style={{
         left: pos?.left ?? 0,
         top: pos?.top ?? 0,

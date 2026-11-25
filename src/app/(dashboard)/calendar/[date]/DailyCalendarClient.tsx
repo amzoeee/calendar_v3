@@ -29,6 +29,8 @@ import EventBlock from '@/features/events/components/EventBlock';
 import { hourLabel, positionEventsForDay } from '@/features/events/positionEvents';
 import { useTimelineZoom } from '@/features/events/useTimelineZoom';
 import type { SubtagDisplay } from '@/lib/tags';
+import type { CalendarTask } from '@/lib/calendarTasks';
+import CalendarDayTasks from '@/features/tasks/components/CalendarDayTasks';
 
 interface Tag {
   id: number;
@@ -43,10 +45,11 @@ interface DailyCalendarClientProps {
   date: string;
   initialEvents: any[];
   tags: Tag[];
+  tasks: CalendarTask[];
   subtagDisplay: SubtagDisplay;
 }
 
-export default function DailyCalendarClient({ date, initialEvents, tags, subtagDisplay }: DailyCalendarClientProps) {
+export default function DailyCalendarClient({ date, initialEvents, tags, tasks, subtagDisplay }: DailyCalendarClientProps) {
   // --- Popovers & Modals ---
   // Mobile-only: the always-visible desktop "Add Event" panel becomes a FAB +
   // bottom sheet on small screens (there's no room for a persistent side panel).
@@ -437,6 +440,19 @@ export default function DailyCalendarClient({ date, initialEvents, tags, subtagD
             <EventSearch tags={tags} />
           </div>
         </div>
+
+        {/* Tasks due this day, lined up with the events below: the reserved
+            scrollbar gutter and 3px match the timeline and EventBlock. */}
+        {tasks.length > 0 && (
+          <div className="shrink-0 flex border-b border-border overflow-hidden [scrollbar-gutter:stable]">
+            <div className="w-16 shrink-0 border-r border-border flex items-start justify-end pr-3 pt-1.5 text-[10px] font-bold text-muted-foreground select-none">
+              Tasks
+            </div>
+            <div className="flex-1 min-w-0 py-1 pr-[3px]">
+              <CalendarDayTasks date={date} tasks={tasks} />
+            </div>
+          </div>
+        )}
 
         {/* Scrollable Timeline Grid */}
         <div

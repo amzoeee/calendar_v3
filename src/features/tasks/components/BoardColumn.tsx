@@ -414,6 +414,7 @@ export default function BoardColumn({
         <CompletedSection
           count={completedCount}
           rows={completedRender}
+          revealId={handlers.linkedId}
           renderRow={(row) => renderRow(row, true)}
         />
       </div>
