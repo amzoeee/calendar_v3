@@ -7,6 +7,7 @@ import { track } from '@/lib/track';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import StatsViewSwitch from '@/app/components/StatsViewSwitch';
+import { groupTagHours } from '@/lib/tagHours';
 import { weekdayOrder, type WeekStart } from '@/lib/week';
 
 interface Tag {
@@ -227,26 +228,7 @@ export default function StatsClient({
     tagAverages[tag] = activeDaysWithData > 0 ? totalHours / activeDaysWithData : 0;
   });
 
-  // Subtags list under their parent, with a total line for the group.
-  const parentName = (name: string) => {
-    const parentId = tags.find((t) => t.name === name)?.parentId;
-    return parentId == null ? undefined : tags.find((t) => t.id === parentId)?.name;
-  };
-  const averageGroups = Object.values(
-    allTags.reduce<Record<string, { root: string; members: string[]; total: number }>>((acc, tag) => {
-      const root = parentName(tag) ?? tag;
-      const group = (acc[root] ??= { root, members: [], total: 0 });
-      group.members.push(tag);
-      group.total += tagAverages[tag] || 0;
-      return acc;
-    }, {}),
-  )
-    .map((g) => ({
-      ...g,
-      hasSubtags: g.members.some((m) => m !== g.root),
-      members: g.members.sort((a, b) => (tagAverages[b] || 0) - (tagAverages[a] || 0)),
-    }))
-    .sort((a, b) => b.total - a.total);
+  const averageGroups = groupTagHours(tagAverages, tags);
 
   // ---- Task completions ------------------------------------------------
   //
