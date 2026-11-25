@@ -6,6 +6,7 @@ import { Check, MoreHorizontal, X } from 'lucide-react';
 import { formatDuration, type Focus, type LifetimeEvents, type NameStats } from '@/lib/lifetime';
 import { formatDateInputValue } from '@/lib/timezone';
 import BulkEdit, { type BulkResult, type BulkTarget } from './BulkEdit';
+import Button from '@/app/components/Button';
 
 const WEEKDAYS = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
 const MS_PER_MIN = 60_000;
@@ -223,39 +224,45 @@ export default function LifetimePanel({
             <div className="relative flex items-center gap-0.5 h-7 shrink-0">
               {bulkTarget && (
                 <>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="none"
                     onClick={() => setMenuOpen((o) => !o)}
                     aria-label="More options"
                     aria-expanded={menuOpen}
-                    className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                    className="p-1 rounded text-muted-foreground hover:text-foreground"
                   >
                     <MoreHorizontal className="h-4 w-4" />
-                  </button>
+                  </Button>
                   {menuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                       <div className="absolute right-0 top-full mt-1 whitespace-nowrap z-50 bg-card border border-border rounded-lg shadow-2xl p-1">
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="none"
                           onClick={() => {
                             setMenuOpen(false);
                             setEditingKey(focusKey);
                           }}
-                          className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors cursor-pointer"
+                          className="w-full text-left px-3 py-2 text-sm rounded"
                         >
                           Rename or retag…
-                        </button>
+                        </Button>
                       </div>
                     </>
                   )}
                 </>
               )}
-              <button
+              <Button
+                variant="ghost"
+                size="none"
                 onClick={onClear}
-                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
                 aria-label="Clear selection"
               >
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -280,7 +287,8 @@ export default function LifetimePanel({
       {parts.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {parts.map((p) => (
-            <button
+            <Button
+              variant="unstyled"
               key={p}
               onClick={() => onPart(activePart === p ? null : p)}
               className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition cursor-pointer ${
@@ -290,13 +298,14 @@ export default function LifetimePanel({
               }`}
             >
               {p}
-            </button>
+            </Button>
           ))}
         </div>
       )}
 
       {focus.kind === 'tag' && focus.subtags.length > 0 && (
-        <button
+        <Button
+          variant="unstyled"
           onClick={() => onSubtags(!focus.withSubtags)}
           aria-pressed={focus.withSubtags}
           className={`max-w-full flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border transition cursor-pointer ${
@@ -307,7 +316,7 @@ export default function LifetimePanel({
         >
           {focus.withSubtags && <Check className="h-3 w-3 shrink-0" />}
           <span className="truncate">Include {focus.subtags.map((g) => data.tagNames[g]).join(', ')}</span>
-        </button>
+        </Button>
       )}
 
       {pinned && bulkTarget && editing && (
