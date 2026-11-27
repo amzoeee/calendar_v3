@@ -612,6 +612,24 @@ export async function discardPendingForUser(userId: number): Promise<number> {
   return deleted.length;
 }
 
+/** The approved, non-recurring event a log starting at `startDatetime` with `title` would extend. */
+export async function findMergeNeighbour(userId: number, startDatetime: string, title: string) {
+  return db
+    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
+    .from(events)
+    .where(
+      and(
+        eq(events.userId, userId),
+        eq(events.isPending, 0),
+        eq(events.endDatetime, startDatetime),
+        eq(sql`lower(trim(${events.title}))`, title.trim().toLowerCase()),
+        isNull(events.recurrenceId),
+        isNull(events.rrule),
+      ),
+    )
+    .limit(1);
+}
+
 /**
  * Applies planPendingMerge to the database: see there for what merges.
  * Returns the extended events' previous ends and the absorbed ids, for Undo.
@@ -627,20 +645,7 @@ export async function mergePendingIntoNeighbours(
 
   if (pending.length === 0) return { extended: [], absorbed: [] };
 
-  const previous = await db
-    .select({ id: events.id, startDatetime: events.startDatetime, endDatetime: events.endDatetime, title: events.title, isPending: events.isPending })
-    .from(events)
-    .where(
-      and(
-        eq(events.userId, userId),
-        eq(events.isPending, 0),
-        eq(events.endDatetime, pending[0].startDatetime),
-        eq(sql`lower(trim(${events.title}))`, pending[0].title.trim().toLowerCase()),
-        isNull(events.recurrenceId),
-        isNull(events.rrule),
-      ),
-    )
-    .limit(1);
+  const previous = await findMergeNeighbour(userId, pending[0].startDatetime, pending[0].title);
 
   const all = [...previous, ...pending];
   const { newEnds, absorbed } = planPendingMerge(all);
