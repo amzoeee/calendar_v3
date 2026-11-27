@@ -80,6 +80,9 @@ export const USAGE_CATALOG = {
   'board.sort': { group: 'Tasks', label: 'Change list sort mode' },
   'board.delete': { group: 'Tasks', label: 'Delete list' },
 
+  'mcp.token_create': { group: 'MCP', label: 'Create token' },
+  'mcp.token_revoke': { group: 'MCP', label: 'Revoke token' },
+
   'undo.event': { group: 'Undo', label: 'Undo event delete' },
   'undo.tag': { group: 'Undo', label: 'Undo tag delete' },
   'undo.task': { group: 'Undo', label: 'Undo task delete' },
