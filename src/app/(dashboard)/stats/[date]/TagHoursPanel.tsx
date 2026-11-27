@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import CalendarMonth from '@/app/components/CalendarMonth';
+import Overlay from '@/app/components/Overlay';
 import { track } from '@/lib/track';
 import { defaultDay, groupTagHours, HOURS_MODE_COOKIE, type HoursMode } from '@/lib/tagHours';
+import type { WeekStart } from '@/lib/week';
 
 interface Tag {
   id: number;
@@ -20,6 +23,7 @@ interface TagHoursPanelProps {
   rangeLen: number;
   today: string;
   initialMode: HoursMode;
+  weekStart: WeekStart;
   tags: Tag[];
   getTagColor: (name: string) => string;
 }
@@ -35,11 +39,14 @@ export default function TagHoursPanel({
   rangeLen,
   today,
   initialMode,
+  weekStart,
   tags,
   getTagColor,
 }: TagHoursPanelProps) {
   const [mode, setMode] = useState(initialMode);
   const [picked, setPicked] = useState<string | null>(null);
+  // Where the day picker opens: under the date on desktop, a sheet on phones.
+  const [pickerAt, setPickerAt] = useState<DOMRect | 'sheet' | null>(null);
 
   const changeMode = (next: HoursMode) => {
     if (next === mode) return;
@@ -54,6 +61,24 @@ export default function TagHoursPanel({
   const index = day === undefined ? -1 : dayStrs.indexOf(day);
   const prevDay = dayStrs[index - 1];
   const nextDay = index === -1 ? undefined : dayStrs[index + 1];
+
+  const openPicker = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const wide = window.matchMedia('(min-width: 768px)').matches;
+    setPickerAt(wide ? e.currentTarget.getBoundingClientRect() : 'sheet');
+  };
+  const pickDay = (d: string) => {
+    setPicked(d);
+    setPickerAt(null);
+  };
+  const calendar = (size: 'sm' | 'lg') => (
+    <CalendarMonth
+      selected={day ?? null}
+      onSelect={pickDay}
+      weekStart={weekStart}
+      size={size}
+      isDisabled={(d) => !dayStrs.includes(d)}
+    />
+  );
 
   const hours = isDay ? (days[index]?.hours ?? {}) : averages;
   const groups = groupTagHours(hours, tags);
@@ -103,13 +128,19 @@ export default function TagHoursPanel({
           day !== undefined && (
             <div className="flex items-center justify-between gap-2 mt-3">
               {stepButton(prevDay, 'Previous day', ChevronLeft)}
-              <span className="text-sm font-semibold text-foreground">
+              <button
+                type="button"
+                onClick={openPicker}
+                aria-haspopup="dialog"
+                aria-label="Pick a day"
+                className="px-2 py-1 rounded-lg text-sm font-semibold text-foreground hover:bg-muted transition cursor-pointer"
+              >
                 {new Date(day + 'T00:00:00').toLocaleDateString('en-US', {
                   weekday: 'short',
                   month: 'short',
                   day: 'numeric',
                 })}
-              </span>
+              </button>
               {stepButton(nextDay, 'Next day', ChevronRight)}
             </div>
           )
@@ -158,6 +189,45 @@ export default function TagHoursPanel({
           </div>
         )}
       </div>
+
+      {pickerAt === 'sheet' && (
+        <Overlay
+          variant="sheet"
+          onClose={() => setPickerAt(null)}
+          aria-label="Pick a day"
+          className="p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold tracking-tight">Pick a day</h2>
+            <button
+              type="button"
+              onClick={() => setPickerAt(null)}
+              className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div>{calendar('lg')}</div>
+        </Overlay>
+      )}
+      {pickerAt instanceof DOMRect && (
+        <Overlay
+          variant="none"
+          onClose={() => setPickerAt(null)}
+          backdropClassName=""
+          aria-label="Pick a day"
+          style={{
+            left: Math.max(8, Math.min(pickerAt.left + pickerAt.width / 2 - 120, window.innerWidth - 248)),
+            ...(window.innerHeight - pickerAt.bottom < 300
+              ? { bottom: window.innerHeight - pickerAt.top + 4 }
+              : { top: pickerAt.bottom + 4 }),
+          }}
+          className="fixed w-60 bg-card border border-border rounded-lg shadow-2xl p-3"
+        >
+          {calendar('sm')}
+        </Overlay>
+      )}
     </div>
   );
 }

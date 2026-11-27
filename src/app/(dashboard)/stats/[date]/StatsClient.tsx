@@ -7,6 +7,7 @@ import { track } from '@/lib/track';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import StatsViewSwitch from '@/app/components/StatsViewSwitch';
+import { isInsideModal } from '@/app/components/ConfirmDialog';
 import type { HoursMode } from '@/lib/tagHours';
 import { weekdayOrder, type WeekStart } from '@/lib/week';
 import TagHoursPanel from './TagHoursPanel';
@@ -302,6 +303,7 @@ export default function StatsClient({
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement;
 
+      if (isInsideModal(e.target)) return;
       if (!isInput && !e.metaKey && !e.ctrlKey) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
@@ -674,6 +676,7 @@ export default function StatsClient({
           rangeLen={rangeLen}
           today={today}
           initialMode={initialHoursMode}
+          weekStart={weekStart}
           tags={tags}
           getTagColor={getTagColor}
         />
