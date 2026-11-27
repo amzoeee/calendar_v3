@@ -9,6 +9,7 @@ import { deleteRecurringSeries, updateRecurringSeries } from '@/lib/recurring';
 import { browserDatetimeToServerDbString, addHoursToDbString } from '@/lib/timezone';
 import { replaceInTitle, retitleKeepingBrackets } from '@/lib/titleParts';
 import { track } from '@/lib/usage';
+import { deleteEventsForUser, insertEventForUser, updateEventForUser, type EventRow } from './mutations';
 
 export async function addEventAction(data: {
   title: string;
@@ -34,14 +35,12 @@ export async function addEventAction(data: {
     endStr = addHoursToDbString(startStr, 1); // default 1 hour
   }
 
-  await db.insert(events).values({
+  await insertEventForUser(session.userId, {
     startDatetime: startStr,
     endDatetime: endStr,
     title,
     description,
     tag,
-    userId: session.userId,
-    isPending: 0,
   });
 
   revalidatePath('/calendar', 'layout');
@@ -72,31 +71,23 @@ export async function updateEventAction(
     endStr = addHoursToDbString(startStr, 1);
   }
 
-  await db
-    .update(events)
-    .set({
-      title,
-      description,
-      tag,
-      startDatetime: startStr,
-      endDatetime: endStr,
-    })
-    .where(and(eq(events.id, id), eq(events.userId, session.userId)));
+  await updateEventForUser(session.userId, id, {
+    title,
+    description,
+    tag,
+    startDatetime: startStr,
+    endDatetime: endStr,
+  });
 
   revalidatePath('/calendar', 'layout');
 }
-
-export type EventRow = typeof events.$inferSelect;
 
 /** Returns the deleted row, so Undo can put it back. */
 export async function deleteEventAction(id: number): Promise<EventRow[]> {
   const session = await requireAuth();
   track(session.userId, 'event.delete');
 
-  const deleted = await db
-    .delete(events)
-    .where(and(eq(events.id, id), eq(events.userId, session.userId)))
-    .returning();
+  const deleted = await deleteEventsForUser(session.userId, [id]);
 
   revalidatePath('/calendar', 'layout');
   return deleted;

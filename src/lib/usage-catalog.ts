@@ -80,6 +80,18 @@ export const USAGE_CATALOG = {
   'board.sort': { group: 'Tasks', label: 'Change list sort mode' },
   'board.delete': { group: 'Tasks', label: 'Delete list' },
 
+  'mcp.token_create': { group: 'MCP', label: 'Create token' },
+  'mcp.token_revoke': { group: 'MCP', label: 'Revoke token' },
+  'mcp.get_events': { group: 'MCP', label: 'get_events' },
+  'mcp.search_events': { group: 'MCP', label: 'search_events' },
+  'mcp.get_time_stats': { group: 'MCP', label: 'get_time_stats' },
+  'mcp.list_tags': { group: 'MCP', label: 'list_tags' },
+  'mcp.create_event': { group: 'MCP', label: 'create_event' },
+  'mcp.update_events': { group: 'MCP', label: 'update_events' },
+  'mcp.delete_events': { group: 'MCP', label: 'delete_events' },
+  'mcp.log_activities': { group: 'MCP', label: 'log_activities' },
+  'mcp.set_timezone': { group: 'MCP', label: 'set_timezone' },
+
   'undo.event': { group: 'Undo', label: 'Undo event delete' },
   'undo.tag': { group: 'Undo', label: 'Undo tag delete' },
   'undo.task': { group: 'Undo', label: 'Undo task delete' },

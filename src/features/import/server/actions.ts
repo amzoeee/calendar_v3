@@ -9,7 +9,8 @@ import { stageLogForUser, recalculatePendingEventsDate, mergePendingIntoNeighbou
 import { redeemLinkCode, unlinkDiscordAccount } from '@/lib/discord-link';
 import { markStagesApproved } from '@/lib/discord-markers';
 import { track } from '@/lib/usage';
-import type { EventRow, EventSnapshot } from '@/features/events/server/actions';
+import type { EventSnapshot } from '@/features/events/server/actions';
+import type { EventRow } from '@/features/events/server/mutations';
 
 const BULK_CHUNK = 500;
 

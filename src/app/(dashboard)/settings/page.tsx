@@ -5,6 +5,7 @@ import SettingsClient from './SettingsClient';
 import { getWeekStart } from '@/lib/server-week';
 import { getSubtagDisplay } from '@/lib/server-tags';
 import { getLinksForUser } from '@/lib/discord-link';
+import { listMcpTokens } from '@/lib/mcp-tokens';
 import { getTags } from '@/features/tags/server/queries';
 
 export default async function SettingsPage() {
@@ -23,6 +24,7 @@ export default async function SettingsPage() {
       weekStart={await getWeekStart()}
       subtagDisplay={await getSubtagDisplay()}
       discordLinks={await getLinksForUser(session.userId)}
+      mcpTokens={await listMcpTokens(session.userId)}
     />
   );
 }

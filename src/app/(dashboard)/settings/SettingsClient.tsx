@@ -57,6 +57,8 @@ import type { BuildInfo } from '@/lib/version';
 import DateInput from '@/app/components/DateInput';
 import { useConfirm } from '@/app/components/ConfirmDialog';
 import { useUndo } from '@/app/components/UndoToast';
+import type { McpTokenView } from '@/lib/mcp-tokens';
+import McpTokens from './McpTokens';
 
 interface Tag {
   id: number;
@@ -144,6 +146,7 @@ interface SettingsClientProps {
   weekStart: WeekStart;
   subtagDisplay: SubtagDisplay;
   discordLinks: DiscordLinkView[];
+  mcpTokens: McpTokenView[];
 }
 
 const SUBTAG_DISPLAY_LABELS: Record<SubtagDisplay, string> = {
@@ -151,7 +154,7 @@ const SUBTAG_DISPLAY_LABELS: Record<SubtagDisplay, string> = {
   parent: 'Parent tag',
 };
 
-export default function SettingsClient({ initialTags, buildInfo, weekStart, subtagDisplay, discordLinks }: SettingsClientProps) {
+export default function SettingsClient({ initialTags, buildInfo, weekStart, subtagDisplay, discordLinks, mcpTokens }: SettingsClientProps) {
   const router = useRouter();
   const { confirm } = useConfirm();
   const { raiseUndo } = useUndo();
@@ -1112,6 +1115,8 @@ export default function SettingsClient({ initialTags, buildInfo, weekStart, subt
 
         {linkError && <p className="text-xs text-red-400">{linkError}</p>}
       </section>
+
+      <McpTokens tokens={mcpTokens} />
 
       {/* Build info */}
       <footer className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 pb-2 text-xs text-muted-foreground">

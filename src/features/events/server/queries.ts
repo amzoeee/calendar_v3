@@ -57,8 +57,14 @@ export async function getApprovedEvents(userId: number, tag?: string | null) {
     );
 }
 
-/** Newest first; matches `q` in the title, description or tag. */
-export async function searchEvents(userId: number, q: string, limit: number, offset: number) {
+/** Newest first; matches `q` in the title, description or tag, optionally starting within [from, to). */
+export async function searchEvents(
+  userId: number,
+  q: string,
+  limit: number,
+  offset: number,
+  range?: { from?: string; to?: string },
+) {
   const pattern = `%${q}%`;
 
   return db
@@ -74,6 +80,8 @@ export async function searchEvents(userId: number, q: string, limit: number, off
       and(
         eq(eventsTable.userId, userId),
         eq(eventsTable.isPending, 0),
+        range?.from ? gte(eventsTable.startDatetime, range.from) : undefined,
+        range?.to ? lt(eventsTable.startDatetime, range.to) : undefined,
         or(
           like(eventsTable.title, pattern),
           like(eventsTable.description, pattern),
