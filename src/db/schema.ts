@@ -200,3 +200,22 @@ export const usageEvents = sqliteTable('usage_events', {
 }, (t) => ({
   createdAtIdx: index('usage_events_created_at_idx').on(t.createdAt),
 }));
+
+// ==========================================
+// MCP
+// ==========================================
+
+// Personal access tokens for the MCP server at /api/mcp. Only a SHA-256 of the
+// token is kept; the prefix is stored so Settings can tell tokens apart.
+export const mcpTokens = sqliteTable('mcp_tokens', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull().references(() => users.id),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  tokenPrefix: text('token_prefix').notNull(),
+  // The zone tool inputs and outputs are read in. Changeable from Settings or
+  // the set_timezone tool, so moving zones doesn't need a new token.
+  timeZone: text('time_zone').notNull(),
+  lastUsedAt: text('last_used_at'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
