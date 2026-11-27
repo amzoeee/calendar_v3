@@ -10,7 +10,8 @@ import StatsViewSwitch from '@/app/components/StatsViewSwitch';
 import { isInsideModal } from '@/app/components/ConfirmDialog';
 import type { HoursMode } from '@/lib/tagHours';
 import { weekdayOrder, type WeekStart } from '@/lib/week';
-import TagHoursPanel from './TagHoursPanel';
+import TagHoursPanel, { useHoursPanel } from './TagHoursPanel';
+import { defaultDay } from '@/lib/tagHours';
 
 interface Tag {
   id: number;
@@ -221,6 +222,28 @@ export default function StatsClient({
     const total = Object.values(hours).reduce((a, b) => a + b, 0);
     return { weekday: wd, dayName: WEEKDAY_LABELS[wd], hours, total, activeCount };
   });
+
+  const hoursPanel = useHoursPanel(
+    initialHoursMode,
+    visibleDays.map((d) => d.dateStr),
+    today,
+  );
+  const shownWeekday =
+    hoursPanel.mode === 'day' && hoursPanel.day
+      ? new Date(hoursPanel.day + 'T00:00:00').getDay()
+      : null;
+  // A bar averages every one of its weekday in the range; open the latest so far.
+  const barDay = (weekday: number) =>
+    defaultDay(
+      visibleDays.filter((d) => d.weekday === weekday).map((d) => d.dateStr),
+      today,
+    );
+  const openBarDay = (dateStr: string) => {
+    hoursPanel.setDay(dateStr);
+    hoursPanel.changeMode('day', 'bar');
+    // Below the chart on phones, beside it on desktop.
+    document.getElementById('tag-hours-panel')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
 
   const maxBarTotal = weekdayBars.reduce((m, b) => Math.max(m, b.total), 0);
   const maxScale = Math.max(8, Math.ceil(maxBarTotal) + 1);
@@ -619,10 +642,19 @@ export default function StatsClient({
             {/* Bars Column — one averaged bar per weekday (max 7, no scroll) */}
             <div className="absolute left-10 right-0 top-0 bottom-0">
               <div className="h-full w-full flex items-stretch justify-around gap-2">
-                {weekdayBars.map((day, idx) => (
-                  <div
+                {weekdayBars.map((day, idx) => {
+                  const dateStr = barDay(day.weekday);
+                  return (
+                  <button
+                    type="button"
                     key={idx}
-                    className="flex-1 min-w-[40px] max-w-[110px] h-full flex flex-col group/bar"
+                    disabled={!dateStr}
+                    onClick={() => dateStr && openBarDay(dateStr)}
+                    aria-label={dateStr && `Show ${day.dayName} ${dateStr} in the hours panel`}
+                    aria-pressed={shownWeekday === day.weekday}
+                    className={`flex-1 min-w-[40px] max-w-[110px] h-full flex flex-col group/bar rounded cursor-pointer disabled:cursor-default focus:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                      shownWeekday === day.weekday ? 'bg-secondary/60' : 'hover:bg-secondary/30'
+                    }`}
                   >
                     {/* Bar area */}
                     <div className="flex-1 w-full relative flex flex-col justify-end pb-8">
@@ -660,8 +692,9 @@ export default function StatsClient({
                           : `avg of ${day.activeCount} day${day.activeCount === 1 ? '' : 's'}`}
                       </p>
                     </div>
-                  </div>
-                ))}
+                  </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -674,8 +707,7 @@ export default function StatsClient({
           averages={tagAverages}
           activeDays={activeDaysWithData}
           rangeLen={rangeLen}
-          today={today}
-          initialMode={initialHoursMode}
+          panel={hoursPanel}
           weekStart={weekStart}
           tags={tags}
           getTagColor={getTagColor}

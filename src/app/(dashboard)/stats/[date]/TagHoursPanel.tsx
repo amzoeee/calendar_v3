@@ -21,8 +21,7 @@ interface TagHoursPanelProps {
   averages: Record<string, number>;
   activeDays: number;
   rangeLen: number;
-  today: string;
-  initialMode: HoursMode;
+  panel: HoursPanelState;
   weekStart: WeekStart;
   tags: Tag[];
   getTagColor: (name: string) => string;
@@ -36,32 +35,40 @@ function saveMode(mode: HoursMode) {
   document.cookie = `${HOURS_MODE_COOKIE}=${mode}; path=/; max-age=31536000; SameSite=Lax`;
 }
 
+export type HoursPanelState = ReturnType<typeof useHoursPanel>;
+
+/** Mode and day for the panel, held by the page so its charts can open a day too. */
+export function useHoursPanel(initialMode: HoursMode, dayStrs: string[], today: string) {
+  const [mode, setMode] = useState(() => lastMode ?? initialMode);
+  const [picked, setPicked] = useState<string | null>(null);
+
+  const changeMode = (next: HoursMode, source: 'toggle' | 'bar' = 'toggle') => {
+    if (next === mode) return;
+    setMode(next);
+    saveMode(next);
+    track('stats.hours_mode', { mode: next, source });
+  };
+
+  const day = picked && dayStrs.includes(picked) ? picked : defaultDay(dayStrs, today);
+  return { mode, changeMode, day, setDay: setPicked };
+}
+
 export default function TagHoursPanel({
   days,
   averages,
   activeDays,
   rangeLen,
-  today,
-  initialMode,
+  panel,
   weekStart,
   tags,
   getTagColor,
 }: TagHoursPanelProps) {
-  const [mode, setMode] = useState(() => lastMode ?? initialMode);
-  const [picked, setPicked] = useState<string | null>(null);
+  const { mode, changeMode, day, setDay: setPicked } = panel;
   // Where the day picker opens: under the date on desktop, a sheet on phones.
   const [pickerAt, setPickerAt] = useState<DOMRect | 'sheet' | null>(null);
 
-  const changeMode = (next: HoursMode) => {
-    if (next === mode) return;
-    setMode(next);
-    saveMode(next);
-    track('stats.hours_mode', { mode: next });
-  };
-
   const isDay = mode === 'day';
   const dayStrs = days.map((d) => d.dateStr);
-  const day = picked && dayStrs.includes(picked) ? picked : defaultDay(dayStrs, today);
   const index = day === undefined ? -1 : dayStrs.indexOf(day);
   const prevDay = dayStrs[index - 1];
   const nextDay = index === -1 ? undefined : dayStrs[index + 1];
@@ -108,7 +115,10 @@ export default function TagHoursPanel({
   return (
     // `lg:self-start` lets it grow with its rows; the 400px floor matches the
     // chart so a short list lines up with it.
-    <div className="w-full lg:self-start lg:min-h-[400px] lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
+    <div
+      id="tag-hours-panel"
+      className="w-full lg:self-start lg:min-h-[400px] lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6 scroll-mt-4"
+    >
       <div>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-bold">{isDay ? 'Event Hours' : 'Event Averages'}</h2>
