@@ -45,12 +45,15 @@ export default function CalendarMonth({
   onSelect,
   weekStart = DEFAULT_WEEK_START,
   size = 'sm',
+  isDisabled,
 }: {
   /** 'YYYY-MM-DD', or null for nothing selected (the grid opens on today). */
   selected: string | null;
   onSelect: (dateStr: string) => void;
   weekStart?: WeekStart;
   size?: keyof typeof SIZES;
+  /** Days that can't be picked. */
+  isDisabled?: (dateStr: string) => boolean;
 }) {
   const s = SIZES[size];
   const todayStr = toDateStr(new Date());
@@ -257,6 +260,7 @@ export default function CalendarMonth({
           const inMonth = d.getMonth() === month;
           const isToday = dStr === todayStr;
           const isSelected = dStr === selected;
+          const disabled = isDisabled?.(dStr) ?? false;
 
           const cls = isSelected
             ? 'bg-primary text-primary-foreground font-bold'
@@ -271,9 +275,12 @@ export default function CalendarMonth({
               type="button"
               key={i}
               onClick={() => onSelect(dStr)}
+              disabled={disabled}
               aria-label={dStr}
               aria-current={isSelected ? 'date' : undefined}
-              className={`${s.day} w-full rounded font-medium transition cursor-pointer flex items-center justify-center ${cls}`}
+              className={`${s.day} w-full rounded font-medium transition flex items-center justify-center ${
+                disabled ? 'text-muted-foreground/40 cursor-not-allowed' : `cursor-pointer ${cls}`
+              }`}
             >
               {d.getDate()}
             </button>

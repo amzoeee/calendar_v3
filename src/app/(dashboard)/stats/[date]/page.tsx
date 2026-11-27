@@ -7,11 +7,13 @@ import {
   taskTags,
 } from '@/db/schema';
 import { eq, and, or, gte, lt, lte, inArray } from 'drizzle-orm';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import StatsClient from './StatsClient';
 import { dbStringToUtcMillis, dayStrOfInstant } from '@/lib/timezone';
 import { getViewerTimeZone, todayForViewer } from '@/lib/server-timezone';
 import { getWeekStart } from '@/lib/server-week';
+import { HOURS_MODE_COOKIE, parseHoursMode } from '@/lib/tagHours';
 import { startOfWeek } from '@/lib/week';
 
 interface PageProps {
@@ -46,12 +48,13 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
 
   const viewerTimeZone = await getViewerTimeZone();
   const weekStart = await getWeekStart();
+  const today = await todayForViewer();
+  const hoursMode = parseHoursMode((await cookies()).get(HOURS_MODE_COOKIE)?.value);
 
   // Validate date format AND that it's a real calendar date (e.g. reject
   // "2026-13-45", which passes the regex but is not a parseable date).
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(date) || !isRealDate(date)) {
-    const today = await todayForViewer();
     redirect(`/stats/${today}`);
   }
 
@@ -239,6 +242,8 @@ export default async function StatsPage({ params, searchParams }: PageProps) {
       endDate={toDateStr(endDate)}
       weekdaysOnly={weekdaysOnly}
       weekStart={weekStart}
+      today={today}
+      initialHoursMode={hoursMode}
       tagHoursByDay={tagHoursByDay}
       tags={dbTags}
     />

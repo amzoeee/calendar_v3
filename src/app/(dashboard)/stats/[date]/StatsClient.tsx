@@ -7,7 +7,11 @@ import { track } from '@/lib/track';
 import { usePreservedScroll } from '@/lib/usePreservedScroll';
 import { useDateNavigation } from '@/lib/useDateNavigation';
 import StatsViewSwitch from '@/app/components/StatsViewSwitch';
+import { isInsideModal } from '@/app/components/ConfirmDialog';
+import type { HoursMode } from '@/lib/tagHours';
 import { weekdayOrder, type WeekStart } from '@/lib/week';
+import TagHoursPanel, { useHoursPanel } from './TagHoursPanel';
+import { defaultDay } from '@/lib/tagHours';
 
 interface Tag {
   id: number;
@@ -28,6 +32,8 @@ interface StatsClientProps {
   endDate: string;
   weekdaysOnly: boolean;
   weekStart: WeekStart;
+  today: string;
+  initialHoursMode: HoursMode;
   tagHoursByDay: Record<string, Record<string, number>>;
   tags: Tag[];
   tasksDoneByDay: Record<string, Record<string, number>>;
@@ -73,6 +79,8 @@ export default function StatsClient({
   endDate,
   weekdaysOnly,
   weekStart,
+  today,
+  initialHoursMode,
   tagHoursByDay,
   tags,
   tasksDoneByDay,
@@ -215,6 +223,28 @@ export default function StatsClient({
     return { weekday: wd, dayName: WEEKDAY_LABELS[wd], hours, total, activeCount };
   });
 
+  const hoursPanel = useHoursPanel(
+    initialHoursMode,
+    visibleDays.map((d) => d.dateStr),
+    today,
+  );
+  const shownWeekday =
+    hoursPanel.mode === 'day' && hoursPanel.day
+      ? new Date(hoursPanel.day + 'T00:00:00').getDay()
+      : null;
+  // A bar averages every one of its weekday in the range; open the latest so far.
+  const barDay = (weekday: number) =>
+    defaultDay(
+      visibleDays.filter((d) => d.weekday === weekday).map((d) => d.dateStr),
+      today,
+    );
+  const openBarDay = (dateStr: string) => {
+    hoursPanel.setDay(dateStr);
+    hoursPanel.changeMode('day', 'bar');
+    // Below the chart on phones, beside it on desktop.
+    document.getElementById('tag-hours-panel')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
   const maxBarTotal = weekdayBars.reduce((m, b) => Math.max(m, b.total), 0);
   const maxScale = Math.max(8, Math.ceil(maxBarTotal) + 1);
 
@@ -226,27 +256,6 @@ export default function StatsClient({
     const totalHours = visibleDays.reduce((sum, d) => sum + (d.hours[tag] || 0), 0);
     tagAverages[tag] = activeDaysWithData > 0 ? totalHours / activeDaysWithData : 0;
   });
-
-  // Subtags list under their parent, with a total line for the group.
-  const parentName = (name: string) => {
-    const parentId = tags.find((t) => t.name === name)?.parentId;
-    return parentId == null ? undefined : tags.find((t) => t.id === parentId)?.name;
-  };
-  const averageGroups = Object.values(
-    allTags.reduce<Record<string, { root: string; members: string[]; total: number }>>((acc, tag) => {
-      const root = parentName(tag) ?? tag;
-      const group = (acc[root] ??= { root, members: [], total: 0 });
-      group.members.push(tag);
-      group.total += tagAverages[tag] || 0;
-      return acc;
-    }, {}),
-  )
-    .map((g) => ({
-      ...g,
-      hasSubtags: g.members.some((m) => m !== g.root),
-      members: g.members.sort((a, b) => (tagAverages[b] || 0) - (tagAverages[a] || 0)),
-    }))
-    .sort((a, b) => b.total - a.total);
 
   // ---- Task completions ------------------------------------------------
   //
@@ -317,6 +326,7 @@ export default function StatsClient({
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement;
 
+      if (isInsideModal(e.target)) return;
       if (!isInput && !e.metaKey && !e.ctrlKey) {
         if (e.key === 'ArrowLeft') {
           e.preventDefault();
@@ -632,10 +642,19 @@ export default function StatsClient({
             {/* Bars Column — one averaged bar per weekday (max 7, no scroll) */}
             <div className="absolute left-10 right-0 top-0 bottom-0">
               <div className="h-full w-full flex items-stretch justify-around gap-2">
-                {weekdayBars.map((day, idx) => (
-                  <div
+                {weekdayBars.map((day, idx) => {
+                  const dateStr = barDay(day.weekday);
+                  return (
+                  <button
+                    type="button"
                     key={idx}
-                    className="flex-1 min-w-[40px] max-w-[110px] h-full flex flex-col group/bar"
+                    disabled={!dateStr}
+                    onClick={() => dateStr && openBarDay(dateStr)}
+                    aria-label={dateStr && `Show ${day.dayName} ${dateStr} in the hours panel`}
+                    aria-pressed={shownWeekday === day.weekday}
+                    className={`flex-1 min-w-[40px] max-w-[110px] h-full flex flex-col group/bar rounded cursor-pointer disabled:cursor-default focus:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                      shownWeekday === day.weekday ? 'bg-secondary/60' : 'hover:bg-secondary/30'
+                    }`}
                   >
                     {/* Bar area */}
                     <div className="flex-1 w-full relative flex flex-col justify-end pb-8">
@@ -673,8 +692,9 @@ export default function StatsClient({
                           : `avg of ${day.activeCount} day${day.activeCount === 1 ? '' : 's'}`}
                       </p>
                     </div>
-                  </div>
-                ))}
+                  </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -682,57 +702,16 @@ export default function StatsClient({
           </div>
         </div>
 
-        {/* Tag Averages Panel. `lg:self-start` lets it grow with its rows;
-            the 400px floor matches the chart so a short list lines up with it. */}
-        <div className="w-full lg:self-start lg:min-h-[400px] lg:w-96 bg-card rounded-xl border border-border p-4 md:p-6 space-y-6">
-          <div>
-            <h2 className="text-lg font-bold">Daily Event Averages</h2>
-            <p className="text-xs text-muted-foreground mt-1">
-              Average event hours per tag (based on {activeDaysWithData} day
-              {activeDaysWithData === 1 ? '' : 's'} with events)
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {averageGroups.length > 0 ? (
-              averageGroups.map((group) => (
-                <div key={group.root} className="space-y-1.5">
-                  {group.hasSubtags && (
-                    <div className="flex items-center justify-between p-3 bg-secondary/60 rounded-lg border border-border">
-                      <div className="flex items-center gap-3 truncate">
-                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTagColor(group.root) }}></span>
-                        <span className="text-sm font-bold truncate text-foreground">{group.root} (total)</span>
-                      </div>
-                      <span className="text-sm font-extrabold text-primary shrink-0">
-                        {group.total.toFixed(1)}h / day
-                      </span>
-                    </div>
-                  )}
-                  {group.members.map((name) => (
-                    <div
-                      key={name}
-                      className={`flex items-center justify-between p-3 bg-secondary/35 rounded-lg border border-border/40 ${
-                        group.hasSubtags ? 'ml-6' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 truncate">
-                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTagColor(name) }}></span>
-                        <span className="text-sm font-semibold truncate text-foreground">{name}</span>
-                      </div>
-                      <span className="text-sm font-extrabold text-primary shrink-0">
-                        {(tagAverages[name] || 0).toFixed(1)}h / day
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-12 border border-dashed border-border rounded-lg">
-                <p className="text-sm text-muted-foreground">No events logged in this range.</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <TagHoursPanel
+          days={visibleDays}
+          averages={tagAverages}
+          activeDays={activeDaysWithData}
+          rangeLen={rangeLen}
+          panel={hoursPanel}
+          weekStart={weekStart}
+          tags={tags}
+          getTagColor={getTagColor}
+        />
         </div>
 
       </div>
