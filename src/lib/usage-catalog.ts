@@ -86,6 +86,11 @@ export const USAGE_CATALOG = {
   'mcp.search_events': { group: 'MCP', label: 'search_events' },
   'mcp.get_time_stats': { group: 'MCP', label: 'get_time_stats' },
   'mcp.list_tags': { group: 'MCP', label: 'list_tags' },
+  'mcp.create_event': { group: 'MCP', label: 'create_event' },
+  'mcp.update_events': { group: 'MCP', label: 'update_events' },
+  'mcp.delete_events': { group: 'MCP', label: 'delete_events' },
+  'mcp.log_activities': { group: 'MCP', label: 'log_activities' },
+  'mcp.set_timezone': { group: 'MCP', label: 'set_timezone' },
 
   'undo.event': { group: 'Undo', label: 'Undo event delete' },
   'undo.tag': { group: 'Undo', label: 'Undo tag delete' },
