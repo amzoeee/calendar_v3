@@ -8,8 +8,8 @@ import {
   reinsertEventsAction,
   updateEventAction,
   updateRecurringSeriesAction,
-  type EventRow,
 } from '@/features/events/server/actions';
+import type { EventRow } from '@/features/events/server/mutations';
 import { isInsideModal, useConfirm } from '@/app/components/ConfirmDialog';
 import { selectStateOf } from '@/app/components/Select';
 import { useUndo } from '@/app/components/UndoToast';

@@ -11,8 +11,6 @@ import { replaceInTitle, retitleKeepingBrackets } from '@/lib/titleParts';
 import { track } from '@/lib/usage';
 import { deleteEventsForUser, insertEventForUser, updateEventForUser, type EventRow } from './mutations';
 
-export type { EventRow };
-
 export async function addEventAction(data: {
   title: string;
   description: string;
