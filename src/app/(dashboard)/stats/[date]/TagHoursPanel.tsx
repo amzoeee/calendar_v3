@@ -28,7 +28,11 @@ interface TagHoursPanelProps {
   getTagColor: (name: string) => string;
 }
 
+// Back/forward reuses the page's first render, so its initialMode can be stale.
+let lastMode: HoursMode | undefined;
+
 function saveMode(mode: HoursMode) {
+  lastMode = mode;
   document.cookie = `${HOURS_MODE_COOKIE}=${mode}; path=/; max-age=31536000; SameSite=Lax`;
 }
 
@@ -43,7 +47,7 @@ export default function TagHoursPanel({
   tags,
   getTagColor,
 }: TagHoursPanelProps) {
-  const [mode, setMode] = useState(initialMode);
+  const [mode, setMode] = useState(() => lastMode ?? initialMode);
   const [picked, setPicked] = useState<string | null>(null);
   // Where the day picker opens: under the date on desktop, a sheet on phones.
   const [pickerAt, setPickerAt] = useState<DOMRect | 'sheet' | null>(null);
