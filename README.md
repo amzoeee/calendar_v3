@@ -245,6 +245,50 @@ to do. `no such table` means it was built by `drizzle-kit push` — the
 calendar_v2 import above produces one of those — so run `npx drizzle-kit push`
 against it once instead.
 
+## MCP server
+
+The app serves an [MCP](https://modelcontextprotocol.io) server at `/api/mcp`,
+so Claude (or any MCP client) can read and edit your events and answer
+questions about where your time went.
+
+1. In Settings → **MCP Server**, name a token and create it. Copy it right
+   away; only a hash is stored.
+2. Add it to your client. For Claude Code, Settings shows the exact command:
+
+   ```bash
+   claude mcp add --transport http calendar https://<your-host>/api/mcp --header "Authorization: Bearer <token>"
+   ```
+
+Each token reads and writes times in its own timezone, starting with the
+browser's that created it. Change it from the token's dropdown in Settings, or
+ask Claude to use `set_timezone` while travelling.
+
+| Tool | What it does |
+|---|---|
+| `get_events` | Events in a time range |
+| `search_events` | Same substring search as the header search box, optionally within a range |
+| `get_time_stats` | Time spent on an activity or tag, matched the way the Lifetime view does, optionally per day/week/month |
+| `list_tags` | Tag names, colors and parents |
+| `create_event` | Adds one event |
+| `update_events` | Retitles, retags or re-describes many events (or a whole series) at once, or moves one |
+| `delete_events` | Deletes events or a whole series |
+| `log_activities` | Adds events from a shorthand log, same format as the import and the Discord bot |
+| `set_timezone` | Changes the token's timezone |
+
+Writes apply immediately, with no pending review and no undo in the app. Each
+write tool returns the previous values or the deleted events so Claude can put
+them back.
+
+### Database
+
+Tokens live in the `mcp_tokens` table, added by migration 0011. A database with
+Drizzle's migration history picks it up on startup. One built by `drizzle-kit
+push` (see the bot's Database section) needs it created once by hand:
+
+```bash
+sqlite3 <path-to-calendar.db> < drizzle/0011_mcp_tokens.sql
+```
+
 ---
 
 ## Features
@@ -258,6 +302,7 @@ against it once instead.
 | Event search | Search for events from the view header and jump straight to them |
 | Tags | Color-coded labels; drag to reorder; archive old ones |
 | Discord log import | Paste a Discord message export to bulk-create events |
+| MCP server | Let Claude read, search, log and edit events and report time spent, with per-token timezones |
 | Discord bot | `/fetch` in Discord pulls your log lines out of a channel and stages them for approval (see below) |
 | ICS import/export | Standard calendar format for sharing with other apps (Google Calendar, Apple Calendar, etc.) |
 | Mini month calendar | Jump to any day from a small month view, available on the main calendar and Settings page |
