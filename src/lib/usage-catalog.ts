@@ -82,6 +82,10 @@ export const USAGE_CATALOG = {
 
   'mcp.token_create': { group: 'MCP', label: 'Create token' },
   'mcp.token_revoke': { group: 'MCP', label: 'Revoke token' },
+  'mcp.get_events': { group: 'MCP', label: 'get_events' },
+  'mcp.search_events': { group: 'MCP', label: 'search_events' },
+  'mcp.get_time_stats': { group: 'MCP', label: 'get_time_stats' },
+  'mcp.list_tags': { group: 'MCP', label: 'list_tags' },
 
   'undo.event': { group: 'Undo', label: 'Undo event delete' },
   'undo.tag': { group: 'Undo', label: 'Undo tag delete' },
