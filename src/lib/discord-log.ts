@@ -372,6 +372,8 @@ export async function parseLogText(
 ): Promise<{
   events: Array<{ start: string; end: string; title: string; tag: string }>;
   dateUsed: string;
+  // Lines left out because existing events already cover their whole span.
+  skipped: string[];
   warnings: string[];
 }> {
   const warnings: string[] = [];
@@ -479,6 +481,7 @@ export async function parseLogText(
   const scheduleStart = currentTime;
 
   const eventsResult: Array<{ start: string; end: string; title: string; tag: string }> = [];
+  const skipped: string[] = [];
   const tagIndex = await loadTagIndex(userId);
 
   for (const act of activities) {
@@ -503,6 +506,8 @@ export async function parseLogText(
         title: act.title,
         tag: tag || '',
       });
+    } else {
+      skipped.push(`${act.timeStr}${act.ampm ?? ''} ${act.title}`);
     }
 
     currentTime = endTime;
@@ -529,6 +534,7 @@ export async function parseLogText(
   return {
     events: eventsResult,
     dateUsed: resolvedDate,
+    skipped,
     warnings,
   };
 }
